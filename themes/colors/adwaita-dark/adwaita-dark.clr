@@ -81,10 +81,10 @@ c0c0c0	 //Jump in current function
 008000	 //Jump target
 ff4040	 //Register target
 [GRAPH]
-3b3933	 //Top color
-3b3933	 //Bottom color
-949491	 //Normal title
-f9f9b1	 //Selected title
+34322d	 //Top color
+34322d	 //Bottom color
+535755	 //Normal title
+9c5d21	 //Selected title
 cfcfa0	 //Current title
 00ffff	 //Group frame
 000000	 //Node shadow

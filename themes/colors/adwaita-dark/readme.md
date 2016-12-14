@@ -1,6 +1,7 @@
 # adwaita-dark
 
 a color theme based on gnome3's adwaita-dark variant.
+use with the corresponding skin.
 
 
 ## screenshot
