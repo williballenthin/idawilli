@@ -4,4 +4,4 @@ an example plugin that demonstrates how to provide custom hints with dynamic dat
 
 # installation
 
-copy this file to `%IDADIR%/plugins`.
+copy the python file to `%IDADIR%/plugins/`.
