@@ -229,7 +229,6 @@ def get_token_at_char(curline, index):
 ###############################################################################
 
 
-
 def enum_function_addrs(fva):
     '''
     yield the effective addresses of each instruction in the given function.
@@ -388,8 +387,9 @@ class CallsHintsHook(idaapi.UI_Hooks):
             if color != idaapi.COLOR_ADDR:
                 return None
 
-            # PATCHED: instead grab the FAR references to code (not necessarilty a branch/call/jump by itself)
-            far_code_references = [xref.to for xref in idautils.XrefsFrom(ea, ida_xref.XREF_FAR) if idc.isCode(idc.GetFlags(xref.to))]
+            # grab the FAR references to code (not necessarilty a branch/call/jump by itself)
+            far_code_references = [xref.to for xref in idautils.XrefsFrom(ea, ida_xref.XREF_FAR) 
+                                   if idc.isCode(idc.GetFlags(xref.to))]
             if len(far_code_references) != 1:
                 return None
 
