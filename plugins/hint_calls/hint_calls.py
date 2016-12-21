@@ -264,7 +264,6 @@ def enum_calls_in_function(fva):
       sequence[tuple[int, str]]: the address of a call instruction, and the disassembly line at that address
     '''
     for ea in enum_function_addrs(fva):
-        # PATCHED to support non-Intel architectures
         if idaapi.is_call_insn(ea):
             disasm = idc.GetDisasm(ea)
             yield ea, disasm
