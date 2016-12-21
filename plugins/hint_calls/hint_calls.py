@@ -6,7 +6,6 @@ Author: Willi Ballenthin <william.ballenthin@fireeye.com>
 Licence: Apache 2.0
 '''
 import logging
-import traceback
 
 import idc
 import idaapi
@@ -404,8 +403,7 @@ class CallsHintsHook(idaapi.UI_Hooks):
             # the remaining lines get shown if you scroll down while the hint is displayed, revealing more lines.
             return render_function_hint(fva), DEFAULT_IMPORTANT_LINES_NUM
         except Exception as e:
-            print('CallsHintsPlugin: error: %s. Get in touch with @williballenthin.' % (str(e)))
-            traceback.print_exc()
+            logger.warning('unexpected exception: %s. Get in touch with @williballenthin.', e, exc_info=True)
             return None
 
 
