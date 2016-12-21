@@ -5,9 +5,16 @@ Installation: put this file in your %IDADIR%/plugins/ directory.
 Author: Willi Ballenthin <william.ballenthin@fireeye.com>
 Licence: Apache 2.0
 '''
+import logging
+
 import idc
 import idaapi
 import idautils
+import ida_xref
+
+
+logger = logging.getLogger(__name__)
+DEFAULT_IMPORTANT_LINES_NUM = 5
 
 
 ###############################################################################
@@ -222,7 +229,6 @@ def get_token_at_char(curline, index):
 ###############################################################################
 
 
-
 def enum_function_addrs(fva):
     '''
     yield the effective addresses of each instruction in the given function.
@@ -256,12 +262,9 @@ def enum_calls_in_function(fva):
       sequence[tuple[int, str]]: the address of a call instruction, and the disassembly line at that address
     '''
     for ea in enum_function_addrs(fva):
-        if idc.GetMnem(ea) != 'call':
-            continue
-
-        disasm = idc.GetDisasm(ea)
-
-        yield ea, disasm
+        if idaapi.is_call_insn(ea):
+            disasm = idc.GetDisasm(ea)
+            yield ea, disasm
 
 
 def enum_string_refs_in_function(fva):
@@ -347,18 +350,16 @@ def render_function_hint(fva):
     ret.append('%d calls, %s strings' % (len(calls), len(strings)))
 
     ret.append('')
-    ret.append('calls:')
-    for call in calls:
-        ret.append('  - ' + call)
-    if not calls:
-        ret.append('  (none)')
-
-    ret.append('')
-    ret.append('strings:')
-    for string in strings:
-        ret.append('  - ' + string)
-    if not strings:
-        ret.append('  (none)')
+    if calls:
+        ret.append('calls:')
+        for call in calls:
+            ret.append('  - ' + call)
+        ret.append('')
+    
+    if strings:
+        ret.append('strings:')
+        for string in strings:
+            ret.append('  - ' + string)
 
     return str('\n'.join(ret))
 
@@ -371,7 +372,14 @@ class CallsHintsHook(idaapi.UI_Hooks):
                 return None
 
             curline = idaapi.get_custom_viewer_curline(view, True)
-            _, x, y = idaapi.get_custom_viewer_place(view, True)
+            
+            # sometimes get_custom_viewer_place() returns [x, y] and sometimes [place_t, x, y].
+            # we want the place_t.
+            viewer_place = idaapi.get_custom_viewer_place(view, True)
+            if len(viewer_place) != 3:
+                return None
+
+            _, x, y = viewer_place
             ea = place.toea()
 
             # "color" is a bit of misnomer: its the type of the symbol currently hinted
@@ -379,44 +387,23 @@ class CallsHintsHook(idaapi.UI_Hooks):
             if color != idaapi.COLOR_ADDR:
                 return None
 
-            # for COLOR_ADDR tokens, we get something like:
-            #   401000sub_401000
-            # so we will need to prune the address from the start before we can use it :-(
-            token = get_token_at_char(curline, x)
-
-            # enumerate the operands of the instruction at this address
-            # and search the token for the operand text
-            func_name = None
-            for i in range(3):
-                o = idc.GetOpnd(ea, i)
-                if not o:
-                    break
-
-                # if we have `offset sub_401000`, we want: `sub_401000`
-                if ' ' in o:
-                    o = o.partition(' ')[2]
-
-                if o in token:
-                    func_name = o
-                    break
-
-            if not func_name:
+            # grab the FAR references to code (not necessarilty a branch/call/jump by itself)
+            far_code_references = [xref.to for xref in idautils.XrefsFrom(ea, ida_xref.XREF_FAR) 
+                                   if idc.isCode(idc.GetFlags(xref.to))]
+            if len(far_code_references) != 1:
                 return None
 
-            # get the address given the function name
-            fva = idc.LocByName(func_name)
-            if not fva:
-                return None
+            fva = far_code_references[0]
 
             # ensure its actually a function
             if not idaapi.get_func(fva):
                 return None
 
-            # this magic constant "1" is the number of "important lines" to display by default.
+            # this magic constant is the number of "important lines" to display by default.
             # the remaining lines get shown if you scroll down while the hint is displayed, revealing more lines.
-            return render_function_hint(fva), 1
+            return render_function_hint(fva), DEFAULT_IMPORTANT_LINES_NUM
         except Exception as e:
-            print('CallsHintsPlugin: error: %s. Get in touch with @williballenthin.' % (str(e)))
+            logger.warning('unexpected exception: %s. Get in touch with @williballenthin.', e, exc_info=True)
             return None
 
 
@@ -429,14 +416,17 @@ class CallsHintsPlugin(idaapi.plugin_t):
 
     def init(self):
         self.hooks = CallsHintsHook()
-        return idaapi.PLUGIN_OK
+        if self.hooks.hook():
+            return idaapi.PLUGIN_KEEP
+        else:
+            logger.warning('error setting hooks.')
+            return idaapi.PLUGIN_SKIP
 
     def run(self, arg):
-        print('CallsHintsPlugin: run')
-        self.hooks.hook()
+        pass
+        
 
     def term(self):
-        print('CallsHintsPlugin: term')
         self.hooks.unhook()
 
 
