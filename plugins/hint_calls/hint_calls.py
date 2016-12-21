@@ -5,12 +5,16 @@ Installation: put this file in your %IDADIR%/plugins/ directory.
 Author: Willi Ballenthin <william.ballenthin@fireeye.com>
 Licence: Apache 2.0
 '''
+import logging
+import traceback
+
 import idc
 import idaapi
 import idautils
-import traceback
 import ida_xref
 
+
+logger = logging.getLogger(__name__)
 DEFAULT_IMPORTANT_LINES_NUM = 5
 
 
@@ -372,7 +376,8 @@ class CallsHintsHook(idaapi.UI_Hooks):
 
             curline = idaapi.get_custom_viewer_curline(view, True)
             
-            # PATCHED: sometimes get_custom_viewer_place() returns [x, y] and sometimes [place_t, x, y]
+            # sometimes get_custom_viewer_place() returns [x, y] and sometimes [place_t, x, y].
+            # we want the place_t.
             viewer_place = idaapi.get_custom_viewer_place(view, True)
             if len(viewer_place) != 3:
                 return None
@@ -413,16 +418,14 @@ class CallsHintsPlugin(idaapi.plugin_t):
     wanted_hotkey = "Ctrl-'"
 
     def init(self):
-        # PATCHED
         self.hooks = CallsHintsHook()
-        if (self.hooks.hook()):
+        if self.hooks.hook():
             return idaapi.PLUGIN_KEEP
         else:
-            print "CallsHintsPlugin: error setting hooks, quitting"
+            logger.warning('error setting hooks.')
             return idaapi.PLUGIN_SKIP
 
     def run(self, arg):
-        # PATCHED
         pass
         
 
