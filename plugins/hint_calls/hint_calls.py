@@ -10,6 +10,8 @@ import idaapi
 import idautils
 import traceback
 import ida_xref
+import ida_lines
+import re
 
 DEFAULT_IMPORTANT_LINES_NUM = 5
 
@@ -262,7 +264,9 @@ def enum_calls_in_function(fva):
     for ea in enum_function_addrs(fva):
         # PATCHED to support non-Intel architectures
         if idaapi.is_call_insn(ea):
-            disasm = idc.GetDisasm(ea)
+            disasm = ida_lines.generate_disassembly(ea, 16, True, False)[1][0]
+            # replace consequent whitespaces by a single whitespaces
+            disasm = re.sub("\s\s+", " ", disasm)
             yield ea, disasm
 
 
@@ -346,21 +350,23 @@ def render_function_hint(fva):
 
     # this would be a good place to use Jinja2 templating,
     #  but lets not require that external dependency
-    ret.append('%d calls, %s strings' % (len(calls), len(strings)))
+    title = ida_lines.COLSTR('%d calls, ' % len(calls), ida_lines.SCOLOR_CODNAME)
+    title += ida_lines.COLSTR('%s strings' % len(strings), ida_lines.SCOLOR_DSTR)
+    ret.append(title)
 
     ret.append('')
     if calls:
-        ret.append('calls:')
+        ret.append(ida_lines.COLSTR('calls:', ida_lines.SCOLOR_CODNAME))
         for call in calls:
             ret.append('  - ' + call)
         ret.append('')
     
     if strings:
-        ret.append('strings:')
-        for string in strings:
-            ret.append('  - ' + string)
+        ret.append(ida_lines.COLSTR('strings:', ida_lines.SCOLOR_DSTR))
+        for s in strings:
+            ret.append('  - ' + ida_lines.COLSTR(s, ida_lines.SCOLOR_DSTR))
 
-    return str('\n'.join(ret))
+    return '\n'.join(ret)
 
 
 class CallsHintsHook(idaapi.UI_Hooks):
