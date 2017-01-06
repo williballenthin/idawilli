@@ -40,8 +40,14 @@ use ``idc.isHead(idc.getFlags(address))`` to test head-ness. for example, consid
 
 although there is a byte at address 0003, it has not been defined like the byte at 0006.
 
-names and comments are set on addresses, not heads. 
+names and comments can be set an any address, not just heads. 
 so in the above example, the byte at address 0003 may have a name and comment, but not be considered a head.
+however, when fetching comments you need to be a bit careful: heads may span multiple bytes, and fetching comments from any address within the head fetches the head's comments.
+given the above example, the following is true::
+
+    idc.MakeComm(0x4, 'a comment')
+    assert idc.Comm(0x4) == 'a comment'
+    assert idc.Comm(0x5) == 'a comment'
 
 
 text encoding
