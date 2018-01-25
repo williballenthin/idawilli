@@ -60,3 +60,79 @@ for compatibility across users, you should explicitly encode and decode to/from 
 
     idc.MakeName(0x0, u'foobar'.encode('ascii', errors='replace'))
     idc.Name(0x0).decode('ascii', errors='replace')
+
+
+commenting
+----------
+
+create local comment::
+
+    if not idc.MakeComm(va, ctext):
+        logger.warning('failed to create local comment: 0x%x', va)
+
+delete local comment::
+
+    if not idc.MakeComm(va, ''):
+        logger.warning('failed to delete local comment: 0x%x', va)
+
+create repeatable comment::
+
+    if not idc.MakeRptCmt(va, ctext):
+        logger.warning('failed to create repeatable comment: 0x%x', va)
+        
+delete repeatable comment::
+
+    if not idc.MakeRptCmt(va, ''):
+        logger.warning('failed to delete repeatable comment: 0x%x', va)
+        
+create anterior comment::
+
+    for i, line in enumerate(ctext.split('\n')):
+        if not idc.ExtLinA(va, i, line):
+            logger.warning('failed to create anterior line comment: 0x%x %d', va, i)
+            
+delete anterior comment::
+
+    # deleting line 0 deletes all the rest, too
+    if not idc.DelExtLnA(va, 0):
+        logger.warning('failed to delete anterior comment: 0x%x', va)
+
+create posterior comment::
+
+    for i, line in enumerate(ctext.split('\n')):
+        if not idc.ExtLinB(va, i, line):
+            logger.warning('failed to create posterior line comment: 0x%x %d', va, i)
+
+delete posterior comment::
+
+    if not idc.DelExtLnB(va, 0):
+        logger.warning('failed to delete anterior comment: 0x%x', va)
+        
+create function comment::
+
+    if not idc.SetFunctionCmt(va, ctext, False):
+        logger.warning('failed to create function local comment: 0x%x', va)
+
+delete function comment::
+
+    if not idc.SetFunctionCmt(va, '', False):
+        logger.warning('failed to delete function local comment: 0x%x', va)
+        
+create repeatable function comment::
+
+    if not idc.SetFunctionCmt(va, ctext, True):
+        logger.warning('failed to create function repeatable comment: 0x%x', va)
+        
+delete repeatable function comment::
+
+    if not idc.SetFunctionCmt(va, '', True):
+        logger.warning('failed to delete function repeatablecomment: 0x%x', va)
+
+
+
+
+
+
+
+
+
