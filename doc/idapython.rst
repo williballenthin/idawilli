@@ -129,6 +129,19 @@ delete repeatable function comment::
         logger.warning('failed to delete function repeatablecomment: 0x%x', va)
 
 
+types
+--------------------------
+
+inspect function prototype::
+
+    tup = idaapi.get_named_type(None, 'CreateServiceA', idaapi.NTF_SYMM)
+    if tup is not None:
+        code, type_str, fields_str, cmt, field_cmts, sclass, value  = tup
+        t1 = idaapi.tinfo_t()
+        t1.deserialize(None, type_str, fields_str, cmt)
+        print('Number of args: %d' % t1.get_nargs())
+        print('Type of arg 0: %s' %t1.get_nth_arg(0)._print())
+        print('Size of arg 0: %d' % t1.get_nth_arg(0).get_size())
 
 
 
