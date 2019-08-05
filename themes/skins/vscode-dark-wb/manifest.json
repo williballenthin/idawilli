@@ -1,0 +1,8 @@
+{
+    "theme_name": "VSCode dark (wb)",
+    "author": "Microsoft (ported by jinmo, edit by wb)",
+    "version": "v0.1",
+    "preview_image": "preview.png",
+    "clr_file": "adwaita-dark.clr",
+    "qss_file": "stylesheet.qss"
+}
