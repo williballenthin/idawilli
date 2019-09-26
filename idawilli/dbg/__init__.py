@@ -48,15 +48,23 @@ def get_winapi_decl(name):
     code, type_str, fields_str, cmt, field_cmts, sclass, value = tup
     ti = idaapi.tinfo_t()
     ti.deserialize(None, type_str, fields_str, cmt)
-  
+
+    # the rendered declaration from IDA doesn't include the function name,
+    # so insert the function name, naively.
+    #
+    # for example;
+    #
+    #    > DWORD (DWORD a, DWORD b)
+    #    < DWORD foo(DWORD a, DWORD b);
     decl = str(ti).replace("(", " " + name + "(") + ";"
+
     return decl
-    
+
 
 def api(dll, proc):
     '''
     get a callable Windows API function.
-    
+
     Python>idaapi.require("idawilli.dbg")
     Python>idawilli.dbg.api("kernel32.dll", "SetLastError")(0x31337)
     0x0L
@@ -71,27 +79,28 @@ def api(dll, proc):
 
 class _Module(object):
     ''' loaded DLL that supports calling procedures via Appcall '''
+
     def __init__(self, dll):
         super(_Module, self).__init__()
         self.dll = dll if dll.lower().endswith('.dll') else (dll + '.dll')
         self.hmod = LoadLibraryA(dll).value
-        
+
     def __getattr__(self, proc):
         if proc == 'dll':
             return super(self, _Module).__getattr__(proc)
         elif proc == 'hmod':
             return super(self, _Module).__getattr__(proc)
-            
+
         pfunc = GetProcAddress(self.hmod, proc).value
         return ida_idd.Appcall.proto(pfunc, get_winapi_decl(proc))
-        
-    
+
+
 class _API(object):
     ''' fake object that creates a _Module on demand '''
+
     def __getattr__(self, dll):
         return _Module(dll)
 
-        
 
 '''
 Python>idaapi.require("idawilli.dbg")
@@ -102,7 +111,7 @@ Python>idawilli.dbg.winapi.kernel32.GetLastError()
 '''
 winapi = _API()
 
-    
+
 def patch_bytes(ea, buf):
     for i, b in enumerate(buf):
-        ida_bytes.patch_byte(ea + i, b)    
+        ida_bytes.patch_byte(ea + i, b)
