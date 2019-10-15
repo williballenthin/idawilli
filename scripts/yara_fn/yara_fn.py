@@ -140,7 +140,7 @@ def format_rules(fva, rules):
     for c in BAD_CHARS:
         safe_name = safe_name.replace(c, '')
 
-    md5 = idautils.GetInputFileMD5()
+    md5 = idautils.GetInputFileMD5().decode("utf-8", errors="ignore").rstrip('\x00')
     ret = []
     ret.append(f'rule a_{md5}_{safe_name}')
     ret.append('  meta:')
@@ -150,7 +150,7 @@ def format_rules(fva, rules):
     ret.append('  strings:')
     for rule in rules:
         formatted_rule = ' '.join(rule.masked_bytes)
-        ret.append(f'    {rule.name} = {formatted_rule}')
+        ret.append(f'    {rule.name} = {{{formatted_rule}}}')
     ret.append('  condition:')
     ret.append('    all of them')
     ret.append('}')
@@ -241,10 +241,12 @@ def main():
     rule = create_yara_rule_for_function(fva)
     print(rule)
 
+    '''
     if test_yara_rule(rule):
         print('success: validated the generated rule')
     else:
         print('error: failed to validate generated rule')
+    '''
 
 
 if __name__ == '__main__':
