@@ -12,6 +12,9 @@ import ida_settings
 import idc
 import idaapi
 import idautils
+import ida_ua
+import ida_bytes
+import ida_segment
 
 
 logger = logging.getLogger(__name__)
@@ -19,15 +22,17 @@ settings = ida_settings.IDASettings('idawilli.color')
 
 CALL_COLOR = settings.get('colors.instructions.call', 0xD7C2C0)      # blueish
 ENCRYPT_COLOR = settings.get('colors.behaviors.encrypt', 0xC0C2D7)   # redish
-ANTIANALYSIS_COLOR = settings.get('colors.behaviors.anti-analysis', 0xC0C2D7)  # redish
+ANTIANALYSIS_COLOR = settings.get(
+    'colors.behaviors.anti-analysis', 0xC0C2D7)  # redish
 
 
 Segment = namedtuple('Segment', ['start', 'end', 'name'])
+
+
 def enum_segments():
-    for segstart in idautils.Segments():
-        segend = idc.SegEnd(segstart)
-        segname = idc.SegName(segstart)
-        yield Segment(segstart, segend, segname)
+    for ea in idautils.Segments():
+        seg = ida_segment.getseg(ea)
+        yield Segment(seg.start_ea, seg.end_ea, seg.name)
 
 
 def enum_heads():
@@ -37,28 +42,28 @@ def enum_heads():
 
 
 def color_head(ea):
-    flags = idc.GetFlags(ea)
-    if not idc.isCode(flags):
+    flags = ida_bytes.get_flags(ea)
+    if not ida_bytes.is_code(flags):
         return
 
-    mnem = idc.GetMnem(ea)
+    mnem = ida_ua.print_insn_mnem(ea)
     if mnem == 'call':
         logger.debug('call: 0x%x', ea)
-        idc.SetColor(ea, idc.CIC_ITEM, CALL_COLOR)
+        idc.set_color(ea, idc.CIC_ITEM, CALL_COLOR)
     elif mnem == 'xor':
-        if idc.GetOpnd(ea, 0) != idc.GetOpnd(ea, 1):
+        if idc.get_operand_value(ea, 0) != idc.get_operand_value(ea, 1):
             logger.debug('non-zero xor: 0x%x', ea)
-            idc.SetColor(ea, idc.CIC_ITEM, ENCRYPT_COLOR)
+            idc.set_color(ea, idc.CIC_ITEM, ENCRYPT_COLOR)
     elif mnem in ('sdit', 'sgdt', 'sldt', 'smsw', 'str', 'in', 'cpuid'):
         logger.debug('anti-vm: 0x%x', ea)
-        idc.SetColor(ea, idc.CIC_ITEM, ANTIANALYSIS_COLOR)
+        idc.set_color(ea, idc.CIC_ITEM, ANTIANALYSIS_COLOR)
     elif mnem == 'in':
-        if idc.GetOpnd(ea, 0) in ("3", "2D"):
+        if idc.get_operand_value(ea, 0) in ("3", "2D"):
             logger.debug('anti-debug: 0x%x', ea)
-            idc.SetColor(ea, idc.CIC_ITEM, ANTIANALYSIS_COLOR)
+            idc.set_color(ea, idc.CIC_ITEM, ANTIANALYSIS_COLOR)
     elif mnem in ('rdtsc', 'icebp'):
         logger.debug('anti-debug: 0x%x', ea)
-        idc.SetColor(ea, idc.CIC_ITEM, ANTIANALYSIS_COLOR)
+        idc.set_color(ea, idc.CIC_ITEM, ANTIANALYSIS_COLOR)
 
 
 def main(argv=None):
