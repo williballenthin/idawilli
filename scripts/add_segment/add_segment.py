@@ -39,11 +39,11 @@ add segment by buffer
 <##segment name:{name}>
 <##segment start address:{addr}>
 """,
-{
-    'path': idaapi.Form.FileInput(open=True),
-    'name': idaapi.Form.StringInput(),
-    'addr': idaapi.Form.NumericInput(tp=Form.FT_ADDR),
-})
+                                 {
+                                     'path': idaapi.Form.FileInput(open=True),
+                                     'name': idaapi.Form.StringInput(),
+                                     'addr': idaapi.Form.NumericInput(tp=Form.FT_ADDR),
+                                 })
 
         def OnFormChange(self, fid):
             return 1
@@ -104,7 +104,7 @@ def main(argv=None):
         logger.warning('failed to align segment: %s', seg.name)
 
     idaapi.patch_many_bytes(seg.addr, buf)
-    
+
 
 class AddSegmentPlugin(idaapi.plugin_t):
     flags = idaapi.PLUGIN_KEEP
@@ -128,6 +128,6 @@ def PLUGIN_ENTRY():
     return AddSegmentPlugin()
 
 
-#if __name__ == '__main__':
-#    logging.basicConfig(level=logging.DEBUG)
-#    main()
+if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
+    main()
