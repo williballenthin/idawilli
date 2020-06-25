@@ -94,16 +94,16 @@ def main(argv=None):
         logger.error('failed to add segment: 0x%x', seg.addr)
         return -1
 
-    if not idc.RenameSeg(seg.addr, seg.name):
+    if not idc.set_segm_name(seg.addr, seg.name):
         logger.warning('failed to rename segment: %s', seg.name)
 
-    if not idc.SetSegClass(seg.addr, 'CODE'):
+    if not idc.set_segm_class(seg.addr, 'CODE'):
         logger.warning('failed to set segment class CODE: %s', seg.name)
 
-    if not idc.SegAlign(seg.addr, idc.saRelPara):
+    if not idc.set_segm_attr(seg.addr, SEGATTR_ALIGN, idc.saRelPara):
         logger.warning('failed to align segment: %s', seg.name)
 
-    idaapi.patch_many_bytes(seg.addr, buf)
+    ida_bytes.patch_bytes(seg.addr, buf)
 
 
 class AddSegmentPlugin(idaapi.plugin_t):

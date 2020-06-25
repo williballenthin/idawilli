@@ -4,35 +4,35 @@ import idautils
 
 def enum_segments():
     for segstart in idautils.Segments():
-        segend = idc.SegEnd(segstart)
-        segname = idc.SegName(segstart)
+        segend = idc.get_segm_end(segstart)
+        segname = idc.get_segm_name(segstart)
         yield segstart, segend, segname
 
 
 def find_pointers(start, end):
     for va in range(start, end-0x4):
-        ptr = idc.Dword(va)
-        if idc.SegStart(ptr) == idc.BADADDR:
+        ptr = idc.get_wide_dword(va)
+        if idc.get_segm_start(ptr) == idc.BADADDR:
             continue
 
         yield va, ptr
 
 
 def is_head(va):
-    return idc.isHead(idc.GetFlags(va))
+    return ida_bytes.is_head(idc.get_full_flags(va))
 
 
 def get_head(va):
     if is_head(va):
         return va
     else:
-        return idc.PrevHead(va)
+        return idc.prev_head(va)
 
 
 def is_code(va):
     if is_head(va):
-        flags = idc.GetFlags(va)
-        return idc.isCode(flags)
+        flags = idc.get_full_flags(va)
+        return ida_bytes.is_code(flags)
     else:
         head = get_head(va)
         return is_code(head)
@@ -51,7 +51,7 @@ def is_defined(va):
 
 
 def is_unknown(va):
-    return idc.isUnknown(idc.GetFlags(va))
+    return ida_bytes.is_unknown(idc.get_full_flags(va))
 
 
 def main():
@@ -81,7 +81,7 @@ def main():
 
             if is_unknown(dst):
                 print('destination unknown, making byte: 0x%x' % (dst))
-                idc.MakeByte(dst)
+                ida_bytes.create_data(dst, FF_BYTE, 1, ida_idaapi.BADADDR)
 
             elif is_head(dst):
                 # things are good
@@ -91,14 +91,14 @@ def main():
                 # need to undefine head, and make byte
                 head_va = get_head(dst)
                 print('destination overlaps with head: 0x%x' % (head_va))
-                idc.MakeUnkn(head_va, dst - head_va)
-                idc.MakeByte(head_va)
-                idc.MakeByte(dst)
+                ida_bytes.del_items(head_va, dst - head_va)
+                ida_bytes.create_data(head_va, FF_BYTE, 1, ida_idaapi.BADADDR)
+                ida_bytes.create_data(dst, FF_BYTE, 1, ida_idaapi.BADADDR)
 
-            idc.MakeUnkn(src, 4)
-            idc.MakeDword(src)
+            ida_bytes.del_items(src, 4)
+            ida_bytes.create_data(src, FF_DWORD, 4, ida_idaapi.BADADDR)
             # this doesn't seem to always work :-(
-            idc.OpOffset(src, 0)
+            idc.op_plain_offset(src, -1, 0)
 
 
 if __name__ == '__main__':
