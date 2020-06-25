@@ -140,7 +140,8 @@ def format_rules(fva, rules):
     for c in BAD_CHARS:
         safe_name = safe_name.replace(c, '')
 
-    md5 = idautils.GetInputFileMD5().decode("utf-8", errors="ignore").rstrip('\x00')
+    #md5 = idautils.GetInputFileMD5().decode("utf-8", errors="ignore").rstrip('\x00')
+    md5 = idautils.GetInputFileMD5().hex()
     ret = []
     ret.append(f'rule a_{md5}_{safe_name}')
     ret.append('  meta:')
