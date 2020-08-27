@@ -1,0 +1,238 @@
+
+AskText QLabel#counterlabel
+{
+    color: grey;
+}
+
+AskText QLabel#counterlabel[invalid=true]
+{
+    color: red;
+}
+
+/* make that guy behave as if it were a regular widget, by killing the default QGroupBox spacing */
+LabeledWidgetContainer
+{
+    border: 0;
+    padding: 0;
+}
+
+QSplitter::handle:horizontal
+{
+    width: 4px;
+}
+
+QSplitter::handle:vertical
+{
+    height: 4px;
+}
+
+DockWidgetTitleButton:!hover
+{
+    border: none;
+}
+
+ActionsInspector QLineEdit
+{
+    width: 16em;
+}
+
+ActionsInspector QKeySequenceEdit
+{
+    width: 16em;
+}
+
+CustomIDAMemo
+{
+    /* misc */
+    qproperty-line-fg-patched-bytes     : #804040;         /* patched bytes (brown-ish) */
+    qproperty-line-fg-unsaved-changes   : #FF8000;         /* unsaved changes (orange-ish) */
+    qproperty-line-bg-highlight         : #FFFF00;         /* highlighting background */
+    qproperty-line-pfx-current-item     : rgba(0, 0, 0, 0);/* Line prefix: Current item (transparent by default) */
+    qproperty-line-bgovl-current-line   : rgba(80, 80, 80, 0.15);    /* current line background overlay */
+    qproperty-line-bgovl-trace          : rgba(255, 255, 0, 0.20);   /* Trace line background overlay */
+    qproperty-line-bgovl-trace-ovl      : rgba(255, 188, 180, 0.40); /* Second trace line background overlay */
+    qproperty-line-bgovl-extra-1        : rgba(80, 255, 80, 0.25);   /* Extra background overlay #1 */
+    qproperty-line-bgovl-extra-2        : rgba(238, 255, 136, 0.25); /* Extra background overlay #2 */
+    qproperty-line-bgovl-extra-3        : rgba(255, 170, 0, 0.4);   /* Extra background overlay #3 */
+
+    /* graph */
+    qproperty-graph-bg-top              : white;
+    qproperty-graph-bg-bottom           : #E0F8FF;
+    qproperty-graph-node-title-normal   : white;
+    qproperty-graph-node-title-selected : #B1F9F9;
+    qproperty-graph-node-title-current  : #A0CFCF;
+    qproperty-graph-node-frame-group    : yellow;
+    qproperty-graph-node-shadow         : black;
+    qproperty-graph-node-high1          : #CCFFFF;
+    qproperty-graph-node-high2          : #CCFFCC;
+    qproperty-graph-node-foreign        : red;
+    qproperty-graph-edge-normal         : blue;
+    qproperty-graph-edge-yes            : green;
+    qproperty-graph-edge-no             : red;
+    qproperty-graph-edge-high           : fuchsia;
+    qproperty-graph-edge-current        : cyan;
+
+    /* bpts */
+    qproperty-line-bg-bpt-enabled        : red;
+    qproperty-line-bg-bpt-disabled       : lime;
+    qproperty-line-bg-bpt-unavailable    : #FF8000;
+}
+
+CustomIDAMemo[debugging="true"]
+{
+    qproperty-line-bg-default            : #CCFFFF;
+    qproperty-line-bgovl-current-ip      : rgba(0, 195, 255, .45);
+}
+
+CustomIDAMemo[hints="true"]
+{
+    qproperty-line-bg-default            : #FFFFE1;         /* hints background (pale yellow) */
+}
+
+TextArrows
+{
+    qproperty-jump-in-function          : silver;
+    qproperty-jump-external-to-function : red;
+    qproperty-jump-under-cursor         : black;
+    qproperty-jump-target               : green;
+    qproperty-register-target           : #4040FF;
+    qproperty-bpt-possible              : #60D0FF;
+}
+
+MainMsgList
+{
+    color            : black;
+    background-color : white;
+}
+
+TCpuRegs
+{
+    background-color: #CCFFFF;
+    qproperty-register-defined: black;
+    qproperty-register-changed: blue;
+    qproperty-register-edited: purple;
+    qproperty-register-unavailable: gray;
+}
+
+TCpuRegs QPushButton
+{
+    background: transparent;
+}
+
+TCpuRegs IDALabel
+{
+    color: blue;
+}
+
+navband_t
+{
+    qproperty-lib-function : #AAFFFF;
+    qproperty-function : #00A2E8;
+    qproperty-code : #B97A57;
+    qproperty-data : silver;
+    qproperty-undefined : #B6B66B;
+    qproperty-extern : #FFA6FF;
+    qproperty-error : #FF5B5B;
+    qproperty-gap : black;
+    qproperty-cursor : #FFFF7F;
+    qproperty-auto-analysis-cursor : #FFAA00;
+    qproperty-lumina-function : #32CD32;
+}
+
+TextEdit
+{
+    qproperty-keyword1-fg: blue;
+    qproperty-keyword1-weight: 0;
+    qproperty-keyword1-italic: 0;
+
+    qproperty-keyword2-fg: purple;
+    qproperty-keyword2-weight: 0;
+    qproperty-keyword2-italic: 0;
+
+    qproperty-keyword3-fg: red;
+    qproperty-keyword3-weight: 0;
+    qproperty-keyword3-italic: 0;
+
+    qproperty-string-fg: darkred;
+    qproperty-string-weight: 0;
+    qproperty-string-italic: 0;
+
+    qproperty-comment-fg: darkgreen;
+    qproperty-comment-weight: 0;
+    qproperty-comment-italic: 1;
+
+    qproperty-preprocessor-fg: blue;
+    qproperty-preprocessor-weight: 1;
+    qproperty-preprocessor-italic: 0;
+
+    qproperty-number-fg: darkcyan;
+    qproperty-number-weight: 1;
+    qproperty-number-italic: 0;
+}
+
+TextEdit text_edit_margin_widget_t
+{
+    color: grey;
+    qproperty-header-color: dimgrey;
+}
+
+TChooser
+{
+    qproperty-highlight-bg-default: yellow;
+    qproperty-highlight-bg-selected: #00C0C0;
+}
+
+
+CustomIDAMemo
+{
+    qproperty-line-fg-default                     : blue;        /* Default                                       */
+    qproperty-line-fg-regular-comment             : blue;        /* Regular comment                               */
+    qproperty-line-fg-repeatable-comment          : gray;        /* Repeatable commen                             */
+    qproperty-line-fg-automatic-comment           : gray;        /* Automatic comment                             */
+    qproperty-line-fg-insn                        : navy;        /* Instruction                                   */
+    qproperty-line-fg-dummy-data-name             : navy;        /* Dummy Data Name                               */
+    qproperty-line-fg-regular-data-name           : blue;        /* Regular Data Name                             */
+    qproperty-line-fg-demangled-name              : blue;        /* Demangled Name                                */
+    qproperty-line-fg-punctuation                 : navy;        /* Punctuation                                   */
+    qproperty-line-fg-charlit-in-insn             : green;       /* Char constant                                 */
+    qproperty-line-fg-strlit-in-insn              : lime;        /* String constant                               */
+    qproperty-line-fg-numlit-in-insn              : green;       /* Numeric constant                              */
+    qproperty-line-fg-void-opnd                   : #FF8000;     /* Void operand                                  */
+    qproperty-line-fg-code-xref                   : green;       /* Code reference                                */
+    qproperty-line-fg-data-xref                   : #8080FF;     /* Data reference                                */
+    qproperty-line-fg-code-xref-to-tail           : red;         /* Code reference to tail byte                   */
+    qproperty-line-fg-data-xref-to-tail           : olive;       /* Data reference to tail byte                   */
+    qproperty-line-fg-error                       : #010101;     /* Error or problem                              */
+    qproperty-line-fg-line-prefix                 : silver;      /* Line prefix                                   */
+    qproperty-line-fg-opcode-byte                 : blue;        /* Opcode bytes                                  */
+    qproperty-line-fg-extra-line                  : blue;        /* Extra line                                    */
+    qproperty-line-fg-alt-opnd                    : blue;        /* Alternative operand                           */
+    qproperty-line-fg-hidden                      : gray;        /* Hidden name                                   */
+    qproperty-line-fg-libfunc                     : #8080FF;     /* Library function name                         */
+    qproperty-line-fg-locvar                      : green;       /* Local variable name                           */
+    qproperty-line-fg-dummy-code-name             : navy;        /* Dummy code name                               */
+    qproperty-line-fg-asm-directive               : blue;        /* Assembler directive                           */
+    qproperty-line-fg-macro                       : purple;      /* Macro                                         */
+    qproperty-line-fg-strlit-in-data              : green;       /* String constant in data directive             */
+    qproperty-line-fg-charlit-in-data             : green;       /* Char constant in data directive               */
+    qproperty-line-fg-numlit-in-data              : #008040;     /* Numeric constant in data directive            */
+    qproperty-line-fg-keyword                     : navy;        /* Keywords (offset, byte ptr, near)             */
+    qproperty-line-fg-register-name               : navy;        /* Register name                                 */
+    qproperty-line-fg-import-name                 : fuchsia;     /* Imported name                                 */
+    qproperty-line-fg-segment-name                : olive;       /* Segment name                                  */
+    qproperty-line-fg-dummy-unknown-name          : navy;        /* Dummy unknown name                            */
+    qproperty-line-fg-code-name                   : blue;        /* Regular Code Name                             */
+    qproperty-line-fg-unknown-name                : navy;        /* Regular Unknown Name                          */
+    qproperty-line-fg-collapsed-line              : blue;        /* Collapsed line                                */
+    qproperty-line-bg-default                     : white;       /* Default background                            */
+    qproperty-line-bg-selected                    : #C0BBAF;     /* Selected background                           */
+    qproperty-line-pfx-libfunc                    : cyan;        /* Line prefix: Library function                 */
+    qproperty-line-pfx-func                       : black;       /* Line prefix: Regular function                 */
+    qproperty-line-pfx-insn                       : maroon;      /* Line prefix: Single instruction               */
+    qproperty-line-pfx-data                       : gray;        /* Line prefix: Data bytes                       */
+    qproperty-line-pfx-unexplored                 : olive;       /* Line prefix: Unexplored byte                  */
+    qproperty-line-pfx-extern                     : fuchsia;     /* Line prefix: External name definition segment */
+    qproperty-line-pfx-current-line               : blue;        /* Line prefix: Current line                     */
+    qproperty-line-pfx-hidden-line                : black;       /* Line prefix: Hidden line                      */
+    qproperty-line-pfx-lumina                     : #32CD32;     /* Line prefix: Lumina                           */
+}
