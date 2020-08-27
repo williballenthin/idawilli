@@ -37,7 +37,7 @@ def enum_segment_ptrs(ea):
 		
 
 
-for ea, ptr in enum_segment_ptrs(idc.ScreenEA()):
+for ea, ptr in enum_segment_ptrs(idc.get_screen_ea()):
     name = ida_name.get_name(ptr)
     
     if not name:

@@ -16,7 +16,7 @@ def main():
         return
         
     with open(path, "rb") as f:
-        buf = tuple(map(ord, f.read()))
+        buf = tuple(f.read())
         
     if len(buf) == 0:
         print("empty file, cancelling")
@@ -26,7 +26,7 @@ def main():
     print("size: 0x%x" % (len(buf)))
     print("aligned size: 0x%x" % (size))
         
-    addr = ida_kernwin.ask_addr(idc.ScreenEA(), "location to write")
+    addr = ida_kernwin.ask_addr(idc.get_screen_ea(), "location to write")
     if not addr:
         return
         

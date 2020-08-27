@@ -4,7 +4,7 @@ import ida_idd
 import ida_name
 import ida_bytes
 import ida_kernwin
-
+import ida_dbg
 
 # import types for the given macros
 idaapi.import_type(idaapi.cvar.idati, 0, "MACRO_NULL")  # for NULL
@@ -24,7 +24,7 @@ def allocate_rwx(size):
     if ptr == 0:
         print("VirtualAlloc failed: 0x%x" % GetLastError())
         raise ValueError("VirtualAlloc failed: 0x%x" % GetLastError())
-    idc.RefreshDebuggerMemory()
+    ida_dbg.refresh_debugger_memory()
     return ptr
     
     

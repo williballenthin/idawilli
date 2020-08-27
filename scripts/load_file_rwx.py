@@ -16,7 +16,7 @@ def main():
         return
         
     with open(path, "rb") as f:
-        buf = tuple(map(ord, f.read()))
+        buf = tuple(f.read())
         
     if len(buf) == 0:
         print("empty file, cancelling")
