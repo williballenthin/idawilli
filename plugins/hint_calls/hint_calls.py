@@ -11,7 +11,10 @@ import idc
 import idaapi
 import idautils
 import ida_xref
+import ida_nalt
+import ida_bytes
 import ida_lines
+import ida_kernwin
 import re
 
 
@@ -137,7 +140,7 @@ def lex(curline):
     it pulls out the strings, color directives, and escaped characters.
     
     Args:
-      curline (str): a line returned by `idaapi.get_custom_viewer_curline`
+      curline (str): a line returned by `ida_kernwin.get_custom_viewer_curline`
     
     Returns:
       generator: generator of Symbol subclass instances
@@ -149,7 +152,7 @@ def lex(curline):
 
         c = curline[offset]
 
-        if c == idaapi.COLOR_ON:
+        if c == ida_lines.COLOR_ON:
             if cur_word:
                 yield StringSymbol(''.join(cur_word))
                 cur_word = []
@@ -160,7 +163,7 @@ def lex(curline):
             yield ColorOnSymbol(color)
             offset += 1
 
-        elif c == idaapi.COLOR_OFF:
+        elif c == ida_lines.COLOR_OFF:
             if cur_word:
                 yield StringSymbol(''.join(cur_word))
                 cur_word = []
@@ -171,7 +174,7 @@ def lex(curline):
             yield ColorOffSymbol(color)
             offset += 1
 
-        elif c == idaapi.COLOR_ESC:
+        elif c == ida_lines.COLOR_ESC:
             if cur_word:
                 yield StringSymbol(''.join(cur_word))
                 cur_word = []
@@ -182,7 +185,7 @@ def lex(curline):
             cur_word.append(c)
             offset += 1
 
-        elif c == idaapi.COLOR_INV:
+        elif c == ida_lines.COLOR_INV:
             if cur_word:
                 yield StringSymbol(''.join(cur_word))
                 cur_word = []
@@ -247,10 +250,10 @@ def enum_function_addrs(fva):
         raise ValueError('not a function')
 
     for block in idaapi.FlowChart(f):
-        ea = block.startEA
-        while ea <= block.endEA:
+        ea = block.start_ea
+        while ea <= block.end_ea:
             yield ea
-            ea = idc.NextHead(ea)
+            ea = ida_bytes.next_head(ea, idc.BADADDR)
 
 
 def enum_calls_in_function(fva):
@@ -286,12 +289,12 @@ def enum_string_refs_in_function(fva):
     '''
     for ea in enum_function_addrs(fva):
         for ref in idautils.DataRefsFrom(ea):
-            stype = idc.GetStringType(ref)
+            stype = ida_nalt.get_str_type(ref)
             if stype < 0 or stype > 7:
                 continue
 
             CALC_MAX_LEN = -1
-            s = str(idc.GetString(ref, CALC_MAX_LEN, stype))
+            s = str(ida_bytes.get_strlit_contents(ref, CALC_MAX_LEN, stype))
 
             yield ea, ref, s
 
@@ -370,18 +373,18 @@ def render_function_hint(fva):
     return '\n'.join(ret)
 
 
-class CallsHintsHook(idaapi.UI_Hooks):
+class CallsHintsHook(ida_kernwin.UI_Hooks):
     def get_custom_viewer_hint(self, view, place):
         try:
-            tform = idaapi.get_current_tform()
-            if idaapi.get_tform_type(tform) != idaapi.BWN_DISASM:
+            widget = ida_kernwin.get_current_widget()
+            if ida_kernwin.get_widget_type(widget) != ida_kernwin.BWN_DISASM:
                 return None
 
-            curline = idaapi.get_custom_viewer_curline(view, True)
+            curline = ida_kernwin.get_custom_viewer_curline(view, True)
             
             # sometimes get_custom_viewer_place() returns [x, y] and sometimes [place_t, x, y].
             # we want the place_t.
-            viewer_place = idaapi.get_custom_viewer_place(view, True)
+            viewer_place = ida_kernwin.get_custom_viewer_place(view, True)
             if len(viewer_place) != 3:
                 return None
 
@@ -390,12 +393,12 @@ class CallsHintsHook(idaapi.UI_Hooks):
 
             # "color" is a bit of misnomer: its the type of the symbol currently hinted
             color = get_color_at_char(curline, x)
-            if color != idaapi.COLOR_ADDR:
+            if color != ida_lines.COLOR_ADDR:
                 return None
 
             # grab the FAR references to code (not necessarilty a branch/call/jump by itself)
             far_code_references = [xref.to for xref in idautils.XrefsFrom(ea, ida_xref.XREF_FAR) 
-                                   if idc.isCode(idc.GetFlags(xref.to))]
+                                   if ida_bytes.is_code(ida_bytes.get_flags(xref.to))]
             if len(far_code_references) != 1:
                 return None
 
