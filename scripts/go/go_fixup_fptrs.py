@@ -19,10 +19,11 @@ def enum_segments():
 def find_pointers(start, end):
     for va in range(start, end-0x8):
         ptr = ida_bytes.get_qword(va)
-        if idc.get_segm_start(ptr) == idc.BADADDR:
-            continue
-
-        yield va, ptr
+        if idc.get_segm_start(ptr) != idc.BADADDR:
+            yield va, ptr, 8
+        ptr = ida_bytes.get_dword(va)
+        if idc.get_segm_start(ptr) != idc.BADADDR:
+            yield va, ptr, 4
 
 
 def is_head(va):
@@ -51,11 +52,12 @@ def is_unknown(va):
 
 def main():
     for segstart, segend, segname in enum_segments():
-        if segname not in ('.rdata', ):
+        if segname not in ('.rdata', 'UPX1'):
             continue
 
-        for src, dst in find_pointers(segstart, segend):
-            if idc.get_segm_name(dst) != ".text":
+        print(segname)
+        for src, dst, size in find_pointers(segstart, segend):
+            if idc.get_segm_name(dst) not in (".text", "UPX0"):
                 continue
 
             if is_code(dst):
@@ -66,8 +68,8 @@ def main():
             ida_auto.auto_make_code(dst)
             ida_auto.auto_make_proc(dst)
 
-            ida_bytes.del_items(src, 8)
-            ida_bytes.create_data(src, idc.FF_QWORD, 8, idc.BADADDR)
+            ida_bytes.del_items(src, size)
+            ida_bytes.create_data(src, idc.FF_QWORD if size == 8 else idc.FF_DWORD, size, idc.BADADDR)
             # this doesn't seem to always work :-(
             idc.op_plain_offset(src, -1, 0)
             ida_name.set_name(src, "j_%s_%x" % (src, dst))
