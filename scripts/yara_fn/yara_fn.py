@@ -113,7 +113,7 @@ def get_basic_block_rule(bb):
                     masked_bytes.append('??')
                 else:
                     bytes.append(byte)
-                    masked_bytes.append('%02X' % (byte))
+                    masked_bytes.append('%02x' % int(byte.encode('hex'), 16))
         elif 'call' in idc.print_insn_mnem(va):
             for i, byte in enumerate(idc.get_bytes(va, size)):
                 bytes.append(byte)
@@ -121,7 +121,7 @@ def get_basic_block_rule(bb):
         else:
             for byte in idc.get_bytes(va, size):
                 bytes.append(byte)
-                masked_bytes.append('%02X' % (byte))
+                masked_bytes.append('%02x' % int(byte.encode('hex'), 16))
 
     return Rule('$0x%x' % (bb.va), bytes, masked_bytes)
 
@@ -142,15 +142,15 @@ def format_rules(fva, rules):
 
     md5 = idautils.GetInputFileMD5().hex()
     ret = []
-    ret.append(f'rule a_{md5}_{safe_name}')
+    ret.append('rule a_{}_{}'.format(md5, safe_name))
     ret.append('  meta:')
-    ret.append(f'    sample_md5 = "{md5}"')
-    ret.append(f'    function_address = "0x{fva}"')
-    ret.append(f'    function_name = "{name}"')
+    ret.append('    sample_md5 = "{}"'.format(md5))
+    ret.append('    function_address = "0x{}"'.format(fva))
+    ret.append('    function_name = "{}"'.format(name))
     ret.append('  strings:')
     for rule in rules:
         formatted_rule = ' '.join(rule.masked_bytes)
-        ret.append(f'    {rule.name} = {{{formatted_rule}}}')
+        ret.append('    {} = {{{}}}'.format(rule.name, formatted_rule))
     ret.append('  condition:')
     ret.append('    all of them')
     ret.append('}')
