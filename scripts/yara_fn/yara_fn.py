@@ -143,6 +143,7 @@ def format_rules(fva, rules):
     md5 = idautils.GetInputFileMD5().hex()
     ret = []
     ret.append(f'rule a_{md5}_{safe_name}')
+    ret.append('{')
     ret.append('  meta:')
     ret.append(f'    sample_md5 = "{md5}"')
     ret.append(f'    function_address = "0x{fva}"')
