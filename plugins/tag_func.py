@@ -89,7 +89,9 @@ def dirtree_mkdirs(dir, path):
             e = dir.mkdir(prefix)
             if e != ida_dirtree.DTE_OK:
                 logger.error("error: %s", ida_dirtree.dirtree_t_errstr(e))
-                return
+                return e
+
+    return ida_dirtree.DTE_OK
 
 
 def main():
@@ -104,19 +106,27 @@ def main():
         logger.error("function directory entry not found: 0x%x", f.start_ea)
         return
 
+    func_dir: ida_dirtree.dirtree_t = ida_dirtree.get_std_dirtree(ida_dirtree.DIRTREE_FUNCS)
+
+    dirent = func_dir.resolve_path(path)
+    name = func_dir.get_entry_name(dirent)
+    existing_tag = path[:-(len("/") + len(name))].lstrip("/")
+
     # ask_str(defval, hist, prompt) -> PyObject *
     # I'm not sure what "history id" does.
-    tag = ida_kernwin.ask_str("", 69, "tag:")
+    tag = ida_kernwin.ask_str(existing_tag, 69, "tag:")
     if not tag:
         return
-
-    func_dir: ida_dirtree.dirtree_t = ida_dirtree.get_std_dirtree(ida_dirtree.DIRTREE_FUNCS)
 
     tag_path = f"/{tag}"
     if not func_dir.isdir(tag_path):
         logger.info("creating tag: %s", tag)
 
-        dirtree_mkdirs(func_dir, tag_path)
+        e = dirtree_mkdirs(func_dir, tag_path)
+        if e != ida_dirtree.DTE_OK:
+            logger.error("error: failed to create tag: %s", tag)
+            return
+ 
     else:
         logger.debug("tag exists: %s", tag)
 
@@ -126,6 +136,10 @@ def main():
 
     dst_name = src_name
     dst_path = f"{tag_path}/{dst_name}"
+
+    if src_path == dst_path:
+        logger.info("skipping move to itself")
+        return
 
     logger.info("moving %s from %s to %s", src_name, src_path, dst_path)
     e = func_dir.rename(src_path, dst_path)
