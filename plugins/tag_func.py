@@ -135,10 +135,7 @@ def set_tagged_func_cmt(tag: str, va: int, cmt: str, repeatable: bool):
 
 
 def set_func_folder_cmt(va: int, folder: str):
-    # IDA is buggy when it comes to rendering Emoji characters in comments.
-    # email to support@hex-rays.com on 2022-01-21
-    #set_tagged_func_cmt("📁", va, folder, True)
-    set_tagged_func_cmt("tag", va, folder, True)
+    set_tagged_func_cmt("📁", va, folder, True)
 
 
 def sync_func_folder_cmts():
