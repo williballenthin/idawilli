@@ -1,11 +1,14 @@
 import logging
-from typing import Iterator, Optional
+from typing import Iterator, List, Optional, Tuple
 
+import ida_ua
 import ida_name
 import ida_funcs
 import ida_idaapi
 import ida_kernwin
 import ida_dirtree
+
+from ida_dirtree import dirtree_t
 
 logger = logging.getLogger("tag_func")
 
@@ -41,25 +44,42 @@ def dirtree_find(dir, pattern) -> Iterator[ida_dirtree.dirtree_cursor_t]:
         ok = dir.findnext(ff)
 
 
-def dirtree_find_name(dir, name) -> Iterator[ida_dirtree.dirtree_cursor_t]:
+def dirtree_join(*parts) -> str:
+    return "/".join(parts)
+
+
+def dirtree_walk(dir: dirtree_t, top: str) -> Iterator[Tuple[str, List[str], List[str]]]:
     """
-    given an item name
-    find absolute paths with the name within the the given dirtree.
-    this searches recursively.
+    like os.walk over the given dirtree.
+
+    yields tuples: (root, [dirs], [files])
+    use dirtree_join(*parts) to join root and dir/file entry:
+
+        # print all files
+        for root, dirs, files in dirtree_walk(func_dir, "/"):
+            for file in files:
+                print(dirtree_join(root, file))
     """
-    directories = ["/"]
+    top = top.rstrip("/")
+    directories = [top]
 
     while len(directories) > 0:
         directory = directories.pop(0)
-        for cursor in dirtree_find(dir, f"{directory}*"):
-            dirent = dir.resolve_cursor(cursor)
 
-            if dir.get_entry_name(dirent) == name:
-                yield cursor
+        dirs = []
+        files = []
+
+        for cursor in dirtree_find(dir, f"{directory}/*"):
+            dirent = dir.resolve_cursor(cursor)
+            name = dir.get_entry_name(dirent)
 
             if dirent.isdir:
-                abspath = dir.get_abspath(cursor)
-                directories.append(f"{abspath}/")
+                dirs.append(name)
+                directories.append(dirtree_join(directory, name))
+            else:
+                files.append(name)
+
+        yield (directory, dirs, files)
 
 
 def find_function_dirtree_path(va: int) -> Optional[str]:
@@ -67,14 +87,16 @@ def find_function_dirtree_path(va: int) -> Optional[str]:
     given the address of a function
     find its absolute path within the function dirtree.
     """
-    func_dir: ida_dirtree.dirtree_t = ida_dirtree.get_std_dirtree(ida_dirtree.DIRTREE_FUNCS)
+    func_dir: dirtree_t = ida_dirtree.get_std_dirtree(ida_dirtree.DIRTREE_FUNCS)
 
     name = ida_name.get_name(va)
     if not name:
         return None
 
-    for cursor in dirtree_find_name(func_dir, name):
-        return func_dir.get_abspath(cursor)
+    for root, _, files in dirtree_walk(func_dir, "/"):
+        for file in files:
+            if file == name:
+                return dirtree_join(root, file)
 
     return None
 
@@ -94,6 +116,46 @@ def dirtree_mkdirs(dir, path):
     return ida_dirtree.DTE_OK
 
 
+def set_tagged_func_cmt(tag: str, va: int, cmt: str, repeatable: bool):
+    func = ida_funcs.get_func(va)
+    existing = (ida_funcs.get_func_cmt(func, repeatable) or "").strip()
+
+    prefix = f"{tag}: "
+    line = f"{prefix}{cmt}"
+
+    if prefix in existing:
+        rest = existing.partition(prefix)[2].partition("\n")[0]
+        new = existing.replace(f"{prefix}{rest}", line)
+    elif existing == "":
+        new = line
+    else:
+        new = existing + f"\n{line}"
+
+    ida_funcs.set_func_cmt(func, new, repeatable)
+
+
+def set_func_folder_cmt(va: int, folder: str):
+    # IDA is buggy when it comes to rendering Emoji characters in comments.
+    # email to support@hex-rays.com on 2022-01-21
+    #set_tagged_func_cmt("📁", va, folder, True)
+    set_tagged_func_cmt("tag", va, folder, True)
+
+
+def sync_func_folder_cmts():
+    func_dir: dirtree_t = ida_dirtree.get_std_dirtree(ida_dirtree.DIRTREE_FUNCS)
+    for root, _, files in dirtree_walk(func_dir, "/"):
+        if root == "/" or root == "":
+            continue
+
+        tag = root.lstrip("/")
+        for file in files:
+            va = ida_name.get_name_ea(ida_idaapi.BADADDR, file)
+            if va == ida_idaapi.BADADDR:
+                continue
+
+            set_func_folder_cmt(va, tag)
+
+
 def main():
     va = ida_kernwin.get_screen_ea()
     f = ida_funcs.get_func(va)
@@ -106,7 +168,7 @@ def main():
         logger.error("function directory entry not found: 0x%x", f.start_ea)
         return
 
-    func_dir: ida_dirtree.dirtree_t = ida_dirtree.get_std_dirtree(ida_dirtree.DIRTREE_FUNCS)
+    func_dir: dirtree_t = ida_dirtree.get_std_dirtree(ida_dirtree.DIRTREE_FUNCS)
 
     dirent = func_dir.resolve_path(path)
     name = func_dir.get_entry_name(dirent)
@@ -147,6 +209,8 @@ def main():
         logger.error("error: %s", ida_dirtree.dirtree_t_errstr(e))
         return
 
+    set_func_folder_cmt(f.start_ea, tag)
+
 
 class FunctionTagPlugin(ida_idaapi.plugin_t):
     # Mandatory definitions
@@ -167,6 +231,7 @@ class FunctionTagPlugin(ida_idaapi.plugin_t):
     def init(self):
         """called when IDA is loading the plugin"""
         print("Function Tag: loaded")
+        sync_func_folder_cmts()
         return ida_idaapi.PLUGIN_OK
 
     def term(self):
@@ -184,4 +249,5 @@ def PLUGIN_ENTRY():
 
 
 if __name__ == "__main__":
+    sync_func_folder_cmts()
     main()
