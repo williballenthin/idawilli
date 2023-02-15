@@ -10,9 +10,6 @@ import ida_idaapi
 
 
 class ColorHooks(idaapi.IDP_Hooks):
-    def __init__(self):
-        super().__init__()
-
     def ev_get_bg_color(self, color, ea):
         """
         Get item background color.
@@ -81,11 +78,10 @@ def mainthread(function):
 # the only way to install this is by instantiating an instance *from within a plugin*.
 class CallPrefix(ida_lines.user_defined_prefix_t):
     def __init__(self):
-        super().__init__(len(" > "))
+        super().__init__(len(">>>"))
 
     def get_user_defined_prefix(self, ea, insn, lnnum, indent, line):
         mnem = insn.get_canon_mnem()
-        f = ida_funcs.get_func(ea)
 
         if mnem == "call":
             return ">>>"
