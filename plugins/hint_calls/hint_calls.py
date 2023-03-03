@@ -294,7 +294,10 @@ def enum_string_refs_in_function(fva):
                 continue
 
             CALC_MAX_LEN = -1
-            s = str(ida_bytes.get_strlit_contents(ref, CALC_MAX_LEN, stype))
+            try:
+                s = ida_bytes.get_strlit_contents(ref, CALC_MAX_LEN, stype).decode("utf-8")
+            except UnicodeDecodeError:
+                s = str(ida_bytes.get_strlit_contents(ref, CALC_MAX_LEN, stype))
 
             yield ea, ref, s
 
@@ -351,24 +354,27 @@ def render_function_hint(fva):
     # use `uniq` here (vs using a set) cause we want to maintain *some* semblance of order.
     calls = list(uniq(d for f, d in enum_calls_in_function(fva)))
     strings = list(uniq(s for o, r, s in enum_string_refs_in_function(fva)))
+    xrefs = [xref.frm for xref in idautils.XrefsTo(fva, ida_xref.XREF_ALL) 
+             if ida_bytes.is_code(ida_bytes.get_flags(xref.frm))]
 
     # this would be a good place to use Jinja2 templating,
     #  but lets not require that external dependency
     title = ida_lines.COLSTR('%d calls, ' % len(calls), ida_lines.SCOLOR_CODNAME)
-    title += ida_lines.COLSTR('%s strings' % len(strings), ida_lines.SCOLOR_DSTR)
+    title += ida_lines.COLSTR('%s strings, ' % len(strings), ida_lines.SCOLOR_DSTR)
+    title += ida_lines.COLSTR('%d xrefs ' % len(xrefs), ida_lines.SCOLOR_DEFAULT)
     ret.append(title)
 
     ret.append('')
     if calls:
-        ret.append(ida_lines.COLSTR('calls:', ida_lines.SCOLOR_CODNAME))
+        ret.append(ida_lines.COLSTR('calls:', ida_lines.SCOLOR_DEFAULT))
         for call in calls:
             ret.append('  - ' + call)
         ret.append('')
     
     if strings:
-        ret.append(ida_lines.COLSTR('strings:', ida_lines.SCOLOR_DSTR))
+        ret.append(ida_lines.COLSTR('strings:', ida_lines.SCOLOR_DEFAULT))
         for s in strings:
-            ret.append('  - ' + ida_lines.COLSTR(s, ida_lines.SCOLOR_DSTR))
+            ret.append('  - "' + ida_lines.COLSTR(s, ida_lines.SCOLOR_DSTR) + '"')
 
     return '\n'.join(ret)
 
