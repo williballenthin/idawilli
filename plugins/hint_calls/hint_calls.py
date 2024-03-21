@@ -5,9 +5,21 @@ Installation: put this file in your %IDADIR%/plugins/ directory.
 Author: Willi Ballenthin <william.ballenthin@fireeye.com>
 Licence: Apache 2.0
 '''
+import logging
+
 import idc
 import idaapi
 import idautils
+import ida_xref
+import ida_nalt
+import ida_bytes
+import ida_lines
+import ida_kernwin
+import re
+
+
+logger = logging.getLogger(__name__)
+DEFAULT_IMPORTANT_LINES_NUM = 5
 
 
 ###############################################################################
@@ -128,7 +140,7 @@ def lex(curline):
     it pulls out the strings, color directives, and escaped characters.
     
     Args:
-      curline (str): a line returned by `idaapi.get_custom_viewer_curline`
+      curline (str): a line returned by `ida_kernwin.get_custom_viewer_curline`
     
     Returns:
       generator: generator of Symbol subclass instances
@@ -140,7 +152,7 @@ def lex(curline):
 
         c = curline[offset]
 
-        if c == idaapi.COLOR_ON:
+        if c == ida_lines.COLOR_ON:
             if cur_word:
                 yield StringSymbol(''.join(cur_word))
                 cur_word = []
@@ -151,7 +163,7 @@ def lex(curline):
             yield ColorOnSymbol(color)
             offset += 1
 
-        elif c == idaapi.COLOR_OFF:
+        elif c == ida_lines.COLOR_OFF:
             if cur_word:
                 yield StringSymbol(''.join(cur_word))
                 cur_word = []
@@ -162,7 +174,7 @@ def lex(curline):
             yield ColorOffSymbol(color)
             offset += 1
 
-        elif c == idaapi.COLOR_ESC:
+        elif c == ida_lines.COLOR_ESC:
             if cur_word:
                 yield StringSymbol(''.join(cur_word))
                 cur_word = []
@@ -173,7 +185,7 @@ def lex(curline):
             cur_word.append(c)
             offset += 1
 
-        elif c == idaapi.COLOR_INV:
+        elif c == ida_lines.COLOR_INV:
             if cur_word:
                 yield StringSymbol(''.join(cur_word))
                 cur_word = []
@@ -222,7 +234,6 @@ def get_token_at_char(curline, index):
 ###############################################################################
 
 
-
 def enum_function_addrs(fva):
     '''
     yield the effective addresses of each instruction in the given function.
@@ -242,7 +253,7 @@ def enum_function_addrs(fva):
         ea = block.start_ea
         while ea <= block.end_ea:
             yield ea
-            ea = idc.next_head(ea)
+            ea = ida_bytes.next_head(ea, idc.BADADDR)
 
 
 def enum_calls_in_function(fva):
@@ -256,12 +267,11 @@ def enum_calls_in_function(fva):
       sequence[tuple[int, str]]: the address of a call instruction, and the disassembly line at that address
     '''
     for ea in enum_function_addrs(fva):
-        if idc.print_insn_mnem(ea) != 'call':
-            continue
-
-        disasm = idc.GetDisasm(ea)
-
-        yield ea, disasm
+        if idaapi.is_call_insn(ea):
+            disasm = ida_lines.generate_disassembly(ea, 16, True, False)[1][0]
+            # replace consequent whitespaces by a single whitespaces
+            disasm = re.sub("\s\s+", " ", disasm)
+            yield ea, disasm
 
 
 def enum_string_refs_in_function(fva):
@@ -279,14 +289,15 @@ def enum_string_refs_in_function(fva):
     '''
     for ea in enum_function_addrs(fva):
         for ref in idautils.DataRefsFrom(ea):
-            stype = idc.get_str_type(ref)
-            if stype is None:
-                continue
+            stype = ida_nalt.get_str_type(ref)
             if stype < 0 or stype > 7:
                 continue
 
             CALC_MAX_LEN = -1
-            s = str(idc.get_strlit_contents(ref, CALC_MAX_LEN, stype))
+            try:
+                s = ida_bytes.get_strlit_contents(ref, CALC_MAX_LEN, stype).decode("utf-8")
+            except UnicodeDecodeError:
+                s = str(ida_bytes.get_strlit_contents(ref, CALC_MAX_LEN, stype))
 
             yield ea, ref, s
 
@@ -343,84 +354,71 @@ def render_function_hint(fva):
     # use `uniq` here (vs using a set) cause we want to maintain *some* semblance of order.
     calls = list(uniq(d for f, d in enum_calls_in_function(fva)))
     strings = list(uniq(s for o, r, s in enum_string_refs_in_function(fva)))
+    xrefs = [xref.frm for xref in idautils.XrefsTo(fva, ida_xref.XREF_ALL) 
+             if ida_bytes.is_code(ida_bytes.get_flags(xref.frm))]
 
     # this would be a good place to use Jinja2 templating,
     #  but lets not require that external dependency
-    ret.append('%d calls, %s strings' % (len(calls), len(strings)))
+    title = ida_lines.COLSTR('%d calls, ' % len(calls), ida_lines.SCOLOR_CODNAME)
+    title += ida_lines.COLSTR('%s strings, ' % len(strings), ida_lines.SCOLOR_DSTR)
+    title += ida_lines.COLSTR('%d xrefs ' % len(xrefs), ida_lines.SCOLOR_DEFAULT)
+    ret.append(title)
 
     ret.append('')
-    ret.append('calls:')
-    for call in calls:
-        ret.append('  - ' + call)
-    if not calls:
-        ret.append('  (none)')
+    if calls:
+        ret.append(ida_lines.COLSTR('calls:', ida_lines.SCOLOR_DEFAULT))
+        for call in calls:
+            ret.append('  - ' + call)
+        ret.append('')
+    
+    if strings:
+        ret.append(ida_lines.COLSTR('strings:', ida_lines.SCOLOR_DEFAULT))
+        for s in strings:
+            ret.append('  - "' + ida_lines.COLSTR(s, ida_lines.SCOLOR_DSTR) + '"')
 
-    ret.append('')
-    ret.append('strings:')
-    for string in strings:
-        ret.append('  - ' + string)
-    if not strings:
-        ret.append('  (none)')
-
-    return str('\n'.join(ret))
+    return '\n'.join(ret)
 
 
-class CallsHintsHook(idaapi.UI_Hooks):
+class CallsHintsHook(ida_kernwin.UI_Hooks):
     def get_custom_viewer_hint(self, view, place):
         try:
-            if place is None: # in case of graph node line if Graph View
-                return None
-            tform = idaapi.get_current_widget()
-            if idaapi.get_widget_type(tform) != idaapi.BWN_DISASM:
+            widget = ida_kernwin.get_current_widget()
+            if ida_kernwin.get_widget_type(widget) != ida_kernwin.BWN_DISASM:
                 return None
 
-            curline = idaapi.get_custom_viewer_curline(view, True)
-            _, x, y = idaapi.get_custom_viewer_place(view, True)
+            curline = ida_kernwin.get_custom_viewer_curline(view, True)
+            
+            # sometimes get_custom_viewer_place() returns [x, y] and sometimes [place_t, x, y].
+            # we want the place_t.
+            viewer_place = ida_kernwin.get_custom_viewer_place(view, True)
+            if len(viewer_place) != 3:
+                return None
+
+            _, x, y = viewer_place
             ea = place.toea()
 
             # "color" is a bit of misnomer: its the type of the symbol currently hinted
             color = get_color_at_char(curline, x)
-            if color != idaapi.COLOR_ADDR:
+            if color != ida_lines.COLOR_ADDR:
                 return None
 
-            # for COLOR_ADDR tokens, we get something like:
-            #   401000sub_401000
-            # so we will need to prune the address from the start before we can use it :-(
-            token = get_token_at_char(curline, x)
-
-            # enumerate the operands of the instruction at this address
-            # and search the token for the operand text
-            func_name = None
-            for i in range(3):
-                o = idc.print_operand(ea, i)
-                if not o:
-                    break
-
-                # if we have `offset sub_401000`, we want: `sub_401000`
-                if ' ' in o:
-                    o = o.partition(' ')[2]
-
-                if o in token:
-                    func_name = o
-                    break
-
-            if not func_name:
+            # grab the FAR references to code (not necessarilty a branch/call/jump by itself)
+            far_code_references = [xref.to for xref in idautils.XrefsFrom(ea, ida_xref.XREF_FAR) 
+                                   if ida_bytes.is_code(ida_bytes.get_flags(xref.to))]
+            if len(far_code_references) != 1:
                 return None
 
-            # get the address given the function name
-            fva = idc.get_name_ea_simple(func_name)
-            if not fva:
-                return None
+            fva = far_code_references[0]
 
             # ensure its actually a function
             if not idaapi.get_func(fva):
                 return None
 
-            # this magic constant "1" is the number of "important lines" to display by default.
+            # this magic constant is the number of "important lines" to display by default.
             # the remaining lines get shown if you scroll down while the hint is displayed, revealing more lines.
-            return render_function_hint(fva), 1
+            return render_function_hint(fva), DEFAULT_IMPORTANT_LINES_NUM
         except Exception as e:
-            print('CallsHintsPlugin: error: %s. Get in touch with @williballenthin.' % (str(e)))
+            logger.warning('unexpected exception: %s. Get in touch with @williballenthin.', e, exc_info=True)
             return None
 
 
@@ -433,14 +431,17 @@ class CallsHintsPlugin(idaapi.plugin_t):
 
     def init(self):
         self.hooks = CallsHintsHook()
-        return idaapi.PLUGIN_OK
+        if self.hooks.hook():
+            return idaapi.PLUGIN_KEEP
+        else:
+            logger.warning('error setting hooks.')
+            return idaapi.PLUGIN_SKIP
 
     def run(self, arg):
-        print('CallsHintsPlugin: run')
-        self.hooks.hook()
+        pass
+        
 
     def term(self):
-        print('CallsHintsPlugin: term')
         self.hooks.unhook()
 
 
