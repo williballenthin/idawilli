@@ -8,6 +8,8 @@ There are two steps:
   1. to fetch the plugin manager
   2. to register the plugin manager with IDA Pro
 
+Then you can install plugins via `pip` directly.
+
 ### 1. Fetch the package from PyPI
 
 The plugin manager is distributed via PyPI, so install it via `pip`:
@@ -42,10 +44,14 @@ We use Python-style metadata, such as a `pyproject.toml` file, to describe the p
 By adding an "entry point" for the `idapro.plugins` group,
 we can register a plugin with the IDA Pro Plugin Manager.
 
-For example, consider a simple IDA plugin with a single file: `hello.py`. 
+Here are some example plugins:
+  - [basic-ida-plugin](/plugins/plugin-manager/examples/basic-ida-plugin/)
+  - [multifile-ida-plugin](/plugins/plugin-manager/examples/multifile-ida-plugin/)
+
+Let's walk through `basic-ida-plugin`, which is a simple IDA plugin with a single file: `hello.py`.
 (Recall that IDAPython plugins should have a function named `PLUGIN_ENTRY` that's used to initialize the plugin.)
 
-The package structure would look like:
+The package structure looks like:
 
     basic-ida-plugin/
     ├── hello.py
@@ -86,6 +92,19 @@ class hello_plugin_t(idaapi.plugin_t):
 def PLUGIN_ENTRY():
     return hello_plugin_t()
 ```
+
+The `pyproject.toml` entry point references `hello` Python module that contains the plugin code.
+Our plugin manager knows how to inspect all installed Python packages
+ and find plugins via the metadata, including `basic-ida-plugin`.
+
+I packaged this plugin and uploaded it to PyPI, so you can install it like this:
+
+    pip install basic-ida-plugin
+
+If you have a local plugin in development, you can use other Python idioms, like:
+
+    pip install --editable /path/to/basic-ida-plugin/source
+
 
 # Entry Points
 
