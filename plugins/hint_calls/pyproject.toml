@@ -4,7 +4,7 @@ authors = [
   {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
 ]
 description = "IDA Pro plugin to display popup function hints for the referenced calls and strings"
-version = "0.1.0"
+version = "0.1.1"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.9"
