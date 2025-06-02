@@ -4,7 +4,7 @@ authors = [
   {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
 ]
 description = "IDA Pro plugin to display popup function hints for the referenced calls and strings"
-version = "0.1.1"
+version = "0.1.2"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.9"
@@ -16,3 +16,11 @@ idapython = "hint_calls"
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# This places `hint_calls.py` directly into `site-packages` (gross),
+#  and lets you do `import hint_calls` (nice).
+# So, I don't love this, but it works.
+#
+# Too bad this doesn't get picked up from the entry points above.
+py-modules = ["hint_calls"]

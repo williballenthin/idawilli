@@ -19,3 +19,9 @@ lint:
     -just ruff
     -just ty
     -just mypy
+
+clean:
+    -rm -rf dist/ hint_calls_ida_plugin.egg-info/
+
+build:
+    python -m build --wheel
