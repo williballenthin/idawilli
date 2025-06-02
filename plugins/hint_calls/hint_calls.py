@@ -8,6 +8,7 @@ Licence: Apache 2.0
 
 import re
 import logging
+from typing import Optional
 
 import idc
 import idaapi
@@ -378,7 +379,7 @@ def render_function_hint(fva):
 
 
 class CallsHintsHook(ida_kernwin.UI_Hooks):
-    def get_custom_viewer_hint(self, view, place: ida_kernwin.place_t | None):
+    def get_custom_viewer_hint(self, view, place: Optional[ida_kernwin.place_t]):
         if not place:
             return None
 
