@@ -1,0 +1,33 @@
+[project]
+name = "idapro-plugin-manager"
+version = "0.1.0"
+description = "Plugin Manager for IDA Pro"
+authors = [
+    {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+readme = {file = "README.md", content-type = "text/markdown"}
+license = "Apache-2.0"
+requires-python = ">=3.9"
+dependencies = [
+    # importlib.metadata available in Python 3.10
+    # so we use this backport until we drop support for Python 3.9.
+    "importlib-metadata>=8.5.0",
+    "importlib-resources>=6.5.2",
+]
+keywords = ["reverse engineering", "ida pro", "idapro", "plugin manager", "plugins"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+]
+
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["idapro_plugin_manager*"]
+namespaces = false

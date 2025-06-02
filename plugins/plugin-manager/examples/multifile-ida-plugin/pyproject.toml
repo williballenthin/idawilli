@@ -1,0 +1,14 @@
+[project]
+name = "multifile-ida-plugin"
+authors = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "Example IDA Plugin with multiple files"
+version = "0.1.0"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.entry-points.'idapro.plugins']
+idapython = "multifile_ida_plugin.plugin"  # refers to src/multifile_ida_plugin/plugin/__init__.py
