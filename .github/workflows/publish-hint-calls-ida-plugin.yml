@@ -3,8 +3,7 @@
 name: publish hint-calls-ida-plugin to pypi
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: write
