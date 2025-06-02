@@ -31,3 +31,13 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["idapro_plugin_manager*"]
 namespaces = false
+
+[project.optional-dependencies]
+build = [
+    # Dev and build dependencies are not relaxed because
+    # we want all developer environments to be consistent.
+    # These dependencies are not used in production environments
+    # and should not conflict with other libraries/tooling.
+    "setuptools==78.1.1",
+    "build==1.2.2"
+]
