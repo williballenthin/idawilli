@@ -54,3 +54,8 @@ The `pyproject.toml` shows how to specify the location of the plugin:
 [project.entry-points.'idapro.plugins']
 idapython = "multifile_ida_plugin.plugin"
 ```
+
+## publishing
+
+Published to PyPI as `multifile-ida-plugin` via the GH Action workflow [publish-multifile-ida-plugin.yml](/../../github/workflows/publish-multifile-ida-plugin.yml).
+
