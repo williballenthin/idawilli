@@ -32,9 +32,7 @@ jobs:
       - name: publish package
         uses: pypa/gh-action-pypi-publish@v1.12.4
         with:
-          skip-existing: true
-          verbose: true
-          print-hash: true
+          skip-existing: false
           packages-dir: plugins/hint_calls/dist
       # put the artifacts after the publish step, so that they are not uploaded if the publish fails
       # since we may have multiple things to publish from the same trigger (release)
