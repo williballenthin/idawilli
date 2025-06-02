@@ -1,17 +1,12 @@
-# Hint Calls Plugin
+# Hint Calls IDA Pro Plugin
 
 IDA Pro plugin to display popup function hints for the referenced calls and strings.
 
-## Features
-
-- Shows function calls and string references as tooltips when hovering over function addresses
-- Displays the number of calls, strings, and cross-references
-- Lists all function calls and string literals used within a function
-- Works in IDA Pro's disassembly view
+![Screeshot of the plugin in action](./img/hint-calls.png)
 
 ## Installation
 
-Assuming you have the [IDA Pro Plugin Manager](/plugins/plugin-manager/), install via pip:
+Assuming you have the [IDA Pro Plugin Manager](https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/), install via pip:
 
 ```bash
 pip install hint-calls-ida-plugin
