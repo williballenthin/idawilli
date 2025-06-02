@@ -5,6 +5,7 @@ Installation: put this file in your %IDADIR%/plugins/ directory.
 Author: Willi Ballenthin <william.ballenthin@fireeye.com>
 Licence: Apache 2.0
 '''
+import re
 import logging
 
 import idc
@@ -15,7 +16,6 @@ import ida_nalt
 import ida_bytes
 import ida_lines
 import ida_kernwin
-import re
 
 
 logger = logging.getLogger(__name__)
@@ -370,7 +370,7 @@ def render_function_hint(fva):
         for call in calls:
             ret.append('  - ' + call)
         ret.append('')
-    
+
     if strings:
         ret.append(ida_lines.COLSTR('strings:', ida_lines.SCOLOR_DEFAULT))
         for s in strings:
@@ -380,21 +380,24 @@ def render_function_hint(fva):
 
 
 class CallsHintsHook(ida_kernwin.UI_Hooks):
-    def get_custom_viewer_hint(self, view, place):
+    def get_custom_viewer_hint(self, view, place: ida_kernwin.place_t | None):
+        if not place:
+            return None
+
         try:
             widget = ida_kernwin.get_current_widget()
             if ida_kernwin.get_widget_type(widget) != ida_kernwin.BWN_DISASM:
                 return None
 
             curline = ida_kernwin.get_custom_viewer_curline(view, True)
-            
+
             # sometimes get_custom_viewer_place() returns [x, y] and sometimes [place_t, x, y].
             # we want the place_t.
             viewer_place = ida_kernwin.get_custom_viewer_place(view, True)
             if len(viewer_place) != 3:
                 return None
 
-            _, x, y = viewer_place
+            _, x, _y = viewer_place
             ea = place.toea()
 
             # "color" is a bit of misnomer: its the type of the symbol currently hinted
@@ -423,11 +426,15 @@ class CallsHintsHook(ida_kernwin.UI_Hooks):
 
 
 class CallsHintsPlugin(idaapi.plugin_t):
-    flags = idaapi.PLUGIN_KEEP
-    comment = 'Display the calls and strings referenced by a function as hints.'
-    help = 'Display the calls and strings referenced by a function as hints.'
-    wanted_name = "CallsHintsPlugin"
-    wanted_hotkey = "Ctrl-'"
+    flags = idaapi.PLUGIN_KEEP | idaapi.PLUGIN_HIDE
+    comment = "Display the calls and strings referenced by a function as hints."
+    help = "Display the calls and strings referenced by a function as hints."
+    wanted_name = "Hint Calls Plugin"
+    wanted_hotkey = ""
+
+    def __init__(self):
+        super().__init__()
+        self.hooks: CallsHintsHook | None = None
 
     def init(self):
         self.hooks = CallsHintsHook()
@@ -437,12 +444,10 @@ class CallsHintsPlugin(idaapi.plugin_t):
             logger.warning('error setting hooks.')
             return idaapi.PLUGIN_SKIP
 
-    def run(self, arg):
-        pass
-        
-
     def term(self):
-        self.hooks.unhook()
+        if self.hooks:
+            self.hooks.unhook()
+            self.hooks = None
 
 
 def PLUGIN_ENTRY():
