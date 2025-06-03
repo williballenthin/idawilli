@@ -39,7 +39,7 @@ build-backend = "setuptools.build_meta"
 include = ["idapro_plugin_manager*"]
 namespaces = false
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
     "types-requests>=2.32.0.20250602",
 ]
