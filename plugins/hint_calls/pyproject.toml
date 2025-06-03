@@ -1,5 +1,5 @@
 [project]
-name = "hint-calls-ida-plugin"
+name = "williballenthin-hint-calls-ida-plugin"
 authors = [
   {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
 ]

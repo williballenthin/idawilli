@@ -9,7 +9,7 @@ IDA Pro plugin to display popup function hints for the referenced calls and stri
 Assuming you have the [IDA Pro Plugin Manager](https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/), install via pip:
 
 ```bash
-pip install hint-calls-ida-plugin
+pip install williballenthin-hint-calls-ida-plugin
 ```
 
 Make sure to use the pip from your IDAPython installation.

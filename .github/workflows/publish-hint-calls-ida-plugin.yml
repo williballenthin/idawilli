@@ -1,6 +1,6 @@
 # use PyPI trusted publishing, as described here:
 # https://blog.trailofbits.com/2023/05/23/trusted-publishing-a-new-benchmark-for-packaging-security/
-name: publish hint-calls-ida-plugin to pypi
+name: publish williballenthin-hint-calls-ida-plugin to pypi
 
 on:
   workflow_dispatch:
