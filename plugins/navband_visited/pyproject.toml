@@ -1,0 +1,21 @@
+[project]
+name = "williballenthin-navband-visited-ida-plugin"
+authors = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "IDA Pro plugin to highlight visited addresses in the navigation band."
+version = "0.1.0"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.entry-points.'idapro.plugins']
+idapython = "navband_visited"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["navband_visited"]
