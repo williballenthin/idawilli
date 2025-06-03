@@ -12,7 +12,7 @@ from ida_dirtree import dirtree_t
 logger = logging.getLogger("tag_func")
 
 
-def dirtree_find(dir, pattern) -> Iterator[ida_dirtree.dirtree_cursor_t]:
+def dirtree_find(dirtree: dirtree_t, pattern) -> Iterator[ida_dirtree.dirtree_cursor_t]:
     """
     enumerate the matches for the given pattern against the given dirtree.
     this is just a Pythonic helper over the SWIG-generated routines.
@@ -37,17 +37,17 @@ def dirtree_find(dir, pattern) -> Iterator[ida_dirtree.dirtree_cursor_t]:
     #
     # to search by name, i guess use pattern "*" and check get_entry_name
     ff = ida_dirtree.dirtree_iterator_t()
-    ok = dir.findfirst(ff, pattern)
+    ok = dirtree.findfirst(ff, pattern)
     while ok:
         yield ff.cursor
-        ok = dir.findnext(ff)
+        ok = dirtree.findnext(ff)
 
 
-def dirtree_join(*parts) -> str:
+def dirtree_join(*parts: list[str]) -> str:
     return "/".join(parts)
 
 
-def dirtree_walk(dir: dirtree_t, top: str) -> Iterator[Tuple[str, List[str], List[str]]]:
+def dirtree_walk(dirtree: dirtree_t, top: str) -> Iterator[Tuple[str, List[str], List[str]]]:
     """
     like os.walk over the given dirtree.
 
@@ -68,9 +68,9 @@ def dirtree_walk(dir: dirtree_t, top: str) -> Iterator[Tuple[str, List[str], Lis
         dirs = []
         files = []
 
-        for cursor in dirtree_find(dir, f"{directory}/*"):
-            dirent = dir.resolve_cursor(cursor)
-            name = dir.get_entry_name(dirent)
+        for cursor in dirtree_find(dirtree, f"{directory}/*"):
+            dirent = dirtree.resolve_cursor(cursor)
+            name = dirtree.get_entry_name(dirent)
 
             if dirent.isdir:
                 dirs.append(name)
@@ -100,14 +100,14 @@ def find_function_dirtree_path(va: int) -> Optional[str]:
     return None
 
 
-def dirtree_mkdirs(dir, path):
+def dirtree_mkdirs(dirtree: dirtree_t, path: str):
     parts = path.split("/")
 
     for i in range(2, len(parts) + 1):
         prefix = "/".join(parts[:i])
 
-        if not dir.isdir(prefix):
-            e = dir.mkdir(prefix)
+        if not dirtree.isdir(prefix):
+            e = dirtree.mkdir(prefix)
             if e != ida_dirtree.DTE_OK:
                 logger.error("error: %s", ida_dirtree.dirtree_t_errstr(e))
                 return e
@@ -184,7 +184,7 @@ def main():
         if e != ida_dirtree.DTE_OK:
             logger.error("error: failed to create tag: %s", tag)
             return
- 
+
     else:
         logger.debug("tag exists: %s", tag)
 
@@ -208,40 +208,24 @@ def main():
     set_func_folder_cmt(f.start_ea, tag)
 
 
-class FunctionTagPlugin(ida_idaapi.plugin_t):
-    # Mandatory definitions
-    PLUGIN_NAME = "Function Tag"
-    PLUGIN_VERSION = "1.0.0"
-    PLUGIN_AUTHORS = "william.ballenthin@mandiant.com"
-
-    wanted_name = PLUGIN_NAME
-    wanted_hotkey = "Z"
+class TagFunctionPlugin(ida_idaapi.plugin_t):
+    flags = ida_idaapi.PLUGIN_UNL | ida_idaapi.PLUGIN_MULTI
     comment = "Quickly organize functions into tags via hotkey"
-    version = ""
-    flags = 0
-
-    def __init__(self):
-        """initialize plugin"""
-        pass
+    help = "Quickly organize functions into tags via hotkey"
+    wanted_name = "Tag Function"
+    wanted_hotkey = "Z"
 
     def init(self):
-        """called when IDA is loading the plugin"""
-        print("Function Tag: loaded")
         sync_func_folder_cmts()
         return ida_idaapi.PLUGIN_OK
 
-    def term(self):
-        """called when IDA is unloading the plugin"""
-        pass
-
-    def run(self, arg):
-        """called when IDA is running the plugin as a script"""
+    def run(self, _arg):
         main()
         return True
 
 
 def PLUGIN_ENTRY():
-    return FunctionTagPlugin()
+    return TagFunctionPlugin()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,17 @@
+[project]
+name = "williballenthin-tag-func-ida-plugin"
+authors = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "IDA Pro plugin for tagging functions into folders"
+version = "0.1.0"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.entry-points.'idapro.plugins']
+idapython = "tag_func"
+
+[tool.setuptools]
+py-modules = ["tag_func"]
