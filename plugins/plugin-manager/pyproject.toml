@@ -13,6 +13,13 @@ dependencies = [
     # so we use this backport until we drop support for Python 3.9.
     "importlib-metadata>=8.5.0",
     "importlib-resources>=6.5.2",
+
+    # for ippm cli tool
+    "packaging>=24.0",
+    "platformdirs>=4.0.0",
+    "requests>=2.30.0",
+    "requests-cache>=1.2.0",
+    "rich>=13.0.0",
 ]
 keywords = ["reverse engineering", "ida pro", "idapro", "plugin manager", "plugins"]
 classifiers = [
@@ -32,7 +39,10 @@ build-backend = "setuptools.build_meta"
 include = ["idapro_plugin_manager*"]
 namespaces = false
 
-[project.optional-dependencies]
+[dependency-groups]
+dev = [
+    "types-requests>=2.32.0.20250602",
+]
 build = [
     # Dev and build dependencies are not relaxed because
     # we want all developer environments to be consistent.
@@ -41,3 +51,6 @@ build = [
     "setuptools==78.1.1",
     "build==1.2.2"
 ]
+
+[project.scripts]
+ippm = "idapro_plugin_manager.__main__:main"

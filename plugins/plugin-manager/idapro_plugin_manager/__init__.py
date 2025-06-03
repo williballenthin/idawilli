@@ -11,7 +11,6 @@ else:
     import importlib.metadata as importlib_metadata
     import importlib.resources as importlib_resources
 
-import ida_loader
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +100,9 @@ def install():
         def PLUGIN_ENTRY():
             return hello_plugin_t()
     """
+    # keep this import lazy so the top level module can be imported
+    # without being inside IDA (such as in tests).
+    import ida_loader
 
     current_target = get_current_target_triple()
     logger.info("current target: %s", current_target)
@@ -168,12 +170,12 @@ def install():
             else:
                 logger.warning("unexpected target: %s", target)
                 continue
-            
+
             # This is like "mysample" for the spec "native_ida_plugin:mysample"
             plugin_file_name = plugin.attr
 
             # Like: "native_ida_plugin/mysample.so"
-            plugin_path = str(module_path  / plugin_file_name) + extension
+            plugin_path = str(module_path / plugin_file_name) + extension
 
             # Load the plugin using IDA's infrastructure (invoking `PLUGIN_ENTRY`).
             try:
