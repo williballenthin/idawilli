@@ -90,3 +90,4 @@ ENV/
 .direnv
 .venv
 .envrc
+.env

@@ -1,7 +1,6 @@
 import logging
 from typing import Iterator, List, Optional, Tuple
 
-import ida_ua
 import ida_name
 import ida_funcs
 import ida_idaapi
@@ -169,7 +168,7 @@ def main():
 
     dirent = func_dir.resolve_path(path)
     name = func_dir.get_entry_name(dirent)
-    existing_tag = path[:-(len("/") + len(name))].lstrip("/")
+    existing_tag = path[: -(len("/") + len(name))].lstrip("/")
 
     # ask_str(defval, hist, prompt) -> PyObject *
     # I'm not sure what "history id" does.
