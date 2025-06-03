@@ -1,14 +1,14 @@
-import idaapi
+import ida_idaapi
 
 
-class hello_plugmod_t(idaapi.plugmod_t):
+class hello_plugmod_t(ida_idaapi.plugmod_t):
     def run(self, arg):
         print("Hello world from Python!")
         return 0
 
 
-class hello_plugin_t(idaapi.plugin_t):
-    flags = idaapi.PLUGIN_UNL | idaapi.PLUGIN_MULTI
+class hello_plugin_t(ida_idaapi.plugin_t):
+    flags = ida_idaapi.PLUGIN_UNL | ida_idaapi.PLUGIN_MULTI
     comment = "This is an example Python plugin (comment)"
     help = "This is an example Python plugin"
     wanted_name = "Example Python plugin"
