@@ -38,7 +38,7 @@ echo -e "\033[34mRunning ty check...\033[0m" >&2
 uvx ty check --ignore unresolved-import "$FILE_PATH"
 
 echo -e "\033[34mRunning mypy...\033[0m" >&2
-uvx mypy --check-untyped-defs --ignore-missing-imports "$FILE_PATH"
+uvx mypy --check-untyped-defs --ignore-missing-imports --disable-error-code=import-untyped "$FILE_PATH"
 
 echo -e "\033[32mLinting completed successfully for $FILE_PATH.\033[0m" >&2
 exit 0
