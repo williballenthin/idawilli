@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import os
 import sys
 import argparse
 import datetime
 from typing import Any
-from collections.abc import Iterator
+from pathlib import Path
 from dataclasses import dataclass
+from collections.abc import Iterator
 
 if sys.version_info < (3, 10):
     # once we drop support for Python 3.9,
@@ -14,14 +16,13 @@ if sys.version_info < (3, 10):
 else:
     import importlib.metadata as importlib_metadata
 
-
 import rich
 import rich.table
 import platformdirs
 import packaging.version
 import requests.exceptions
-from rich.progress import Progress
 from rich.markdown import Markdown
+from rich.progress import Progress
 from requests_cache import SQLiteCache, CachedSession, CachedResponse, OriginalResponse
 
 # manually registered plugins, which requires a new release of ippm to update.
@@ -29,6 +30,28 @@ ADDITIONAL_PROJECTS: set[str] = set()
 IGNORED_PROJECTS: set[str] = {
     "idapro-plugin-manager",  # this project, which isn't a plugin, but has the prefix.
 }
+
+# Bootstrap plugin content that gets installed to $IDADIR/plugins/
+BOOTSTRAP_PLUGIN_CONTENT = """import idaapi
+
+import idapro_plugin_manager
+
+
+class loader_plugin_t(idaapi.plugin_t):
+    # don't use PLUGIN_FIX because we want plugins to be re-loaded at various lifecycle points, not just at startup.
+    flags = idaapi.PLUGIN_MULTI | idaapi.PLUGIN_HIDE
+    comment = "Plugin used to load other plugins"
+    help = "Plugin used to load other plugins"
+    wanted_name = "IDA Pro Plugin Manager Loader"
+    wanted_hotkey = ""
+
+    def init(self):
+        idapro_plugin_manager.install()
+
+
+def PLUGIN_ENTRY():
+    return loader_plugin_t()
+"""
 
 
 def get_session() -> CachedSession:
@@ -167,7 +190,7 @@ def iter_plugins() -> Iterator[PluginInfo]:
                 progress.advance(task)
 
 
-def handle_list_command(args: argparse.Namespace) -> None:
+def handle_list_command(args: argparse.Namespace) -> int:
     table = rich.table.Table(title="Available IDA Pro Plugins on PyPI")
     table.add_column("Name", style="cyan", no_wrap=True)
     table.add_column("Last Release", style="magenta")
@@ -202,8 +225,10 @@ def handle_list_command(args: argparse.Namespace) -> None:
     else:
         rich.print("No IDA Pro plugins found on PyPI matching the criteria.")
 
+    return 0
 
-def handle_show_command(args: argparse.Namespace) -> None:
+
+def handle_show_command(args: argparse.Namespace) -> int:
     plugin_name = args.plugin_name
     session = get_session()
     try:
@@ -237,10 +262,10 @@ def handle_show_command(args: argparse.Namespace) -> None:
             ("Platform", "platform"),
         ]
         for display, key in url_fields:
-            if (value := info.get(key)):
+            if value := info.get(key):
                 table.add_row(display, value)
 
-        if (project_urls := info.get("project_urls")):
+        if project_urls := info.get("project_urls"):
             for key, url in project_urls.items():
                 table.add_row(f"Project URL ({key})", url)
 
@@ -251,7 +276,7 @@ def handle_show_command(args: argparse.Namespace) -> None:
             table.add_row("Dependencies", "\n".join(info["requires_dist"]))
 
         downloads = info.get("downloads", {})
-        if downloads and downloads.get("last_day", -1) != -1 :
+        if downloads and downloads.get("last_day", -1) != -1:
             table.add_row("Downloads (Day)", str(downloads.get("last_day")))
             table.add_row("Downloads (Week)", str(downloads.get("last_week")))
             table.add_row("Downloads (Month)", str(downloads.get("last_month")))
@@ -269,24 +294,18 @@ def handle_show_command(args: argparse.Namespace) -> None:
                     all_files_yanked = False
                 else:
                     upload_times = [
-                        e["upload_time_iso_8601"]
-                        for e in release_files_list
-                        if "upload_time_iso_8601" in e
+                        e["upload_time_iso_8601"] for e in release_files_list if "upload_time_iso_8601" in e
                     ]
                     if not upload_times:
                         upload_date = None
                     else:
                         earliest_upload_time_iso = min(upload_times)
-                        upload_date = datetime.datetime.fromisoformat(
-                            earliest_upload_time_iso.replace("Z", "+00:00")
-                        )
+                        upload_date = datetime.datetime.fromisoformat(earliest_upload_time_iso.replace("Z", "+00:00"))
                     all_files_yanked = all(e.get("yanked", False) for e in release_files_list)
 
                 if upload_date:
-                    version_history_data.append(
-                        (upload_date, version_s, all_files_yanked)
-                    )
-            
+                    version_history_data.append((upload_date, version_s, all_files_yanked))
+
             version_history_data.sort(key=lambda x: x[0], reverse=True)
 
             if version_history_data:
@@ -305,22 +324,82 @@ def handle_show_command(args: argparse.Namespace) -> None:
                 table.add_row(f"Description ({description_content_type})", description)
 
         rich.print(table)
+        return 0
 
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 404:
             rich.print(f"[bold red]Error: Plugin '{plugin_name}' not found on PyPI.[/]")
+            return 0
         else:
             rich.print(
                 f"[bold red]Error fetching plugin details: HTTP {e.response.status_code} - {e.response.reason}[/]"
             )
+            return 0
 
 
-def handle_version_command(args: argparse.Namespace) -> None:
+def get_idausr_directory() -> Path:
+    if sys.platform == "win32":
+        # Windows: %APPDATA%/Hex-Rays/IDA Pro
+        appdata = os.environ.get("APPDATA")
+        if idausr := appdata:
+            idausr = Path(idausr) / "Hex-Rays" / "IDA Pro"
+        else:
+            raise ValueError("failed to find %APPDATA% environment variable")
+    else:
+        # Linux and Mac: $HOME/.idapro
+        if home := os.environ.get("HOME"):
+            idausr = Path(home) / ".idapro"
+        else:
+            raise ValueError("failed to find $HOME environment variable")
+
+    if not idausr or not idausr.exists():
+        raise ValueError(f"$IDAUSR directory does not exist: {idausr}")
+
+    return idausr
+
+
+def handle_register_command(args: argparse.Namespace) -> int:
+    try:
+        idausr = get_idausr_directory()
+    except ValueError as e:
+        rich.print(f"[bold red]Error: Could not find the $IDAUSR directory: {e}[/]")
+        return -1
+
+    plugins_dir = idausr / "plugins"
+    plugins_dir.mkdir(parents=True, exist_ok=True)
+
+    bootstrap_file = plugins_dir / "load-idapro-plugin-manager.py"
+
+    if bootstrap_file.exists():
+        existing_content = bootstrap_file.read_text()
+        if existing_content.strip() == BOOTSTRAP_PLUGIN_CONTENT.strip():
+            rich.print("[green]Bootstrap plugin is already installed and up to date.[/]")
+            return 0
+
+        else:
+            rich.print("[bold red]Error: Bootstrap plugin file already exists with different content.[/]")
+            rich.print(f"File location: {bootstrap_file}")
+            rich.print("The existing file may be from a different version or manually modified.")
+            rich.print("Please backup and remove the existing file if you want to proceed.")
+            return -1
+
+    try:
+        bootstrap_file.write_text(BOOTSTRAP_PLUGIN_CONTENT)
+        rich.print(f"[green]Successfully installed bootstrap plugin to {bootstrap_file}[/]")
+        rich.print("The IDA Pro Plugin Manager is now registered with IDA Pro.")
+        return 0
+    except PermissionError:
+        rich.print("[bold red]Error: Permission denied writing to IDA plugins directory.[/]")
+        return -1
+
+
+def handle_version_command(args: argparse.Namespace) -> int:
     version = importlib_metadata.version("idapro-plugin-manager")
     rich.print(f"ippm version {version}")
+    return 0
 
 
-def main() -> None:
+def main() -> int:
     parser = argparse.ArgumentParser(
         description="IDA Pro Plugin Manager (ippm). Manages IDA Pro plugins found on PyPI."
     )
@@ -329,6 +408,10 @@ def main() -> None:
     # version command
     version_parser = subparsers.add_parser("version", help="Show program's version number and exit.")
     version_parser.set_defaults(func=handle_version_command)
+
+    # register command
+    register_parser = subparsers.add_parser("register", help="Register the plugin manager with IDA Pro.")
+    register_parser.set_defaults(func=handle_register_command)
 
     list_parser = subparsers.add_parser("list", help="List available IDA Pro plugins on PyPI.")
     list_parser.set_defaults(func=handle_list_command)
@@ -339,10 +422,11 @@ def main() -> None:
 
     args = parser.parse_args()
     if hasattr(args, "func"):
-        args.func(args)
+        return args.func(args)
     else:
         parser.print_help()
+        return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

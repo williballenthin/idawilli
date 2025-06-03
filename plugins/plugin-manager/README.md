@@ -32,9 +32,13 @@ Python>subprocess.run(["which", "pip"], capture_output=True).stdout.decode("utf-
 
 ### 2. Register the plugin manager in IDA Pro
 
-Copy `plugins/load_idapro_plugin_manager.py` to `~/.idapro/plugins/`.
+Run the following command to automatically register the plugin manager with IDA Pro:
 
-You only have to do this once, even if you upgrade IDA.
+```bash
+$ ippm register
+```
+
+This installs the bootstrap plugin to your IDA Pro plugins directory. You only have to do this once, even if you upgrade IDA.
 
 ## Packaging Plugins
 
@@ -104,6 +108,8 @@ I packaged this plugin and uploaded it to PyPI, so you can install it like this:
 If you have a local plugin in development, you can use other Python idioms, like:
 
     pip install --editable /path/to/basic-ida-plugin/source
+
+There is a more comprehensive miration guide found in [doc/migrating-a-plugin.md](doc/migrating-a-plugin.md).
 
 
 # Entry Points
