@@ -11,7 +11,10 @@ $ ippm register
 # find some plugins
 $ ippm list
 $ ippm show williballenthin-hint-calls-ida-plugin
-$ pip install williballenthin-hint-calls-ida-plugin
+$ ippm install williballenthin-hint-calls-ida-plugin
+$ ippm update williballenthin-hint-calls-ida-plugin
+$ ippm update-all
+$ ippm remove williballenthin-hint-calls-ida-plugin
 ```
 
 Read on for details:
@@ -124,6 +127,60 @@ $ ippm show williballenthin-tag-func-ida-plugin
 │                             │                                                                              │
 │                             │ Make sure to use the pip from your IDAPython installation.                   │
 └─────────────────────────────┴──────────────────────────────────────────────────────────────────────────────
+```
+
+### Installing Plugins
+
+To install a plugin:
+
+```bash
+$ ippm install multifile-ida-plugin
+Installing plugin: multifile-ida-plugin
+Successfully installed multifile-ida-plugin
+  Collecting multifile-ida-plugin
+    Downloading multifile_ida_plugin-0.1.0-py3-none-any.whl.metadata (1.8 kB)
+  Downloading multifile_ida_plugin-0.1.0-py3-none-any.whl (2.8 kB)
+  Installing collected packages: multifile-ida-plugin
+  Successfully installed multifile-ida-plugin-0.1.0
+```
+
+
+### Updating Plugins
+To update a plugin to the latest version:
+
+```bash
+$ ippm update multifile-ida-plugin
+Updating plugin: multifile-ida-plugin
+multifile-ida-plugin is already up to date
+  Requirement already satisfied: multifile-ida-plugin in ./.venv/lib/python3.12/site-packages (0.1.0)
+```
+
+### Updating All Plugins
+
+To update all installed plugins to their latest versions:
+
+```bash
+$ ippm update-all 
+Finding installed IDA Pro plugins...
+Found 2 installed IDA Pro plugin(s):
+  - basic-ida-plugin
+  - multifile-ida-plugin
+
+Checking for updates...
+  basic-ida-plugin: 0.1.0 (up to date)
+  multifile-ida-plugin: 0.1.0 (up to date)
+
+All plugins are up to date!
+```
+
+### Removing Plugins
+
+To remove an installed plugin:
+
+```bash
+$ ippm remove multifile-ida-plugin
+Removing plugin: multifile-ida-plugin
+Successfully removed multifile-ida-plugin
 ```
 
 ## Packaging Plugins

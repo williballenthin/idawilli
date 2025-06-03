@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 import argparse
 import datetime
+import subprocess
 from typing import Any
 from pathlib import Path
 from dataclasses import dataclass
@@ -190,6 +192,44 @@ def iter_plugins() -> Iterator[PluginInfo]:
                 progress.advance(task)
 
 
+def is_valid_package_spec(package_spec: str) -> bool:
+    """Validate that a package specification is safe and well-formed."""
+    # Allow only alphanumeric characters, hyphens, underscores, dots, and version specs
+    # This prevents shell injection and ensures we only get valid package names
+    pattern = r"^[a-zA-Z0-9._-]+(?:==|>=|<=|>|<|!=|~=)?[a-zA-Z0-9._-]*$"
+    return bool(re.match(pattern, package_spec))
+
+
+def run_pip_command(args: list[str]) -> tuple[bool, str]:
+    """Run a pip command safely and return success status and output."""
+    try:
+        result = subprocess.run(
+            # this won't work if we execute within IDA
+            # I wonder if we can invoke pip as a module in the curren interpreter?
+            [sys.executable, "-m", "pip"] + args,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=300,  # 5 minute timeout
+        )
+        return result.returncode == 0, result.stdout + result.stderr
+    except subprocess.TimeoutExpired:
+        return False, "Command timed out after 5 minutes"
+
+
+def get_installed_ida_plugins() -> list[str]:
+    """Get list of currently installed IDA Pro plugins using entry points mechanism."""
+    installed_plugins = []
+
+    plugins = list(importlib_metadata.entry_points(group="idapro.plugins"))
+
+    for plugin in plugins:
+        if plugin.dist:
+            installed_plugins.append(plugin.dist.name)
+
+    return list(set(installed_plugins))
+
+
 def handle_list_command(args: argparse.Namespace) -> int:
     table = rich.table.Table(title="Available IDA Pro Plugins on PyPI")
     table.add_column("Name", style="cyan", no_wrap=True)
@@ -337,6 +377,180 @@ def handle_show_command(args: argparse.Namespace) -> int:
             return 0
 
 
+def handle_install_command(args: argparse.Namespace) -> int:
+    package_spec = args.package_spec
+
+    if not is_valid_package_spec(package_spec):
+        rich.print(f"[bold red]Error: Invalid package specification '{package_spec}'[/]")
+        rich.print("Package name must contain only alphanumeric characters, hyphens, underscores, and dots.")
+        rich.print("Version specifications like '==1.0.0' are allowed.")
+        return -1
+
+    rich.print(f"Installing plugin: [cyan]{package_spec}[/]")
+
+    success, output = run_pip_command(["install", package_spec])
+
+    if success:
+        rich.print(f"[green]Successfully installed {package_spec}[/]")
+        if output.strip():
+            for line in output.strip().split("\n"):
+                if line.strip():
+                    rich.print(f"  {line}")
+    else:
+        rich.print(f"[bold red]Failed to install {package_spec}[/]")
+        rich.print("Error output:")
+        for line in output.strip().split("\n"):
+            if line.strip():
+                rich.print(f"  {line}")
+        return -1
+
+    return 0
+
+
+def handle_remove_command(args: argparse.Namespace) -> int:
+    package_name = args.package_name
+
+    if not is_valid_package_spec(package_name):
+        rich.print(f"[bold red]Error: Invalid package name '{package_name}'[/]")
+        rich.print("Package name must contain only alphanumeric characters, hyphens, underscores, and dots.")
+        return -1
+
+    try:
+        importlib_metadata.distribution(package_name)
+    except importlib_metadata.PackageNotFoundError:
+        rich.print(f"[yellow]Package '{package_name}' is not installed[/]")
+        return 0
+
+    rich.print(f"Removing plugin: [cyan]{package_name}[/]")
+
+    success, output = run_pip_command(["uninstall", package_name, "--yes"])
+
+    if success:
+        rich.print(f"[green]Successfully removed {package_name}[/]")
+    else:
+        rich.print(f"[bold red]Failed to remove {package_name}[/]")
+        rich.print("Error output:")
+        for line in output.strip().split("\n"):
+            if line.strip():
+                rich.print(f"  {line}")
+        return -1
+
+    return 0
+
+
+def handle_update_command(args: argparse.Namespace) -> int:
+    package_name = args.package_name
+
+    if not is_valid_package_spec(package_name):
+        rich.print(f"[bold red]Error: Invalid package name '{package_name}'[/]")
+        rich.print("Package name must contain only alphanumeric characters, hyphens, underscores, and dots.")
+        return -1
+
+    try:
+        importlib_metadata.distribution(package_name)
+    except importlib_metadata.PackageNotFoundError:
+        rich.print(f"[yellow]Package '{package_name}' is not installed[/]")
+        return 0
+
+    rich.print(f"Updating plugin: [cyan]{package_name}[/]")
+
+    success, output = run_pip_command(["install", "--upgrade", package_name])
+
+    if success:
+        # Check if there was actually an update or if it was already up to date
+        if "already satisfied" in output.lower() or "already up-to-date" in output.lower():
+            rich.print(f"[green]{package_name} is already up to date[/]")
+        else:
+            rich.print(f"[green]Successfully updated {package_name}[/]")
+        # Show brief output
+        if output.strip():
+            for line in output.strip().split("\n")[-3:]:  # Show last 3 lines
+                if line.strip():
+                    rich.print(f"  {line}")
+    else:
+        rich.print(f"[bold red]Failed to update {package_name}[/]")
+        rich.print("Error output:")
+        for line in output.strip().split("\n"):
+            if line.strip():
+                rich.print(f"  {line}")
+        return -1
+
+    return 0
+
+
+def handle_update_all_command(args: argparse.Namespace) -> int:
+    rich.print("Finding installed IDA Pro plugins...")
+
+    installed_plugins = get_installed_ida_plugins()
+
+    if not installed_plugins:
+        rich.print("[yellow]No IDA Pro plugins are currently installed[/]")
+        return 0
+
+    rich.print(f"Found {len(installed_plugins)} installed IDA Pro plugin(s):")
+    for plugin in installed_plugins:
+        rich.print(f"  - [cyan]{plugin}[/]")
+
+    rich.print("\nChecking for updates...")
+
+    plugins_to_update = []
+
+    for plugin in installed_plugins:
+        dist = importlib_metadata.distribution(plugin)
+        installed_version = dist.version
+
+        session = get_session()
+        response = session.get(f"https://pypi.org/pypi/{plugin}/json")
+        if response.status_code == 404:
+            rich.print(f"  [yellow]{plugin}: Not found on PyPI, skipping[/]")
+            continue
+        response.raise_for_status()
+        data = response.json()
+        latest_version = data["info"]["version"]
+
+        try:
+            installed_ver = packaging.version.parse(installed_version)
+            latest_ver = packaging.version.parse(latest_version)
+            if latest_ver > installed_ver:
+                plugins_to_update.append(plugin)
+                rich.print(f"  [cyan]{plugin}[/]: {installed_version} → {latest_version}")
+            else:
+                rich.print(f"  [green]{plugin}[/]: {installed_version} (up to date)")
+        except packaging.version.InvalidVersion:
+            plugins_to_update.append(plugin)
+            rich.print(f"  [yellow]{plugin}[/]: version comparison failed, will attempt update")
+
+    if not plugins_to_update:
+        rich.print("\n[green]All plugins are up to date![/]")
+        return 0
+
+    rich.print(f"\nUpdating {len(plugins_to_update)} plugin(s)...")
+
+    failed_updates = []
+    for plugin in plugins_to_update:
+        rich.print(f"Updating [cyan]{plugin}[/]...")
+
+        success, output = run_pip_command(["install", "--upgrade", plugin])
+
+        if success:
+            rich.print(f"  [green]Successfully updated {plugin}[/]")
+        else:
+            rich.print(f"  [bold red]Failed to update {plugin}[/]")
+            failed_updates.append(plugin)
+            for line in output.strip().split("\n"):
+                if line.strip():
+                    rich.print(f"    {line}")
+
+    if failed_updates:
+        rich.print(f"\n[bold red]Failed to update {len(failed_updates)} plugin(s):[/]")
+        for plugin in failed_updates:
+            rich.print(f"  - {plugin}")
+        return -1
+    else:
+        rich.print("\n[green]All plugins updated successfully![/]")
+        return 0
+
+
 def get_idausr_directory() -> Path:
     if sys.platform == "win32":
         # Windows: %APPDATA%/Hex-Rays/IDA Pro
@@ -412,6 +626,31 @@ def main() -> int:
     # register command
     register_parser = subparsers.add_parser("register", help="Register the plugin manager with IDA Pro.")
     register_parser.set_defaults(func=handle_register_command)
+
+    # install command
+    install_parser = subparsers.add_parser("install", help="Install an IDA Pro plugin from PyPI.")
+    install_parser.add_argument(
+        "package_spec",
+        metavar="PACKAGE",
+        help="Package name or package name with version (e.g., 'plugin-name' or 'plugin-name==1.0.0')",
+    )
+    install_parser.set_defaults(func=handle_install_command)
+
+    # remove command
+    remove_parser = subparsers.add_parser("remove", help="Remove an installed IDA Pro plugin.")
+    remove_parser.add_argument("package_name", metavar="PACKAGE_NAME", help="The name of the plugin to remove.")
+    remove_parser.set_defaults(func=handle_remove_command)
+
+    # update command
+    update_parser = subparsers.add_parser("update", help="Update a specific IDA Pro plugin to its latest version.")
+    update_parser.add_argument("package_name", metavar="PACKAGE_NAME", help="The name of the plugin to update.")
+    update_parser.set_defaults(func=handle_update_command)
+
+    # update-all command
+    update_all_parser = subparsers.add_parser(
+        "update-all", help="Update all outdated IDA Pro plugins to their latest versions."
+    )
+    update_all_parser.set_defaults(func=handle_update_all_command)
 
     list_parser = subparsers.add_parser("list", help="List available IDA Pro plugins on PyPI.")
     list_parser.set_defaults(func=handle_list_command)
