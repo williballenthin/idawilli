@@ -1,5 +1,24 @@
 # IDA Pro Plugin Manager
 
+The IDA Pro Plugin Manager is a tool to help you discover, install, and manage IDA Pro plugins distributed via a central index. It should be *very easy* for you extend the capabilities of IDA Pro with plugins, whether they are written in IDAPython or compiled languages like C/C++.
+
+Quickstart:
+```bash
+# one time installation
+$ pip install idapro-plugin-manager
+$ ippm register
+
+# find some plugins
+$ ippm list
+$ ippm show williballenthin-hint-calls-ida-plugin
+$ pip install williballenthin-hint-calls-ida-plugin
+```
+
+Read on for details:
+  - [Installation Instructions](#installation)
+  - [Command-Line Tool (`ippm`)](#command-line-tool-ippm)
+  - [Packaging Plugins](#packaging-plugins)
+  - [Entry Points](#entry-points)
 
 ## Installation
 
@@ -39,6 +58,73 @@ $ ippm register
 ```
 
 This installs the bootstrap plugin to your IDA Pro plugins directory. You only have to do this once, even if you upgrade IDA.
+
+## Command-Line Tool (`ippm`)
+
+The IDA Pro Plugin Manager also comes with a command-line tool, `ippm`, to help you discover and manage plugins.
+
+### Listing Available Plugins
+
+To see a list of IDA Pro plugins available on PyPI, use the `list` command:
+
+```bash
+$ ippm list
+                                      Available IDA Pro Plugins on PyPI
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Name                                       ┃ Last Release         ┃ Summary                                ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ basic-ida-plugin (installed)               │ 0.1.0 (Jun 02, 2025) │ Example IDA Plugin                     │
+│ multifile-ida-plugin                       │ 0.1.0 (Jun 02, 2025) │ Example IDA Plugin with multiple files │
+│ williballenthin-colorize-calls-ida-plugin  │ 0.1.0 (Jun 03, 2025) │ IDA Pro plugin to colorize call        │
+│                                            │                      │ instructions and add a prefix          │
+│ williballenthin-hint-calls-ida-plugin      │ 0.1.2 (Jun 03, 2025) │ IDA Pro plugin to display popup        │
+│                                            │                      │ function hints for the referenced      │
+│                                            │                      │ calls and strings                      │
+│ williballenthin-navband-visited-ida-plugin │ 0.1.0 (Jun 03, 2025) │ IDA Pro plugin to highlight visited    │
+│                                            │                      │ addresses in the navigation band.      │
+│ williballenthin-tag-func-ida-plugin        │ 0.1.0 (Jun 03, 2025) │ IDA Pro plugin for tagging functions   │
+│                                            │                      │ into folders                           │
+└────────────────────────────────────────────┴──────────────────────┴────────────────────────────────────────┘
+```
+
+This command queries PyPI for packages that appear to be IDA Pro plugins (based on naming conventions like `idapro-plugin-*`, `*-ida-plugin`, etc.). 
+
+
+### Showing Plugin Details
+
+To view detailed information about a specific plugin, use the `show` command followed by the plugin's name as it appears on PyPI:
+
+```bash
+$ ippm show williballenthin-tag-func-ida-plugin
+┌─────────────────────────────┬──────────────────────────────────────────────────────────────────────────────┐
+│ Name                        │ williballenthin-tag-func-ida-plugin                                          │
+│ Version                     │ 0.1.0                                                                        │
+│ Summary                     │ IDA Pro plugin for tagging functions into folders                            │
+│ Author                      │ Willi Ballenthin <willi.ballenthin@gmail.com>                                │
+│ License                     │ Apache-2.0                                                                   │
+│ Requires Python             │ >=3.9                                                                        │
+│ Package URL                 │ https://pypi.org/project/williballenthin-tag-func-ida-plugin/                │
+│ Project URL                 │ https://pypi.org/project/williballenthin-tag-func-ida-plugin/                │
+│ Release URL                 │ https://pypi.org/project/williballenthin-tag-func-ida-plugin/0.1.0/          │
+│ Version History             │ 0.1.0           Jun 03, 2025                                                 │
+│ Description (text/markdown) │ ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓ │
+│                             │ ┃                       Tag Function IDA Pro Plugin                        ┃ │
+│                             │ ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛ │
+│                             │                                                                              │
+│                             │ IDA Pro plugin for tagging functions into folders.                           │
+│                             │                                                                              │
+│                             │                                                                              │
+│                             │                                 Installation                                 │
+│                             │                                                                              │
+│                             │ Assuming you have the IDA Pro Plugin Manager, install via pip:               │
+│                             │                                                                              │
+│                             │                                                                              │
+│                             │  pip install williballenthin-tag-func-ida-plugin                             │
+│                             │                                                                              │
+│                             │                                                                              │
+│                             │ Make sure to use the pip from your IDAPython installation.                   │
+└─────────────────────────────┴──────────────────────────────────────────────────────────────────────────────
+```
 
 ## Packaging Plugins
 
