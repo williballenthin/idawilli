@@ -1,0 +1,42 @@
+# use PyPI trusted publishing, as described here:
+# https://blog.trailofbits.com/2023/05/23/trusted-publishing-a-new-benchmark-for-packaging-security/
+name: publish williballenthin-colorize-calls-ida-plugin to pypi
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pypi-publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - name: Set up Python
+        uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # v5.0.0
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        run: |
+          cd plugins/colorize_calls
+          pip install setuptools==78.1.1 build==1.2.2
+      - name: build package
+        run: |
+          cd plugins/colorize_calls
+          python -m build
+      - name: publish package
+        uses: pypa/gh-action-pypi-publish@v1.12.4
+        with:
+          skip-existing: false
+          packages-dir: plugins/colorize_calls/dist
+      # put the artifacts after the publish step, so that they are not uploaded if the publish fails
+      # since we may have multiple things to publish from the same trigger (release)
+      - name: upload package artifacts
+        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+        with:
+          path: plugins/colorize_calls/dist/*
