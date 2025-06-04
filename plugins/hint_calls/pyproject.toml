@@ -10,6 +10,10 @@ license = "Apache-2.0"
 requires-python = ">=3.9"
 dependencies = []
 
+[project.urls]
+source = "https://github.com/williballenthin/idawilli/tree/master/plugins/hint_calls"
+repository = "https://github.com/williballenthin/idawilli"
+
 [project.entry-points.'idapro.plugins']
 idapython = "hint_calls"
 

@@ -15,6 +15,33 @@ else:
 logger = logging.getLogger(__name__)
 
 
+def register_plugin_addon(plugin_name: str) -> None:
+    """Register a plugin as an addon with IDA Pro.
+
+    An addon shows up in the "About" dialog within IDA Pro.
+    Registering an addon is optional, but it provides useful metadata,
+     and this is an easy thing that the plugin manager can do for all plugins.
+    """
+    # keep this import lazy so the top level module can be imported
+    # without being inside IDA (such as in tests).
+    import ida_kernwin
+
+    metadata = importlib_metadata.metadata(plugin_name)
+    addon = ida_kernwin.addon_info_t()
+    addon.id = metadata["Name"]
+    addon.version = metadata.get("Version")
+    addon.name = metadata.get("Summary", metadata["Name"])
+    addon.producer = metadata.get("Author-email")
+
+    project_urls = metadata.get_all('Project-URL') or []
+    if (source_urls := [url for url in project_urls if url.startswith("source")]):
+        # like `source, https://www.github.com/username/repo`
+        addon.url = source_urls[0].partition(', ')[2]
+
+    ida_kernwin.register_addon(addon)
+    logger.debug("registered addon: %s", addon.name)
+
+
 def get_current_target_triple() -> str:
     """
     Generates the current target triple based on the OS and architecture.
@@ -104,6 +131,8 @@ def install():
     # without being inside IDA (such as in tests).
     import ida_loader
 
+    register_plugin_addon("idapro-plugin-manager")
+
     current_target = get_current_target_triple()
     logger.info("current target: %s", current_target)
     plugins = list(importlib_metadata.entry_points(group="idapro.plugins"))
@@ -152,6 +181,7 @@ def install():
                 continue
 
             logger.info("loaded: %s", name)
+            register_plugin_addon(name)
 
         elif target == current_target:
             # load a native plugin
@@ -186,6 +216,7 @@ def install():
                 continue
 
             logger.info("loaded: %s", name)
+            register_plugin_addon(name)
 
         else:
             logger.warning("unexpected target: %s", target)

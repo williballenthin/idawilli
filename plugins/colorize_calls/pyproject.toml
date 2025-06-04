@@ -10,8 +10,16 @@ license = "Apache-2.0"
 requires-python = ">=3.9"
 dependencies = []
 
+[project.urls]
+source = "https://github.com/williballenthin/idawilli/tree/master/plugins/colorize_calls"
+repository = "https://github.com/williballenthin/idawilli"
+
 [project.entry-points.'idapro.plugins']
 idapython = "colorize_calls"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 py-modules = ["colorize_calls"]

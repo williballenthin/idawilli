@@ -31,6 +31,10 @@ classifiers = [
     "Topic :: Security",
 ]
 
+[project.urls]
+source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager"
+repository = "https://github.com/williballenthin/idawilli"
+
 [build-system]
 requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
