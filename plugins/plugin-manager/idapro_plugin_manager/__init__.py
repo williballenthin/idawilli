@@ -27,16 +27,18 @@ def register_plugin_addon(plugin_name: str) -> None:
     import ida_kernwin
 
     metadata = importlib_metadata.metadata(plugin_name)
+    assert metadata, f"missing metadata for {plugin_name}"
+
     addon = ida_kernwin.addon_info_t()
     addon.id = metadata["Name"]
     addon.version = metadata.get("Version")
     addon.name = metadata.get("Summary", metadata["Name"])
     addon.producer = metadata.get("Author-email")
 
-    project_urls = metadata.get_all('Project-URL') or []
-    if (source_urls := [url for url in project_urls if url.startswith("source")]):
+    project_urls = metadata.get_all("Project-URL") or []
+    if source_urls := [url for url in project_urls if url.startswith("source")]:
         # like `source, https://www.github.com/username/repo`
-        addon.url = source_urls[0].partition(', ')[2]
+        addon.url = source_urls[0].partition(", ")[2]
 
     ida_kernwin.register_addon(addon)
     logger.debug("registered addon: %s", addon.name)

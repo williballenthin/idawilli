@@ -46,6 +46,7 @@ namespaces = false
 [project.optional-dependencies]
 dev = [
     "types-requests>=2.32.0.20250602",
+    "pytest>=7.0.0",
 ]
 build = [
     # Dev and build dependencies are not relaxed because

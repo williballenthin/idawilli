@@ -27,6 +27,8 @@ from rich.markdown import Markdown
 from rich.progress import Progress
 from requests_cache import SQLiteCache, CachedSession, CachedResponse, OriginalResponse
 
+import idapro_plugin_manager.mirror
+
 # manually registered plugins, which requires a new release of ippm to update.
 ADDITIONAL_PROJECTS: set[str] = set()
 IGNORED_PROJECTS: set[str] = {
@@ -607,6 +609,40 @@ def handle_register_command(args: argparse.Namespace) -> int:
         return -1
 
 
+def handle_mirror_command(args: argparse.Namespace) -> int:
+    repo_dir = Path(args.repo_dir)
+    package_names = args.package_names
+
+    if not package_names:
+        if not args.yes:
+            rich.print("No packages specified. Do you want to mirror all available IDA Pro plugins?")
+            rich.print("[yellow]This will download all discovered IDA Pro plugins from PyPI and their dependencies.[/]")
+
+            response = input("Continue? [y/N]: ").strip().lower()
+            if response not in ["y", "yes"]:
+                rich.print("Operation cancelled.")
+                return 0
+
+        rich.print("Discovering IDA Pro plugins on PyPI...")
+
+        session = get_session()
+        projects = get_plugin_projects_from_pypi(session)
+        package_names = list(projects.keys())
+
+        if not package_names:
+            rich.print("[yellow]No IDA Pro plugins found on PyPI.[/]")
+            return 0
+
+        rich.print(f"Found {len(package_names)} IDA Pro plugins to mirror:")
+        for pkg in sorted(package_names)[:10]:  # Show first 10
+            rich.print(f"  - {pkg}")
+        if len(package_names) > 10:
+            rich.print(f"  ... and {len(package_names) - 10} more")
+
+    idapro_plugin_manager.mirror.mirror_packages(repo_dir, package_names)
+    return 0
+
+
 def handle_version_command(args: argparse.Namespace) -> int:
     version = importlib_metadata.version("idapro-plugin-manager")
     rich.print(f"ippm version {version}")
@@ -619,15 +655,12 @@ def main() -> int:
     )
     subparsers = parser.add_subparsers(dest="command", required=True, help="Available commands")
 
-    # version command
     version_parser = subparsers.add_parser("version", help="Show program's version number and exit.")
     version_parser.set_defaults(func=handle_version_command)
 
-    # register command
     register_parser = subparsers.add_parser("register", help="Register the plugin manager with IDA Pro.")
     register_parser.set_defaults(func=handle_register_command)
 
-    # install command
     install_parser = subparsers.add_parser("install", help="Install an IDA Pro plugin from PyPI.")
     install_parser.add_argument(
         "package_spec",
@@ -636,17 +669,14 @@ def main() -> int:
     )
     install_parser.set_defaults(func=handle_install_command)
 
-    # remove command
     remove_parser = subparsers.add_parser("remove", help="Remove an installed IDA Pro plugin.")
     remove_parser.add_argument("package_name", metavar="PACKAGE_NAME", help="The name of the plugin to remove.")
     remove_parser.set_defaults(func=handle_remove_command)
 
-    # update command
     update_parser = subparsers.add_parser("update", help="Update a specific IDA Pro plugin to its latest version.")
     update_parser.add_argument("package_name", metavar="PACKAGE_NAME", help="The name of the plugin to update.")
     update_parser.set_defaults(func=handle_update_command)
 
-    # update-all command
     update_all_parser = subparsers.add_parser(
         "update-all", help="Update all outdated IDA Pro plugins to their latest versions."
     )
@@ -658,6 +688,19 @@ def main() -> int:
     show_parser = subparsers.add_parser("show", help="Show detailed information for a specific plugin on PyPI.")
     show_parser.add_argument("plugin_name", metavar="PLUGIN_NAME", help="The name of the plugin on PyPI.")
     show_parser.set_defaults(func=handle_show_command)
+
+    mirror_parser = subparsers.add_parser("mirror", help="Create a PEP 503 compliant local PyPI repository mirror.")
+    mirror_parser.add_argument("repo_dir", metavar="REPO_DIR", help="Directory to create the local repository in.")
+    mirror_parser.add_argument(
+        "package_names",
+        metavar="PACKAGE",
+        nargs="*",
+        help="Package names to mirror (if none specified, will prompt to mirror all IDA plugins).",
+    )
+    mirror_parser.add_argument(
+        "--yes", action="store_true", help="Automatically answer yes to prompts when mirroring all IDA plugins."
+    )
+    mirror_parser.set_defaults(func=handle_mirror_command)
 
     args = parser.parse_args()
     if hasattr(args, "func"):
