@@ -57,5 +57,5 @@ idapython = "multifile_ida_plugin.plugin"
 
 ## publishing
 
-Published to PyPI as [multifile-ida-plugin](https://pypi.org/project/multifile-ida-plugin/) via the GH Action workflow [publish-multifile-ida-plugin.yml](/.github/workflows/publish-multifile-ida-plugin.yml).
+Published to PyPI as [williballenthin-multifile-ida-plugin](https://pypi.org/project/williballenthin-multifile-ida-plugin/) via the GH Action workflow [publish-multifile-ida-plugin.yml](/.github/workflows/publish-multifile-ida-plugin.yml).
 
