@@ -24,6 +24,7 @@ Available plugins:
 | Name                                      | Summary                                      |
 |--------------------------------------------|----------------------------------------------|
 | [3p-HRDevHelper-ida-plugin](https://github.com/patois/HRDevHelper)  | A helpful tool for debugging and developing your own Hexrays plugins and scripts |
+| [3p-deREFerencing-ida-plugin](https://github.com/danigargu/deREferencing) | IDA Pro plugin that implements more user-friendly register and stack views |
 | [williballenthin-colorize-calls-ida-plugin](https://github.com/williballenthin/idawilli/tree/master/plugins/colorize_calls)  | IDA Pro plugin to colorize call instructions and add a prefix |
 | [williballenthin-hint-calls-ida-plugin](https://github.com/williballenthin/idawilli/tree/master/plugins/hint_calls)      | IDA Pro plugin to display popup function hints for the referenced calls and strings |
 | [williballenthin-navband-visited-ida-plugin](https://github.com/williballenthin/idawilli/tree/master/plugins/navband_visited) | IDA Pro plugin to highlight visited addresses in the navigation band. |
