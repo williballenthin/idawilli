@@ -30,7 +30,6 @@ jobs:
           python -m pip install setuptools==78.1.1 build==1.2.2
       - run: |
           cd plugins/plugin-manager/3p-plugins
-          wget https://github.com/google/copybara/releases/latest/download/copybara_deploy.jar
           just import-hrdevhelper
           just build-hrdevhelper
       - name: publish package
