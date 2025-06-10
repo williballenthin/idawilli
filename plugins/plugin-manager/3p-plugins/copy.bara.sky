@@ -7,6 +7,42 @@ def apply_pyproject(ctx, content):
 
 # -------------------------------------
 
+deREFerencing_pyproject = """\
+[project]
+name = "3p-deREFerencing-ida-plugin"
+authors = [
+  {name = "Daniel Garcia", email = "danigargu@gmail.com"},
+]
+maintainers = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "IDA Pro plugin that implements more user-friendly register and stack views"
+version = "2025.6.10"
+readme = "README.md"
+license-files = [ "LICENSE" ]
+requires-python = ">=3.9"
+dependencies = []
+
+[project.urls]
+source = "https://github.com/danigargu/deREferencing"
+repository = "https://github.com/danigargu/deREferencing"
+plugin-source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/3p-plugins/"
+
+[project.entry-points.'idapro.plugins']
+idapython = "dereferencing.plugin"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+"""
+
+
+def apply_deREFerencing_pyproject(ctx):
+    apply_pyproject(ctx, deREFerencing_pyproject)
+
+
+# -------------------------------------
+
 HRDevHelper_pyproject = """\
 [project]
 name = "3p-HRDevHelper-ida-plugin"
@@ -60,6 +96,7 @@ core.workflow(
 		],
 	),
     destination = folder.destination(),
+    mode = "SQUASH",
 
     authoring = authoring.pass_thru("Default email <default@default.com>"),
     transformations = [
@@ -69,5 +106,32 @@ core.workflow(
 		# so remove that import line (which is otherwise circular).
 		core.replace("from hrdevhelper import HRDevHelper", "# from hrdevhelper import HRDevHelper"),
         core.move("", "HRDevHelper"),
+    ],
+)
+
+
+core.workflow(
+    name = "deREFerencing",
+    origin = git.github_origin(
+        url = "https://github.com/danigargu/deREferencing.git",
+        # master as of 2025-06-10
+        ref = "259685bce8ab4ba0371ec6d13446cc553df2689b",
+    ),
+    origin_files = glob(
+        [
+            "dereferencing.py",
+            "dereferencing/**",
+            "LICENSE",
+            "README.md",
+        ]
+    ),
+    destination = folder.destination(),
+    mode = "SQUASH",
+
+    authoring = authoring.pass_thru("Default email <default@default.com>"),
+    transformations = [
+        apply_deREFerencing_pyproject,
+        core.move("dereferencing.py", "dereferencing/plugin.py"),
+        core.move("", "deREFerencing"),
     ],
 )
