@@ -30,8 +30,8 @@ jobs:
           python -m pip install setuptools==78.1.1 build==1.2.2
       - run: |
           cd plugins/plugin-manager/3p-plugins
-          just import-deREFerencing
-          just build-deREFerencing
+          just import-dereferencing
+          just build-dereferencing
       - name: publish package
         uses: pypa/gh-action-pypi-publish@v1.12.4
         with:
