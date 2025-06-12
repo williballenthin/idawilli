@@ -7,7 +7,6 @@ help = "show profile (python)"
 
 [devshell]
 packages = [
-  "temurin-jre-bin-23",
   "just",
   "python312",
   "just",
