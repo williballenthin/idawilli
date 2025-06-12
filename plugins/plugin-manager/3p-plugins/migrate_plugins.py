@@ -79,7 +79,7 @@ build-backend = "setuptools.build_meta"
 """
 
 IDA_TERMINAL_PYPROJECT = """[project]
-name = "3p-ida-terminal-plugin"
+name = "3p-terminal-ida-plugin"
 authors = [
   {name = "Hex-Rays SA"},
 ]
