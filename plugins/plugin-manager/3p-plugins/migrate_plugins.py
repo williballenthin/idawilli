@@ -249,9 +249,9 @@ PLUGINS = {
             # Create pyproject.toml
             CreateFile("pyproject.toml", IDA_TERMINAL_PYPROJECT),
             # Update the plugin.py to work with the new structure
-            ReplaceText("plugin.py", "from termqt import Terminal", "from .termqt import Terminal"),
-            ReplaceText("plugin.py", "from termqt import TerminalPOSIXExecIO", "from .termqt import TerminalPOSIXExecIO"),
-            ReplaceText("plugin.py", "from termqt import TerminalWinptyIO", "from .termqt import TerminalWinptyIO"),
+            ReplaceText("plugin.py", "from termqt import Terminal", "from ida_terminal_module.termqt import Terminal"),
+            ReplaceText("plugin.py", "from termqt import TerminalPOSIXExecIO", "from ida_terminal_module.termqt import TerminalPOSIXExecIO"),
+            ReplaceText("plugin.py", "from termqt import TerminalWinptyIO", "from ida_terminal_module.termqt import TerminalWinptyIO"),
             # Note: config loading works fine as-is since we provide a default config.py
         ]
     ),
