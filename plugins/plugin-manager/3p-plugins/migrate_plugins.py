@@ -21,6 +21,97 @@ import fnmatch
 import re
 
 
+# Global pyproject.toml templates
+HRDEVHELPER_PYPROJECT = """[project]
+name = "3p-HRDevHelper-ida-plugin"
+authors = [
+  {name = "Dennis Elser"},
+]
+maintainers = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "A helpful tool for debugging and developing your own Hexrays plugins and scripts"
+version = "2025.6.6"
+readme = "README.md"
+license-files = [ "LICENSE" ]
+requires-python = ">=3.9"
+dependencies = []
+
+[project.urls]
+source = "https://github.com/patois/HRDevHelper"
+repository = "https://github.com/patois/HRDevHelper"
+plugin-source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/3p-plugins/"
+
+[project.entry-points.'idapro.plugins']
+idapython = "hrdh.hrdevhelper"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+"""
+
+DEREFERENCING_PYPROJECT = """[project]
+name = "3p-deREFerencing-ida-plugin"
+authors = [
+  {name = "Daniel Garcia", email = "danigargu@gmail.com"},
+]
+maintainers = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "IDA Pro plugin that implements more user-friendly register and stack views"
+version = "2025.6.10"
+readme = "README.md"
+license-files = [ "LICENSE" ]
+requires-python = ">=3.9"
+dependencies = []
+
+[project.urls]
+source = "https://github.com/danigargu/deREferencing"
+repository = "https://github.com/danigargu/deREferencing"
+plugin-source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/3p-plugins/"
+
+[project.entry-points.'idapro.plugins']
+idapython = "dereferencing.plugin"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+"""
+
+IDA_TERMINAL_PYPROJECT = """[project]
+name = "3p-ida-terminal-plugin"
+authors = [
+  {name = "Hex-Rays SA"},
+]
+maintainers = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "A lightweight terminal integration for IDA Pro that lets you open a fully functional terminal within the IDA GUI"
+version = "2025.6.12"
+readme = "README.md"
+license-files = [ "LICENSE" ]
+requires-python = ">=3.9"
+dependencies = []
+
+[project.urls]
+source = "https://github.com/HexRaysSA/ida-terminal-plugin"
+repository = "https://github.com/HexRaysSA/ida-terminal-plugin"
+plugin-source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/3p-plugins/"
+
+[project.entry-points.'idapro.plugins']
+idapython = "ida_terminal_module.plugin"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+"""
+
+IDA_TERMINAL_INIT = '''"""IDA Terminal Plugin Module
+
+A lightweight terminal integration for IDA Pro.
+"""'''
+
+
 @dataclass
 class PluginConfig:
     """Configuration for a single plugin migration."""
@@ -116,33 +207,7 @@ PLUGINS = {
         transformations=[
             MoveFile("hrdevhelper.py", "hrdh/hrdevhelper.py"),
             ReplaceText("*.py", "from hrdevhelper import HRDevHelper", "# from hrdevhelper import HRDevHelper"),
-            CreateFile("pyproject.toml", """[project]
-name = "3p-HRDevHelper-ida-plugin"
-authors = [
-  {name = "Dennis Elser"},
-]
-maintainers = [
-  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
-]
-description = "A helpful tool for debugging and developing your own Hexrays plugins and scripts"
-version = "2025.6.6"
-readme = "README.md"
-license-files = [ "LICENSE" ]
-requires-python = ">=3.9"
-dependencies = []
-
-[project.urls]
-source = "https://github.com/patois/HRDevHelper"
-repository = "https://github.com/patois/HRDevHelper"
-plugin-source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/3p-plugins/"
-
-[project.entry-points.'idapro.plugins']
-idapython = "hrdh.hrdevhelper"
-
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-"""),
+            CreateFile("pyproject.toml", HRDEVHELPER_PYPROJECT),
         ]
     ),
     
@@ -158,33 +223,36 @@ build-backend = "setuptools.build_meta"
         ],
         transformations=[
             MoveFile("dereferencing.py", "dereferencing/plugin.py"),
-            CreateFile("pyproject.toml", """[project]
-name = "3p-deREFerencing-ida-plugin"
-authors = [
-  {name = "Daniel Garcia", email = "danigargu@gmail.com"},
-]
-maintainers = [
-  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
-]
-description = "IDA Pro plugin that implements more user-friendly register and stack views"
-version = "2025.6.10"
-readme = "README.md"
-license-files = [ "LICENSE" ]
-requires-python = ">=3.9"
-dependencies = []
-
-[project.urls]
-source = "https://github.com/danigargu/deREferencing"
-repository = "https://github.com/danigargu/deREferencing"
-plugin-source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/3p-plugins/"
-
-[project.entry-points.'idapro.plugins']
-idapython = "dereferencing.plugin"
-
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-"""),
+            CreateFile("pyproject.toml", DEREFERENCING_PYPROJECT),
+        ]
+    ),
+    
+    "ida-terminal-plugin": PluginConfig(
+        name="ida-terminal-plugin",
+        repo_url="https://github.com/HexRaysSA/ida-terminal-plugin.git",
+        commit="efc8b1cef30a1a019bdbc7565108d160795bafea",
+        include_files=[
+            "index.py",
+            "termqt/**",
+            "config.example.py",
+            "LICENSE",
+            "README.md",
+        ],
+        transformations=[
+            # Create the main plugin module directory
+            MoveFile("index.py", "ida_terminal_module/plugin.py"),
+            MoveFile("config.example.py", "ida_terminal_module/config.py"),
+            # Move termqt into the module
+            MoveFile("termqt", "ida_terminal_module/termqt"),
+            # Create __init__.py for the main module
+            CreateFile("ida_terminal_module/__init__.py", IDA_TERMINAL_INIT),
+            # Create pyproject.toml
+            CreateFile("pyproject.toml", IDA_TERMINAL_PYPROJECT),
+            # Update the plugin.py to work with the new structure
+            ReplaceText("plugin.py", "from termqt import Terminal", "from .termqt import Terminal"),
+            ReplaceText("plugin.py", "from termqt import TerminalPOSIXExecIO", "from .termqt import TerminalPOSIXExecIO"),
+            ReplaceText("plugin.py", "from termqt import TerminalWinptyIO", "from .termqt import TerminalWinptyIO"),
+            # Note: config loading works fine as-is since we provide a default config.py
         ]
     ),
 }
