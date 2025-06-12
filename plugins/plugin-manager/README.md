@@ -23,10 +23,11 @@ Available plugins:
 
 | Name                                      | Summary                                      |
 |--------------------------------------------|----------------------------------------------|
-| [3p-HRDevHelper-ida-plugin](https://github.com/patois/HRDevHelper)  | A helpful tool for debugging and developing your own Hexrays plugins and scripts |
-| [3p-LazyIDA-ida-plugin](https://github.com/L4ys/LazyIDA) | Make your IDA Lazy! A collection of useful utilities for IDA Pro analysis |
-| [3p-SwiftStringInspector-ida-plugin](https://github.com/keowu/swiftstringinspector) | A simple plugin for working with Swift Strings, optimized Swift Strings, and Swift Arrays during the reverse engineering of iOS binaries |
-| [3p-deREFerencing-ida-plugin](https://github.com/danigargu/deREferencing) | IDA Pro plugin that implements more user-friendly register and stack views |
+| [3p-HRDevHelper-ida-plugin](https://github.com/patois/HRDevHelper)  | A helpful tool for debugging and developing your own Hexrays plugins and scripts by [Dennis Elser](https://github.com/patois/HRDevHelper) |
+| [3p-LazyIDA-ida-plugin](https://github.com/L4ys/LazyIDA) | Make your IDA Lazy! A collection of useful utilities for IDA Pro analysis by [Lays](https://github.com/L4ys/LazyIDA) |
+| [3p-SwiftStringInspector-ida-plugin](https://github.com/keowu/swiftstringinspector) | A simple plugin for working with Swift Strings, optimized Swift Strings, and Swift Arrays during the reverse engineering of iOS binaries by [Keowu](https://github.com/keowu/swiftstringinspector) |
+| [3p-deREFerencing-ida-plugin](https://github.com/danigargu/deREferencing) | IDA Pro plugin that implements more user-friendly register and stack views by [Daniel Garcia](https://github.com/danigargu/deREferencing) |
+| [3p-terminal-ida-plugin](https://github.com/HexRaysSA/ida-terminal-plugin) | A lightweight terminal integration for IDA Pro that lets you open a fully functional terminal within the IDA GUI by [Hex-Rays SA](https://github.com/HexRaysSA/ida-terminal-plugin) |
 | [williballenthin-colorize-calls-ida-plugin](https://github.com/williballenthin/idawilli/tree/master/plugins/colorize_calls)  | IDA Pro plugin to colorize call instructions and add a prefix |
 | [williballenthin-hint-calls-ida-plugin](https://github.com/williballenthin/idawilli/tree/master/plugins/hint_calls)      | IDA Pro plugin to display popup function hints for the referenced calls and strings |
 | [williballenthin-navband-visited-ida-plugin](https://github.com/williballenthin/idawilli/tree/master/plugins/navband_visited) | IDA Pro plugin to highlight visited addresses in the navigation band. |
