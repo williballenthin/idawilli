@@ -10,6 +10,9 @@ import-ida-terminal-plugin:
 import-lazyida:
     python migrate_plugins.py LazyIDA
 
+import-swiftstringinspector:
+    python migrate_plugins.py SwiftStringInspector
+
 import:
     python migrate_plugins.py
 
@@ -24,6 +27,9 @@ clean-ida-terminal-plugin:
 
 clean-lazyida:
     rm -rf third_party/LazyIDA
+
+clean-swiftstringinspector:
+    rm -rf third_party/SwiftStringInspector
 
 clean:
     rm -rf third_party/
@@ -40,11 +46,15 @@ build-ida-terminal-plugin:
 build-lazyida:
     python -m build --wheel third_party/LazyIDA
 
+build-swiftstringinspector:
+    python -m build --wheel third_party/SwiftStringInspector
+
 build:
     just build-hrdevhelper
     just build-dereferencing
     just build-ida-terminal-plugin
     just build-lazyida
+    just build-swiftstringinspector
 
 test-hrdevhelper:
     python ../scripts/test_plugin.py third_party/HRDevHelper/dist/*.whl
@@ -58,8 +68,12 @@ test-ida-terminal-plugin:
 test-lazyida:
     python ../scripts/test_plugin.py third_party/LazyIDA/dist/*.whl
 
+test-swiftstringinspector:
+    python ../scripts/test_plugin.py third_party/SwiftStringInspector/dist/*.whl
+
 test:
     just test-hrdevhelper
     just test-dereferencing
     just test-ida-terminal-plugin
     just test-lazyida
+    just test-swiftstringinspector

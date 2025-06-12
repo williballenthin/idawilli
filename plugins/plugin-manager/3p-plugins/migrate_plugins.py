@@ -139,6 +139,34 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 """
 
+SWIFTSTRINGINSPECTOR_PYPROJECT = """[project]
+name = "3p-SwiftStringInspector-ida-plugin"
+authors = [
+  {name = "Keowu"},
+]
+maintainers = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "A simple plugin for working with Swift Strings, optimized Swift Strings, and Swift Arrays during the reverse engineering of iOS binaries in Hex-Rays IDA"
+version = "2025.6.12"
+readme = "README.md"
+license-files = [ "LICENSE" ]
+requires-python = ">=3.9"
+dependencies = []
+
+[project.urls]
+source = "https://github.com/keowu/swiftstringinspector"
+repository = "https://github.com/keowu/swiftstringinspector"
+plugin-source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/3p-plugins/"
+
+[project.entry-points.'idapro.plugins']
+idapython = "swiftstringinspector.plugin"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+"""
+
 
 @dataclass
 class PluginConfig:
@@ -300,6 +328,25 @@ PLUGINS = {
             CreateFile("lazyida/__init__.py", "# LazyIDA Plugin Package"),
             # Create pyproject.toml
             CreateFile("pyproject.toml", LAZYIDA_PYPROJECT),
+        ]
+    ),
+
+    "SwiftStringInspector": PluginConfig(
+        name="SwiftStringInspector",
+        repo_url="https://github.com/keowu/swiftstringinspector.git",
+        commit="0ef03a928eeee9586ce706fdddd89e4c91359bb3",
+        include_files=[
+            "swift_string_inspector.py",
+            "LICENSE",
+            "README.md",
+        ],
+        transformations=[
+            # Move the main plugin file into a package structure
+            MoveFile("swift_string_inspector.py", "swiftstringinspector/plugin.py"),
+            # Create __init__.py for the package
+            CreateFile("swiftstringinspector/__init__.py", "# SwiftStringInspector Plugin Package"),
+            # Create pyproject.toml
+            CreateFile("pyproject.toml", SWIFTSTRINGINSPECTOR_PYPROJECT),
         ]
     ),
 }
