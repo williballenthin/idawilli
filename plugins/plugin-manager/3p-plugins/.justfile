@@ -35,3 +35,17 @@ build:
     just build-hrdevhelper
     just build-dereferencing
     just build-ida-terminal-plugin
+
+test-hrdevhelper:
+    python ../scripts/test_plugin.py third_party/HRDevHelper/dist/*.whl
+
+test-dereferencing:
+    python ../scripts/test_plugin.py third_party/deREFerencing/dist/*.whl
+
+test-ida-terminal-plugin:
+    python ../scripts/test_plugin.py third_party/ida-terminal-plugin/dist/*.whl
+
+test:
+    just test-hrdevhelper
+    just test-dereferencing
+    just test-ida-terminal-plugin

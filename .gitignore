@@ -91,3 +91,5 @@ ENV/
 .venv
 .envrc
 .env
+plugins/plugin-manager/tests/data/Practical Malware Analysis Lab 01-01.dll_.*
+plugins/plugin-manager/3p-plugins/third_party
