@@ -111,6 +111,34 @@ IDA_TERMINAL_INIT = '''"""IDA Terminal Plugin Module
 A lightweight terminal integration for IDA Pro.
 """'''
 
+LAZYIDA_PYPROJECT = """[project]
+name = "3p-LazyIDA-ida-plugin"
+authors = [
+  {name = "Lays"},
+]
+maintainers = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "Make your IDA Lazy! A collection of useful utilities for IDA Pro analysis"
+version = "2025.6.12"
+readme = "README.md"
+license-files = [ "LICENSE" ]
+requires-python = ">=3.9"
+dependencies = []
+
+[project.urls]
+source = "https://github.com/L4ys/LazyIDA"
+repository = "https://github.com/L4ys/LazyIDA"
+plugin-source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/3p-plugins/"
+
+[project.entry-points.'idapro.plugins']
+idapython = "lazyida.plugin"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+"""
+
 
 @dataclass
 class PluginConfig:
@@ -253,6 +281,25 @@ PLUGINS = {
             ReplaceText("plugin.py", "from termqt import TerminalPOSIXExecIO", "from ida_terminal_module.termqt import TerminalPOSIXExecIO"),
             ReplaceText("plugin.py", "from termqt import TerminalWinptyIO", "from ida_terminal_module.termqt import TerminalWinptyIO"),
             # Note: config loading works fine as-is since we provide a default config.py
+        ]
+    ),
+    
+    "LazyIDA": PluginConfig(
+        name="LazyIDA",
+        repo_url="https://github.com/L4ys/LazyIDA.git",
+        commit="9194babbeaf67e392f88e3ea87f0bf4fdc3f5982",
+        include_files=[
+            "LazyIDA.py",
+            "LICENSE",
+            "README.md",
+        ],
+        transformations=[
+            # Move the main plugin file into a package structure
+            MoveFile("LazyIDA.py", "lazyida/plugin.py"),
+            # Create __init__.py for the package
+            CreateFile("lazyida/__init__.py", "# LazyIDA Plugin Package"),
+            # Create pyproject.toml
+            CreateFile("pyproject.toml", LAZYIDA_PYPROJECT),
         ]
     ),
 }
