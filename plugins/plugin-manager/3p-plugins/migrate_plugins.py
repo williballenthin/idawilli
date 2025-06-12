@@ -10,15 +10,13 @@ Usage:
     python migrate_plugins.py  # migrates all plugins
 """
 
-import os
 import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Optional
 import fnmatch
-import re
 
 from rich import print
 
@@ -167,6 +165,54 @@ idapython = "swiftstringinspector.plugin"
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+"""
+
+XREFER_PYPROJECT = """[project]
+name = "3p-xrefer-ida-plugin"
+authors = [
+  {name = "m-umairx"},
+]
+maintainers = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "FLARE Team's Binary Navigator. XRefer is a Python-based plugin for IDA Pro that provides a custom navigation interface, analyzes execution paths, clusters functions, and highlights downstream behaviors. It can incorporate external data and integrates with LLMs for code descriptions."
+version = "2025.6.12"
+readme = "README.md"
+license-files = [ "LICENSE" ]
+requires-python = ">=3.9"
+dependencies = [
+  "flare_capa",
+  "networkx",
+  "Requests",
+  "tabulate",
+  "asciinet",
+  "bs4",
+  "langchain",
+  "langchain_google_genai",
+  "langchain_openai",
+  "tenacity",
+  "python-statemachine",
+  "asciinet"
+]
+
+[project.urls]
+source = "https://github.com/mandiant/xrefer"
+repository = "https://github.com/mandiant/xrefer"
+plugin-source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/3p-plugins/"
+
+[project.entry-points.'idapro.plugins']
+idapython = "xrefer.entry"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+"""
+
+XREFER_ENTRY = """
+from xrefer.plugin import XReferPlugin
+
+def PLUGIN_ENTRY():
+    return XReferPlugin()
 """
 
 
@@ -360,10 +406,32 @@ PLUGINS = {
             CreateFile("pyproject.toml", SWIFTSTRINGINSPECTOR_PYPROJECT),
         ]
     ),
+
+    "xrefer": PluginConfig(
+        name="xrefer",
+        repo_url="https://github.com/mandiant/xrefer.git",
+        commit="3123c65484bfcacc002b8527016ac036b5ea5260",
+        include_files=[
+            "plugins/xrefer/**",
+            #"plugins/xrefer.py",
+            "LICENSE",
+            "README.md",
+        ],
+        transformations=[
+            MoveFile("plugins/xrefer", "xrefer"),
+            DeleteDirectory("plugins"),
+            # this file has some manual path fixups,
+            # which we do ourselves here,
+            # so we provide our own entrypoint.
+            #MoveFile("plugins/xrefer.py", "xrefer/plugin.py"),
+            CreateFile("xrefer/entry.py", XREFER_ENTRY),
+            CreateFile("pyproject.toml", XREFER_PYPROJECT),
+        ]
+    ),
 }
 
 
-def run_command(cmd: List[str], cwd: Path = None) -> None:
+def run_command(cmd: List[str], cwd: Optional[Path] = None) -> None:
     """Run a shell command and handle errors."""
     result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
     if result.returncode != 0:
@@ -465,11 +533,11 @@ def migrate_plugin(plugin_name: str, config: PluginConfig, output_dir: Path) -> 
         print_directory_tree(repo_dir, prefix="  ")
         
         # Copy matching files
-        print(f"  Copying files...")
+        print("  Copying files...")
         copy_matching_files(repo_dir, plugin_output_dir, config.include_files, config.exclude_files)
        
         # Apply transformations
-        print(f"  Applying transformations...")
+        print("  Applying transformations...")
         for transformation in config.transformations:
             transformation.apply(plugin_output_dir)
         

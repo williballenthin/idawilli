@@ -13,6 +13,9 @@ import-lazyida:
 import-swiftstringinspector:
     python migrate_plugins.py SwiftStringInspector
 
+import-xrefer:
+    python migrate_plugins.py xrefer
+
 import:
     python migrate_plugins.py
 
@@ -30,6 +33,9 @@ clean-lazyida:
 
 clean-swiftstringinspector:
     rm -rf third_party/SwiftStringInspector
+
+clean-xrefer:
+    rm -rf third_party/xrefer
 
 clean:
     rm -rf third_party/
@@ -49,12 +55,16 @@ build-lazyida:
 build-swiftstringinspector:
     python -m build --wheel third_party/SwiftStringInspector
 
+build-xrefer:
+    python -m build --wheel third_party/xrefer
+
 build:
     just build-hrdevhelper
     just build-dereferencing
     just build-ida-terminal-plugin
     just build-lazyida
     just build-swiftstringinspector
+    just build-xrefer
 
 test-hrdevhelper:
     python ../scripts/test_plugin.py third_party/HRDevHelper/dist/*.whl
@@ -71,9 +81,13 @@ test-lazyida:
 test-swiftstringinspector:
     python ../scripts/test_plugin.py third_party/SwiftStringInspector/dist/*.whl
 
+test-xrefer:
+    python ../scripts/test_plugin.py third_party/xrefer/dist/*.whl
+
 test:
     just test-hrdevhelper
     just test-dereferencing
     just test-ida-terminal-plugin
     just test-lazyida
     just test-swiftstringinspector
+    just test-xrefer
