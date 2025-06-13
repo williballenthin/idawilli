@@ -91,3 +91,25 @@ test:
     just test-lazyida
     just test-swiftstringinspector
     just test-xrefer
+
+isort:
+    uvx isort --length-sort --profile black --line-length 120 migrate_plugins.py
+
+black:
+    uvx black --line-length 120 migrate_plugins.py
+
+ruff:
+    uvx ruff check --line-length 120 migrate_plugins.py
+
+ty:
+    uvx ty check --ignore unresolved-import migrate_plugins.py
+
+mypy:
+    uvx mypy --check-untyped-defs --ignore-missing-imports --disable-error-code=import-untyped migrate_plugins.py
+
+lint:
+    -just isort
+    -just black
+    -just ruff
+    -just ty
+    -just mypy

@@ -11,15 +11,14 @@ Usage:
 """
 
 import shutil
-import subprocess
-import tempfile
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import List, Optional
 import fnmatch
+import tempfile
+import subprocess
+from typing import List, Optional
+from pathlib import Path
+from dataclasses import field, dataclass
 
 from rich import print
-
 
 # Global pyproject.toml templates
 HRDEVHELPER_PYPROJECT = """[project]
@@ -219,6 +218,7 @@ def PLUGIN_ENTRY():
 @dataclass
 class PluginConfig:
     """Configuration for a single plugin migration."""
+
     name: str
     repo_url: str
     commit: str
@@ -229,12 +229,12 @@ class PluginConfig:
 
 class FileTransformation:
     """Base class for file transformations.
-    
+
     All transformation classes should implement the apply() method:
         def apply(self, work_dir: Path) -> None:
             # Apply transformation to files in work_dir
     """
-    
+
     def apply(self, work_dir: Path) -> None:
         """Apply the transformation to files in the working directory."""
         raise NotImplementedError("Subclasses must implement apply()")
@@ -243,13 +243,14 @@ class FileTransformation:
 @dataclass
 class MoveFile(FileTransformation):
     """Move/rename a file."""
+
     src: str
     dst: str
-    
+
     def apply(self, work_dir: Path) -> None:
         src_path = work_dir / self.src
         dst_path = work_dir / self.dst
-        
+
         if src_path.exists():
             dst_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(src_path), str(dst_path))
@@ -259,18 +260,19 @@ class MoveFile(FileTransformation):
 @dataclass
 class ReplaceText(FileTransformation):
     """Replace text in a file."""
+
     file_pattern: str
     old_text: str
     new_text: str
-    
+
     def apply(self, work_dir: Path) -> None:
         for file_path in work_dir.rglob("*"):
             if file_path.is_file() and fnmatch.fnmatch(file_path.name, self.file_pattern):
                 try:
-                    content = file_path.read_text(encoding='utf-8')
+                    content = file_path.read_text(encoding="utf-8")
                     if self.old_text in content:
                         new_content = content.replace(self.old_text, self.new_text)
-                        file_path.write_text(new_content, encoding='utf-8')
+                        file_path.write_text(new_content, encoding="utf-8")
                         print(f"  [cyan]Replaced text[/] in {file_path.relative_to(work_dir)}")
                 except UnicodeDecodeError:
                     # Skip binary files
@@ -280,19 +282,21 @@ class ReplaceText(FileTransformation):
 @dataclass
 class CreateFile(FileTransformation):
     """Create a new file with given content."""
+
     file_path: str
     content: str
-    
+
     def apply(self, work_dir: Path) -> None:
         file_path = work_dir / self.file_path
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_text(self.content, encoding='utf-8')
+        file_path.write_text(self.content, encoding="utf-8")
         print(f"  [cyan]Created[/] {self.file_path}")
 
 
 @dataclass
 class DeleteDirectory(FileTransformation):
     """Recursively delete a directory."""
+
     dir_path: str
 
     def apply(self, work_dir: Path) -> None:
@@ -300,7 +304,6 @@ class DeleteDirectory(FileTransformation):
         if target_dir.exists() and target_dir.is_dir():
             shutil.rmtree(target_dir)
             print(f"  [cyan]Deleted directory[/] {self.dir_path}")
-
 
 
 PLUGINS = {
@@ -321,9 +324,8 @@ PLUGINS = {
             MoveFile("hrdevhelper.py", "hrdh/hrdevhelper.py"),
             ReplaceText("*.py", "from hrdevhelper import HRDevHelper", "# from hrdevhelper import HRDevHelper"),
             CreateFile("pyproject.toml", HRDEVHELPER_PYPROJECT),
-        ]
+        ],
     ),
-    
     "deREFerencing": PluginConfig(
         name="deREFerencing",
         repo_url="https://github.com/danigargu/deREferencing.git",
@@ -337,9 +339,8 @@ PLUGINS = {
         transformations=[
             MoveFile("dereferencing.py", "dereferencing/plugin.py"),
             CreateFile("pyproject.toml", DEREFERENCING_PYPROJECT),
-        ]
+        ],
     ),
-    
     "ida-terminal-plugin": PluginConfig(
         name="ida-terminal-plugin",
         repo_url="https://github.com/HexRaysSA/ida-terminal-plugin.git",
@@ -363,12 +364,19 @@ PLUGINS = {
             CreateFile("pyproject.toml", IDA_TERMINAL_PYPROJECT),
             # Update the plugin.py to work with the new structure
             ReplaceText("plugin.py", "from termqt import Terminal", "from ida_terminal_module.termqt import Terminal"),
-            ReplaceText("plugin.py", "from termqt import TerminalPOSIXExecIO", "from ida_terminal_module.termqt import TerminalPOSIXExecIO"),
-            ReplaceText("plugin.py", "from termqt import TerminalWinptyIO", "from ida_terminal_module.termqt import TerminalWinptyIO"),
+            ReplaceText(
+                "plugin.py",
+                "from termqt import TerminalPOSIXExecIO",
+                "from ida_terminal_module.termqt import TerminalPOSIXExecIO",
+            ),
+            ReplaceText(
+                "plugin.py",
+                "from termqt import TerminalWinptyIO",
+                "from ida_terminal_module.termqt import TerminalWinptyIO",
+            ),
             # Note: config loading works fine as-is since we provide a default config.py
-        ]
+        ],
     ),
-    
     "LazyIDA": PluginConfig(
         name="LazyIDA",
         repo_url="https://github.com/L4ys/LazyIDA.git",
@@ -385,9 +393,8 @@ PLUGINS = {
             CreateFile("lazyida/__init__.py", "# LazyIDA Plugin Package"),
             # Create pyproject.toml
             CreateFile("pyproject.toml", LAZYIDA_PYPROJECT),
-        ]
+        ],
     ),
-
     "SwiftStringInspector": PluginConfig(
         name="SwiftStringInspector",
         repo_url="https://github.com/keowu/swiftstringinspector.git",
@@ -404,16 +411,15 @@ PLUGINS = {
             CreateFile("swiftstringinspector/__init__.py", "# SwiftStringInspector Plugin Package"),
             # Create pyproject.toml
             CreateFile("pyproject.toml", SWIFTSTRINGINSPECTOR_PYPROJECT),
-        ]
+        ],
     ),
-
     "xrefer": PluginConfig(
         name="xrefer",
         repo_url="https://github.com/mandiant/xrefer.git",
         commit="3123c65484bfcacc002b8527016ac036b5ea5260",
         include_files=[
             "plugins/xrefer/**",
-            #"plugins/xrefer.py",
+            # "plugins/xrefer.py",
             "LICENSE",
             "README.md",
         ],
@@ -423,10 +429,10 @@ PLUGINS = {
             # this file has some manual path fixups,
             # which we do ourselves here,
             # so we provide our own entrypoint.
-            #MoveFile("plugins/xrefer.py", "xrefer/plugin.py"),
+            # MoveFile("plugins/xrefer.py", "xrefer/plugin.py"),
             CreateFile("xrefer/entry.py", XREFER_ENTRY),
             CreateFile("pyproject.toml", XREFER_PYPROJECT),
-        ]
+        ],
     ),
 }
 
@@ -463,10 +469,10 @@ def print_directory_tree(directory: Path, prefix: str = "", is_last: bool = True
     items = sorted(directory.iterdir(), key=lambda x: (x.is_file(), x.name.lower()))
     if directory.name == ".git":
         items = []
-    
+
     for i, item in enumerate(items):
         is_last_item = i == len(items) - 1
-        
+
         # Choose the appropriate tree character
         if is_last_item:
             current_prefix = "[grey69]└──[/] "
@@ -474,9 +480,9 @@ def print_directory_tree(directory: Path, prefix: str = "", is_last: bool = True
         else:
             current_prefix = "[grey69]├──[/] "
             next_prefix = prefix + "[grey69]│[/]   "
-        
+
         print(f"{prefix}{current_prefix}{item.name}")
-        
+
         # Recursively print subdirectories
         if item.is_dir():
             print_directory_tree(item, next_prefix, is_last_item)
@@ -487,17 +493,17 @@ def copy_matching_files(src_dir: Path, dst_dir: Path, include_patterns: List[str
     for src_file in src_dir.rglob("*"):
         if not src_file.is_file():
             continue
-            
+
         rel_path = src_file.relative_to(src_dir)
-        
+
         # Check if file matches include patterns
         if not matches_pattern(rel_path, include_patterns):
             continue
-            
+
         # Check if file matches exclude patterns
         if exclude_patterns and matches_pattern(rel_path, exclude_patterns):
             continue
-            
+
         # Copy the file
         dst_file = dst_dir / rel_path
         dst_file.parent.mkdir(parents=True, exist_ok=True)
@@ -508,22 +514,22 @@ def copy_matching_files(src_dir: Path, dst_dir: Path, include_patterns: List[str
 def migrate_plugin(plugin_name: str, config: PluginConfig, output_dir: Path) -> None:
     """Migrate a single plugin."""
     print(f"\n[bold yellow]Migrating[/] {plugin_name}...")
-    
+
     plugin_output_dir = output_dir / plugin_name
-    
+
     # Clean output directory
     if plugin_output_dir.exists():
         shutil.rmtree(plugin_output_dir)
     plugin_output_dir.mkdir(parents=True)
-    
+
     # Clone repository to temporary directory
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
         repo_dir = temp_path / "repo"
-        
+
         print(f"  [bold yellow]Cloning[/] {config.repo_url}...")
         run_command(["git", "clone", config.repo_url, str(repo_dir)])
-        
+
         print(f"  [bold yellow]Checking out[/] {config.commit}...")
         run_command(["git", "checkout", config.commit], cwd=repo_dir)
 
@@ -531,27 +537,27 @@ def migrate_plugin(plugin_name: str, config: PluginConfig, output_dir: Path) -> 
         print("  [bold yellow]Full repository contents[/]:")
         print(f"  {repo_dir}")
         print_directory_tree(repo_dir, prefix="  ")
-        
+
         # Copy matching files
         print("  [bold yellow]Copying files[/]...")
         copy_matching_files(repo_dir, plugin_output_dir, config.include_files, config.exclude_files)
-       
+
         # Apply transformations
         print("  [bold yellow]Applying transformations[/]...")
         for transformation in config.transformations:
             transformation.apply(plugin_output_dir)
-        
+
         # Show directory structure after transformations
         print("  [bold yellow]Directory structure after transformations[/]:")
         print(f"  {plugin_output_dir}")
         print_directory_tree(plugin_output_dir, prefix="  ")
-    
+
     print(f"  [green]✓ {plugin_name} migrated successfully[/]")
 
 
 def main():
     import sys
-    
+
     # Determine which plugins to migrate
     if len(sys.argv) > 1:
         plugin_names = sys.argv[1:]
@@ -561,13 +567,13 @@ def main():
                 sys.exit(1)
     else:
         plugin_names = list(PLUGINS.keys())
-    
+
     output_dir = Path("third_party")
-    
+
     for plugin_name in plugin_names:
         config = PLUGINS[plugin_name]
         migrate_plugin(plugin_name, config, output_dir)
-    
+
     print(f"\n[green]✓ Migration complete![/] Plugins available in {output_dir}/")
 
 
