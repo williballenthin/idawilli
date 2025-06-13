@@ -241,6 +241,36 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 """
 
+IDAFUZZY_PYPROJECT = """[project]
+name = "3p-IDAFuzzy-ida-plugin"
+authors = [
+  {name = "Ga-ryo"},
+]
+maintainers = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "Fuzzy searching tool for IDA Pro"
+version = "2025.6.13"
+readme = "README.md"
+license-files = [ "LICENSE" ]
+requires-python = ">=3.9"
+dependencies = [
+  "fuzzywuzzy[speedup]",
+]
+
+[project.urls]
+source = "https://github.com/Ga-ryo/IDAFuzzy"
+repository = "https://github.com/Ga-ryo/IDAFuzzy"
+plugin-source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/3p-plugins/"
+
+[project.entry-points.'idapro.plugins']
+idapython = "idafuzzy.plugin"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+"""
+
 
 @dataclass
 class PluginConfig:
@@ -475,6 +505,24 @@ PLUGINS = {
         transformations=[
             MoveFile("HexRaysPyTools.py", "HexRaysPyTools/plugin.py"),
             CreateFile("pyproject.toml", HEXRAYSPYTOOLS_PYPROJECT),
+        ],
+    ),
+    "IDAFuzzy": PluginConfig(
+        name="IDAFuzzy",
+        repo_url="https://github.com/Ga-ryo/IDAFuzzy.git",
+        commit="afd3b34d1fbd2a389f9975de83d5ab46f78aedb6",
+        include_files=[
+            "ida_fuzzy.py",
+            "LICENSE",
+            "README.md",
+        ],
+        transformations=[
+            # Move the main plugin file into a package structure
+            MoveFile("ida_fuzzy.py", "idafuzzy/plugin.py"),
+            # Create __init__.py for the package
+            CreateFile("idafuzzy/__init__.py", "# IDAFuzzy Plugin Package"),
+            # Create pyproject.toml
+            CreateFile("pyproject.toml", IDAFUZZY_PYPROJECT),
         ],
     ),
 }
