@@ -244,6 +244,19 @@ class CreateFile(FileTransformation):
         print(f"  [cyan]Created[/] {self.file_path}")
 
 
+@dataclass
+class DeleteDirectory(FileTransformation):
+    """Recursively delete a directory."""
+    dir_path: str
+
+    def apply(self, work_dir: Path) -> None:
+        target_dir = work_dir / self.dir_path
+        if target_dir.exists() and target_dir.is_dir():
+            shutil.rmtree(target_dir)
+            print(f"  [cyan]Deleted directory[/] {self.dir_path}")
+
+
+
 PLUGINS = {
     "HRDevHelper": PluginConfig(
         name="HRDevHelper",
