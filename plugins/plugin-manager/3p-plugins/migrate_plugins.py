@@ -323,6 +323,32 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 """
 
+EASY_NOP_PYPROJECT = """[project]
+name = "3p-easy-nop-ida-plugin"
+authors = [
+  {name = "stevemk14ebr"},
+]
+maintainers = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "Easy nopping tool for your nopping needs"
+version = "2025.6.13"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.urls]
+source = "https://github.com/stevemk14ebr/RETools"
+repository = "https://github.com/stevemk14ebr/RETools"
+plugin-source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/3p-plugins/"
+
+[project.entry-points.'idapro.plugins']
+idapython = "easy_nop.plugin"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+"""
+
 
 @dataclass
 class PluginConfig:
@@ -611,6 +637,24 @@ PLUGINS = {
             CreateFile("string_from_selection/__init__.py", "# String From Selection Plugin Package"),
             # Create pyproject.toml
             CreateFile("pyproject.toml", STRING_FROM_SELECTION_PYPROJECT),
+        ],
+    ),
+    "easy-nop": PluginConfig(
+        name="easy-nop",
+        repo_url="https://github.com/stevemk14ebr/RETools.git",
+        commit="9501332bf02688d3a4b31d85a25349671767be98",
+        include_files=[
+            "IdaScripts/plugins/easy_nop.py",
+        ],
+        transformations=[
+            # Move the main plugin file into a package structure
+            MoveFile("IdaScripts/plugins/easy_nop.py", "easy_nop/plugin.py"),
+            # Clean up the intermediate directory
+            DeleteDirectory("IdaScripts"),
+            # Create __init__.py for the package
+            CreateFile("easy_nop/__init__.py", "# Easy Nop Plugin Package"),
+            # Create pyproject.toml
+            CreateFile("pyproject.toml", EASY_NOP_PYPROJECT),
         ],
     ),
 }

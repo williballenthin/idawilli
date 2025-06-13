@@ -28,6 +28,9 @@ import-hexlight:
 import-string-from-selection:
     python migrate_plugins.py string-from-selection
 
+import-easy-nop:
+    python migrate_plugins.py easy-nop
+
 import:
     python migrate_plugins.py
 
@@ -60,6 +63,9 @@ clean-hexlight:
 
 clean-string-from-selection:
     rm -rf third_party/string-from-selection
+
+clean-easy-nop:
+    rm -rf third_party/easy-nop
 
 clean:
     rm -rf third_party/
@@ -94,6 +100,9 @@ build-hexlight:
 build-string-from-selection:
     python -m build --wheel third_party/string-from-selection
 
+build-easy-nop:
+    python -m build --wheel third_party/easy-nop
+
 build:
     just build-hrdevhelper
     just build-dereferencing
@@ -105,6 +114,7 @@ build:
     just build-idafuzzy
     just build-hexlight
     just build-string-from-selection
+    just build-easy-nop
 
 test-hrdevhelper:
     python ../scripts/test_plugin.py third_party/HRDevHelper/dist/*.whl
@@ -136,6 +146,9 @@ test-hexlight:
 test-string-from-selection:
     python ../scripts/test_plugin.py third_party/string-from-selection/dist/*.whl
 
+test-easy-nop:
+    python ../scripts/test_plugin.py third_party/easy-nop/dist/*.whl
+
 test:
     just test-hrdevhelper
     just test-dereferencing
@@ -147,6 +160,7 @@ test:
     just test-idafuzzy
     just test-hexlight
     just test-string-from-selection
+    just test-easy-nop
 
 isort:
     uvx isort --length-sort --profile black --line-length 120 migrate_plugins.py

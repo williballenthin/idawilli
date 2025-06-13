@@ -28,6 +28,7 @@ Available plugins:
 | [3p-hexlight-ida-plugin](https://github.com/stevemk14ebr/RETools) | Highlighting plugin for Hex-Rays Decompiler - highlights matching braces and allows navigation with 'B' key by [Milan Bohacek](https://github.com/stevemk14ebr/RETools) |
 | [3p-IDAFuzzy-ida-plugin](https://github.com/Ga-ryo/IDAFuzzy) | Fuzzy searching tool for IDA Pro by [Ga-ryo](https://github.com/Ga-ryo/IDAFuzzy) |
 | [3p-LazyIDA-ida-plugin](https://github.com/L4ys/LazyIDA) | Make your IDA Lazy! A collection of useful utilities for IDA Pro analysis by [Lays](https://github.com/L4ys/LazyIDA) |
+| [3p-easy-nop-ida-plugin](https://github.com/stevemk14ebr/RETools) | Easy nopping tool for your nopping needs by [stevemk14ebr](https://github.com/stevemk14ebr/RETools) |
 | [3p-string-from-selection-ida-plugin](https://github.com/stevemk14ebr/RETools) | Define a string from selection, useful for non-null terminated strings by [stevemk14ebr](https://github.com/stevemk14ebr/RETools) |
 | [3p-SwiftStringInspector-ida-plugin](https://github.com/keowu/swiftstringinspector) | A simple plugin for working with Swift Strings, optimized Swift Strings, and Swift Arrays during the reverse engineering of iOS binaries by [Keowu](https://github.com/keowu/swiftstringinspector) |
 | [3p-deREFerencing-ida-plugin](https://github.com/danigargu/deREferencing) | IDA Pro plugin that implements more user-friendly register and stack views by [Daniel Garcia](https://github.com/danigargu/deREferencing) |
