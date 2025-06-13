@@ -20,6 +20,8 @@ from typing import List, Dict, Optional
 import fnmatch
 import re
 
+from rich import print
+
 
 # Global pyproject.toml templates
 HRDEVHELPER_PYPROJECT = """[project]
@@ -205,7 +207,7 @@ class MoveFile(FileTransformation):
         if src_path.exists():
             dst_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(src_path), str(dst_path))
-            print(f"  Moved {self.src} -> {self.dst}")
+            print(f"  [cyan]Moved[/] {self.src} [cyan]->[/] {self.dst}")
 
 
 @dataclass
@@ -223,7 +225,7 @@ class ReplaceText(FileTransformation):
                     if self.old_text in content:
                         new_content = content.replace(self.old_text, self.new_text)
                         file_path.write_text(new_content, encoding='utf-8')
-                        print(f"  Replaced text in {file_path.relative_to(work_dir)}")
+                        print(f"  [cyan]Replaced text[/] in {file_path.relative_to(work_dir)}")
                 except UnicodeDecodeError:
                     # Skip binary files
                     pass
@@ -239,13 +241,9 @@ class CreateFile(FileTransformation):
         file_path = work_dir / self.file_path
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(self.content, encoding='utf-8')
-        print(f"  Created {self.file_path}")
+        print(f"  [cyan]Created[/] {self.file_path}")
 
 
-
-
-
-# Plugin Configurations
 PLUGINS = {
     "HRDevHelper": PluginConfig(
         name="HRDevHelper",
@@ -375,6 +373,34 @@ def matches_pattern(file_path: Path, patterns: List[str]) -> bool:
     return False
 
 
+def print_directory_tree(directory: Path, prefix: str = "", is_last: bool = True) -> None:
+    """Print directory contents in ASCII tree format."""
+    if not directory.exists():
+        return
+
+    # Get all items and sort them (directories first, then files)
+    items = sorted(directory.iterdir(), key=lambda x: (x.is_file(), x.name.lower()))
+    if directory.name == ".git":
+        items = []
+    
+    for i, item in enumerate(items):
+        is_last_item = i == len(items) - 1
+        
+        # Choose the appropriate tree character
+        if is_last_item:
+            current_prefix = "[grey69]└──[/] "
+            next_prefix = prefix + "    "
+        else:
+            current_prefix = "[grey69]├──[/] "
+            next_prefix = prefix + "[grey69]│[/]   "
+        
+        print(f"{prefix}{current_prefix}{item.name}")
+        
+        # Recursively print subdirectories
+        if item.is_dir():
+            print_directory_tree(item, next_prefix, is_last_item)
+
+
 def copy_matching_files(src_dir: Path, dst_dir: Path, include_patterns: List[str], exclude_patterns: List[str]) -> None:
     """Copy files matching include patterns but not exclude patterns."""
     for src_file in src_dir.rglob("*"):
@@ -395,12 +421,12 @@ def copy_matching_files(src_dir: Path, dst_dir: Path, include_patterns: List[str
         dst_file = dst_dir / rel_path
         dst_file.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src_file, dst_file)
-        print(f"  Copied {rel_path}")
+        print(f"  [cyan]Copied[/] {rel_path}")
 
 
 def migrate_plugin(plugin_name: str, config: PluginConfig, output_dir: Path) -> None:
     """Migrate a single plugin."""
-    print(f"\nMigrating {plugin_name}...")
+    print(f"\n[bold yellow]Migrating[/] {plugin_name}...")
     
     plugin_output_dir = output_dir / plugin_name
     
@@ -414,22 +440,32 @@ def migrate_plugin(plugin_name: str, config: PluginConfig, output_dir: Path) -> 
         temp_path = Path(temp_dir)
         repo_dir = temp_path / "repo"
         
-        print(f"  Cloning {config.repo_url}...")
+        print(f"  [bold yellow]Cloning[/] {config.repo_url}...")
         run_command(["git", "clone", config.repo_url, str(repo_dir)])
         
-        print(f"  Checking out {config.commit}...")
+        print(f"  [bold yellow]Checking out[/] {config.commit}...")
         run_command(["git", "checkout", config.commit], cwd=repo_dir)
+
+        # Show directory structure before transformations
+        print("  [bold yellow]Full repository contents[/]:")
+        print(f"  {repo_dir}")
+        print_directory_tree(repo_dir, prefix="  ")
         
         # Copy matching files
         print(f"  Copying files...")
         copy_matching_files(repo_dir, plugin_output_dir, config.include_files, config.exclude_files)
-        
+       
         # Apply transformations
         print(f"  Applying transformations...")
         for transformation in config.transformations:
             transformation.apply(plugin_output_dir)
+        
+        # Show directory structure after transformations
+        print("  [bold yellow]Directory structure after transformations[/]:")
+        print(f"  {plugin_output_dir}")
+        print_directory_tree(plugin_output_dir, prefix="  ")
     
-    print(f"  ✓ {plugin_name} migrated successfully")
+    print(f"  [green]✓ {plugin_name} migrated successfully[/]")
 
 
 def main():
@@ -451,7 +487,7 @@ def main():
         config = PLUGINS[plugin_name]
         migrate_plugin(plugin_name, config, output_dir)
     
-    print(f"\n✓ Migration complete! Plugins available in {output_dir}/")
+    print(f"\n[green]✓ Migration complete![/] Plugins available in {output_dir}/")
 
 
 if __name__ == "__main__":
