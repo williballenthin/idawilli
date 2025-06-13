@@ -271,6 +271,32 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 """
 
+HEXLIGHT_PYPROJECT = """[project]
+name = "3p-hexlight-ida-plugin"
+authors = [
+  {name = "Milan Bohacek", email = "milan.bohacek+hexlight@gmail.com"},
+]
+maintainers = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "Highlighting plugin for Hex-Rays Decompiler - highlights matching braces and allows navigation with 'B' key"
+version = "2025.6.13"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.urls]
+source = "https://github.com/stevemk14ebr/RETools"
+repository = "https://github.com/stevemk14ebr/RETools"
+plugin-source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/3p-plugins/"
+
+[project.entry-points.'idapro.plugins']
+idapython = "hexlight.plugin"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+"""
+
 
 @dataclass
 class PluginConfig:
@@ -523,6 +549,24 @@ PLUGINS = {
             CreateFile("idafuzzy/__init__.py", "# IDAFuzzy Plugin Package"),
             # Create pyproject.toml
             CreateFile("pyproject.toml", IDAFUZZY_PYPROJECT),
+        ],
+    ),
+    "hexlight": PluginConfig(
+        name="hexlight",
+        repo_url="https://github.com/stevemk14ebr/RETools.git",
+        commit="9501332bf02688d3a4b31d85a25349671767be98",
+        include_files=[
+            "IdaScripts/plugins/hexlight.py",
+        ],
+        transformations=[
+            # Move the main plugin file into a package structure
+            MoveFile("IdaScripts/plugins/hexlight.py", "hexlight/plugin.py"),
+            # Clean up the intermediate directory
+            DeleteDirectory("IdaScripts"),
+            # Create __init__.py for the package
+            CreateFile("hexlight/__init__.py", "# Hexlight Plugin Package"),
+            # Create pyproject.toml
+            CreateFile("pyproject.toml", HEXLIGHT_PYPROJECT),
         ],
     ),
 }

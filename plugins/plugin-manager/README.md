@@ -25,6 +25,7 @@ Available plugins:
 |--------------------------------------------|----------------------------------------------|
 | [3p-HRDevHelper-ida-plugin](https://github.com/patois/HRDevHelper)  | A helpful tool for debugging and developing your own Hexrays plugins and scripts by [Dennis Elser](https://github.com/patois/HRDevHelper) |
 | [3p-HexRaysPyTools-ida-plugin](https://github.com/igogo-x86/HexRaysPyTools) | IDA Pro plugin which improves work with HexRays decompiler and helps in process of reconstruction structures and classes by [igogo-x86](https://github.com/igogo-x86/HexRaysPyTools) |
+| [3p-hexlight-ida-plugin](https://github.com/stevemk14ebr/RETools) | Highlighting plugin for Hex-Rays Decompiler - highlights matching braces and allows navigation with 'B' key by [Milan Bohacek](https://github.com/stevemk14ebr/RETools) |
 | [3p-IDAFuzzy-ida-plugin](https://github.com/Ga-ryo/IDAFuzzy) | Fuzzy searching tool for IDA Pro by [Ga-ryo](https://github.com/Ga-ryo/IDAFuzzy) |
 | [3p-LazyIDA-ida-plugin](https://github.com/L4ys/LazyIDA) | Make your IDA Lazy! A collection of useful utilities for IDA Pro analysis by [Lays](https://github.com/L4ys/LazyIDA) |
 | [3p-SwiftStringInspector-ida-plugin](https://github.com/keowu/swiftstringinspector) | A simple plugin for working with Swift Strings, optimized Swift Strings, and Swift Arrays during the reverse engineering of iOS binaries by [Keowu](https://github.com/keowu/swiftstringinspector) |

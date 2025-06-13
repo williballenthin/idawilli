@@ -22,6 +22,9 @@ import-hexrayspytools:
 import-idafuzzy:
     python migrate_plugins.py IDAFuzzy
 
+import-hexlight:
+    python migrate_plugins.py hexlight
+
 import:
     python migrate_plugins.py
 
@@ -48,6 +51,9 @@ clean-hexrayspytools:
 
 clean-idafuzzy:
     rm -rf third_party/IDAFuzzy
+
+clean-hexlight:
+    rm -rf third_party/hexlight
 
 clean:
     rm -rf third_party/
@@ -76,6 +82,9 @@ build-hexrayspytools:
 build-idafuzzy:
     python -m build --wheel third_party/IDAFuzzy
 
+build-hexlight:
+    python -m build --wheel third_party/hexlight
+
 build:
     just build-hrdevhelper
     just build-dereferencing
@@ -85,6 +94,7 @@ build:
     just build-xrefer
     just build-hexrayspytools
     just build-idafuzzy
+    just build-hexlight
 
 test-hrdevhelper:
     python ../scripts/test_plugin.py third_party/HRDevHelper/dist/*.whl
@@ -110,6 +120,9 @@ test-hexrayspytools:
 test-idafuzzy:
     python ../scripts/test_plugin.py third_party/IDAFuzzy/dist/*.whl
 
+test-hexlight:
+    python ../scripts/test_plugin.py third_party/hexlight/dist/*.whl
+
 test:
     just test-hrdevhelper
     just test-dereferencing
@@ -119,6 +132,7 @@ test:
     just test-xrefer
     just test-hexrayspytools
     just test-idafuzzy
+    just test-hexlight
 
 isort:
     uvx isort --length-sort --profile black --line-length 120 migrate_plugins.py
