@@ -297,6 +297,32 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 """
 
+STRING_FROM_SELECTION_PYPROJECT = """[project]
+name = "3p-string-from-selection-ida-plugin"
+authors = [
+  {name = "stevemk14ebr"},
+]
+maintainers = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "Define a string from selection, useful for non-null terminated strings"
+version = "2025.6.13"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.urls]
+source = "https://github.com/stevemk14ebr/RETools"
+repository = "https://github.com/stevemk14ebr/RETools"
+plugin-source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/3p-plugins/"
+
+[project.entry-points.'idapro.plugins']
+idapython = "string_from_selection.plugin"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+"""
+
 
 @dataclass
 class PluginConfig:
@@ -567,6 +593,24 @@ PLUGINS = {
             CreateFile("hexlight/__init__.py", "# Hexlight Plugin Package"),
             # Create pyproject.toml
             CreateFile("pyproject.toml", HEXLIGHT_PYPROJECT),
+        ],
+    ),
+    "string-from-selection": PluginConfig(
+        name="string-from-selection",
+        repo_url="https://github.com/stevemk14ebr/RETools.git",
+        commit="9501332bf02688d3a4b31d85a25349671767be98",
+        include_files=[
+            "IdaScripts/plugins/string_from_selection.py",
+        ],
+        transformations=[
+            # Move the main plugin file into a package structure
+            MoveFile("IdaScripts/plugins/string_from_selection.py", "string_from_selection/plugin.py"),
+            # Clean up the intermediate directory
+            DeleteDirectory("IdaScripts"),
+            # Create __init__.py for the package
+            CreateFile("string_from_selection/__init__.py", "# String From Selection Plugin Package"),
+            # Create pyproject.toml
+            CreateFile("pyproject.toml", STRING_FROM_SELECTION_PYPROJECT),
         ],
     ),
 }

@@ -25,6 +25,9 @@ import-idafuzzy:
 import-hexlight:
     python migrate_plugins.py hexlight
 
+import-string-from-selection:
+    python migrate_plugins.py string-from-selection
+
 import:
     python migrate_plugins.py
 
@@ -54,6 +57,9 @@ clean-idafuzzy:
 
 clean-hexlight:
     rm -rf third_party/hexlight
+
+clean-string-from-selection:
+    rm -rf third_party/string-from-selection
 
 clean:
     rm -rf third_party/
@@ -85,6 +91,9 @@ build-idafuzzy:
 build-hexlight:
     python -m build --wheel third_party/hexlight
 
+build-string-from-selection:
+    python -m build --wheel third_party/string-from-selection
+
 build:
     just build-hrdevhelper
     just build-dereferencing
@@ -95,6 +104,7 @@ build:
     just build-hexrayspytools
     just build-idafuzzy
     just build-hexlight
+    just build-string-from-selection
 
 test-hrdevhelper:
     python ../scripts/test_plugin.py third_party/HRDevHelper/dist/*.whl
@@ -123,6 +133,9 @@ test-idafuzzy:
 test-hexlight:
     python ../scripts/test_plugin.py third_party/hexlight/dist/*.whl
 
+test-string-from-selection:
+    python ../scripts/test_plugin.py third_party/string-from-selection/dist/*.whl
+
 test:
     just test-hrdevhelper
     just test-dereferencing
@@ -133,6 +146,7 @@ test:
     just test-hexrayspytools
     just test-idafuzzy
     just test-hexlight
+    just test-string-from-selection
 
 isort:
     uvx isort --length-sort --profile black --line-length 120 migrate_plugins.py
