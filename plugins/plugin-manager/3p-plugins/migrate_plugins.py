@@ -533,11 +533,11 @@ def migrate_plugin(plugin_name: str, config: PluginConfig, output_dir: Path) -> 
         print_directory_tree(repo_dir, prefix="  ")
         
         # Copy matching files
-        print("  Copying files...")
+        print("  [bold yellow]Copying files[/]...")
         copy_matching_files(repo_dir, plugin_output_dir, config.include_files, config.exclude_files)
        
         # Apply transformations
-        print("  Applying transformations...")
+        print("  [bold yellow]Applying transformations[/]...")
         for transformation in config.transformations:
             transformation.apply(plugin_output_dir)
         
