@@ -349,6 +349,36 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 """
 
+D810_PYPROJECT = """[project]
+name = "3p-d810-ida-plugin"
+authors = [
+  {name = "EShard Team"},
+]
+maintainers = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "IDA Pro plugin to deobfuscate code at decompilation time by modifying IDA Pro microcode"
+version = "2025.6.13"
+readme = "README.md"
+license-files = [ "LICENSE" ]
+requires-python = ">=3.9"
+dependencies = [
+    "z3-solver",
+]
+
+[project.urls]
+source = "https://github.com/joydo/d810"
+repository = "https://github.com/joydo/d810"
+plugin-source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/3p-plugins/"
+
+[project.entry-points.'idapro.plugins']
+idapython = "d810.plugin"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+"""
+
 
 @dataclass
 class PluginConfig:
@@ -655,6 +685,21 @@ PLUGINS = {
             CreateFile("easy_nop/__init__.py", "# Easy Nop Plugin Package"),
             # Create pyproject.toml
             CreateFile("pyproject.toml", EASY_NOP_PYPROJECT),
+        ],
+    ),
+    "d810": PluginConfig(
+        name="d810",
+        repo_url="https://github.com/joydo/d810.git",
+        commit="87fe12ca9cfbea5744c30546308898bf7199c073",
+        include_files=[
+            "D810.py",
+            "d810/**",
+            "LICENSE",
+            "README.md",
+        ],
+        transformations=[
+            MoveFile("D810.py", "d810/plugin.py"),
+            CreateFile("pyproject.toml", D810_PYPROJECT),
         ],
     ),
 }
