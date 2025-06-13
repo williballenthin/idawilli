@@ -214,6 +214,33 @@ def PLUGIN_ENTRY():
     return XReferPlugin()
 """
 
+HEXRAYSPYTOOLS_PYPROJECT = """[project]
+name = "3p-HexRaysPyTools-ida-plugin"
+authors = [
+  {name = "igogo-x86"},
+]
+maintainers = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "IDA Pro plugin which improves work with HexRays decompiler and helps in process of reconstruction structures and classes"
+version = "2025.6.13"
+readme = "readme.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.urls]
+source = "https://github.com/igogo-x86/HexRaysPyTools"
+repository = "https://github.com/igogo-x86/HexRaysPyTools"
+plugin-source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/3p-plugins/"
+
+[project.entry-points.'idapro.plugins']
+idapython = "HexRaysPyTools.plugin"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+"""
+
 
 @dataclass
 class PluginConfig:
@@ -255,6 +282,8 @@ class MoveFile(FileTransformation):
             dst_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(src_path), str(dst_path))
             print(f"  [cyan]Moved[/] {self.src} [cyan]->[/] {self.dst}")
+        else:
+            print(f"  [red]Failed to move[/] {self.src} (does not exist)")
 
 
 @dataclass
@@ -432,6 +461,20 @@ PLUGINS = {
             # MoveFile("plugins/xrefer.py", "xrefer/plugin.py"),
             CreateFile("xrefer/entry.py", XREFER_ENTRY),
             CreateFile("pyproject.toml", XREFER_PYPROJECT),
+        ],
+    ),
+    "HexRaysPyTools": PluginConfig(
+        name="HexRaysPyTools",
+        repo_url="https://github.com/igogo-x86/HexRaysPyTools.git",
+        commit="b8ebf757a92fda934c35c418fc55bfdd6fc8e67c",
+        include_files=[
+            "HexRaysPyTools.py",
+            "HexRaysPyTools/**",
+            "readme.md",
+        ],
+        transformations=[
+            MoveFile("HexRaysPyTools.py", "HexRaysPyTools/plugin.py"),
+            CreateFile("pyproject.toml", HEXRAYSPYTOOLS_PYPROJECT),
         ],
     ),
 }

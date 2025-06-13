@@ -16,6 +16,9 @@ import-swiftstringinspector:
 import-xrefer:
     python migrate_plugins.py xrefer
 
+import-hexrayspytools:
+    python migrate_plugins.py HexRaysPyTools
+
 import:
     python migrate_plugins.py
 
@@ -36,6 +39,9 @@ clean-swiftstringinspector:
 
 clean-xrefer:
     rm -rf third_party/xrefer
+
+clean-hexrayspytools:
+    rm -rf third_party/HexRaysPyTools
 
 clean:
     rm -rf third_party/
@@ -58,6 +64,9 @@ build-swiftstringinspector:
 build-xrefer:
     python -m build --wheel third_party/xrefer
 
+build-hexrayspytools:
+    python -m build --wheel third_party/HexRaysPyTools
+
 build:
     just build-hrdevhelper
     just build-dereferencing
@@ -65,6 +74,7 @@ build:
     just build-lazyida
     just build-swiftstringinspector
     just build-xrefer
+    just build-hexrayspytools
 
 test-hrdevhelper:
     python ../scripts/test_plugin.py third_party/HRDevHelper/dist/*.whl
@@ -84,6 +94,9 @@ test-swiftstringinspector:
 test-xrefer:
     python ../scripts/test_plugin.py third_party/xrefer/dist/*.whl
 
+test-hexrayspytools:
+    python ../scripts/test_plugin.py third_party/HexRaysPyTools/dist/*.whl
+
 test:
     just test-hrdevhelper
     just test-dereferencing
@@ -91,6 +104,7 @@ test:
     just test-lazyida
     just test-swiftstringinspector
     just test-xrefer
+    just test-hexrayspytools
 
 isort:
     uvx isort --length-sort --profile black --line-length 120 migrate_plugins.py
