@@ -407,6 +407,34 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 """
 
+HEXHIGHLIGHTER_PYPROJECT = """[project]
+name = "3p-hex-highlighter-ida-plugin"
+authors = [
+  {name = "Vincent Mallet"},
+]
+maintainers = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "Highlight code blocks in IDA Pro's Hex-Rays decompiler output to make it easier to follow nested blocks"
+version = "2025.6.16"
+readme = "README.md"
+license-files = [ "LICENSE" ]
+requires-python = ">=3.9"
+dependencies = []
+
+[project.urls]
+source = "https://github.com/vmallet/ida-hex-highlighter"
+repository = "https://github.com/vmallet/ida-hex-highlighter"
+plugin-source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/3p-plugins/"
+
+[project.entry-points.'idapro.plugins']
+idapython = "ida_hex_highlighter.plugin"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+"""
+
 
 @dataclass
 class PluginConfig:
@@ -744,6 +772,23 @@ PLUGINS = {
             MoveFile("hexinlay/hexrays_inlay.py", "hexinlay/plugin.py"),
             CreateFile("hexinlay/__init__.py", "# HexInlay Plugin Package"),
             CreateFile("pyproject.toml", HEXINLAY_PYPROJECT),
+        ],
+    ),
+    "hex-highlighter": PluginConfig(
+        name="hex-highlighter",
+        repo_url="https://github.com/vmallet/ida-hex-highlighter.git",
+        commit="a160bc6fd304c272a0f631777a2dac110465a2f2",
+        include_files=[
+            "plugins/highlighter_plugin.py",
+            "plugins/ida_hex_highlighter/**",
+            "LICENSE",
+            "README.md",
+        ],
+        transformations=[
+            MoveFile("plugins/ida_hex_highlighter/", "ida_hex_highlighter/"),
+            MoveFile("plugins/highlighter_plugin.py", "ida_hex_highlighter/plugin.py"),
+            DeleteDirectory("plugins"),
+            CreateFile("pyproject.toml", HEXHIGHLIGHTER_PYPROJECT),
         ],
     ),
 }

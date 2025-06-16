@@ -37,6 +37,9 @@ import-d810:
 import-hexinlay:
     python migrate_plugins.py HexInlay
 
+import-hex-highlighter:
+    python migrate_plugins.py hex-highlighter
+
 import:
     python migrate_plugins.py
 
@@ -78,6 +81,9 @@ clean-d810:
 
 clean-hexinlay:
     rm -rf third_party/HexInlay
+
+clean-hex-highlighter:
+    rm -rf third_party/hex-highlighter
 
 clean:
     rm -rf third_party/
@@ -121,6 +127,9 @@ build-d810:
 build-hexinlay:
     python -m build --wheel third_party/HexInlay
 
+build-hex-highlighter:
+    python -m build --wheel third_party/hex-highlighter
+
 build:
     just build-hrdevhelper
     just build-dereferencing
@@ -135,6 +144,7 @@ build:
     just build-easy-nop
     just build-d810
     just build-hexinlay
+    just build-hex-highlighter
 
 test-hrdevhelper:
     python ../scripts/test_plugin.py third_party/HRDevHelper/dist/*.whl
@@ -175,6 +185,9 @@ test-d810:
 test-hexinlay:
     python ../scripts/test_plugin.py third_party/HexInlay/dist/*.whl
 
+test-hex-highlighter:
+    python ../scripts/test_plugin.py third_party/hex-highlighter/dist/*.whl
+
 test:
     just test-hrdevhelper
     just test-dereferencing
@@ -189,6 +202,7 @@ test:
     just test-easy-nop
     just test-d810
     just test-hexinlay
+    just test-hex-highlighter
 
 isort:
     uvx isort --length-sort --profile black --line-length 120 migrate_plugins.py
