@@ -34,6 +34,9 @@ import-easy-nop:
 import-d810:
     python migrate_plugins.py d810
 
+import-hexinlay:
+    python migrate_plugins.py HexInlay
+
 import:
     python migrate_plugins.py
 
@@ -72,6 +75,9 @@ clean-easy-nop:
 
 clean-d810:
     rm -rf third_party/d810
+
+clean-hexinlay:
+    rm -rf third_party/HexInlay
 
 clean:
     rm -rf third_party/
@@ -112,6 +118,9 @@ build-easy-nop:
 build-d810:
     python -m build --wheel third_party/d810
 
+build-hexinlay:
+    python -m build --wheel third_party/HexInlay
+
 build:
     just build-hrdevhelper
     just build-dereferencing
@@ -125,6 +134,7 @@ build:
     just build-string-from-selection
     just build-easy-nop
     just build-d810
+    just build-hexinlay
 
 test-hrdevhelper:
     python ../scripts/test_plugin.py third_party/HRDevHelper/dist/*.whl
@@ -162,6 +172,9 @@ test-easy-nop:
 test-d810:
     python ../scripts/test_plugin.py third_party/d810/dist/*.whl
 
+test-hexinlay:
+    python ../scripts/test_plugin.py third_party/HexInlay/dist/*.whl
+
 test:
     just test-hrdevhelper
     just test-dereferencing
@@ -175,6 +188,7 @@ test:
     just test-string-from-selection
     just test-easy-nop
     just test-d810
+    just test-hexinlay
 
 isort:
     uvx isort --length-sort --profile black --line-length 120 migrate_plugins.py

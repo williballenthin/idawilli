@@ -379,6 +379,34 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 """
 
+HEXINLAY_PYPROJECT = """[project]
+name = "3p-HexInlay-ida-plugin"
+authors = [
+  {name = "Milan Bohacek", email = "milankovo@gmail.com"},
+]
+maintainers = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "Inlay hints for hex-rays decompiler - shows function argument names in decompiled code"
+version = "2025.6.16"
+readme = "README.md"
+license-files = [ "LICENSE" ]
+requires-python = ">=3.9"
+dependencies = []
+
+[project.urls]
+source = "https://github.com/milankovo/hexinlay"
+repository = "https://github.com/milankovo/hexinlay"
+plugin-source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/3p-plugins/"
+
+[project.entry-points.'idapro.plugins']
+idapython = "hexinlay.plugin"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+"""
+
 
 @dataclass
 class PluginConfig:
@@ -700,6 +728,22 @@ PLUGINS = {
         transformations=[
             MoveFile("D810.py", "d810/plugin.py"),
             CreateFile("pyproject.toml", D810_PYPROJECT),
+        ],
+    ),
+    "HexInlay": PluginConfig(
+        name="HexInlay",
+        repo_url="https://github.com/milankovo/hexinlay.git",
+        commit="d521edb",  # Latest commit with warning fix
+        include_files=[
+            "HexInlay/hexrays_inlay.py",
+            "LICENSE",
+            "README.md",
+        ],
+        transformations=[
+            MoveFile("HexInlay", "hexinlay"),
+            MoveFile("hexinlay/hexrays_inlay.py", "hexinlay/plugin.py"),
+            CreateFile("hexinlay/__init__.py", "# HexInlay Plugin Package"),
+            CreateFile("pyproject.toml", HEXINLAY_PYPROJECT),
         ],
     ),
 }

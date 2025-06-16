@@ -24,6 +24,7 @@ Available plugins:
 | Name                                      | Summary                                      |
 |--------------------------------------------|----------------------------------------------|
 | [3p-HRDevHelper-ida-plugin](https://github.com/patois/HRDevHelper)  | A helpful tool for debugging and developing your own Hexrays plugins and scripts by [Dennis Elser](https://github.com/patois/HRDevHelper) |
+| [3p-HexInlay-ida-plugin](https://github.com/milankovo/hexinlay) | Inlay hints for hex-rays decompiler - shows function argument names in decompiled code by [Milan Bohacek](https://github.com/milankovo/hexinlay) |
 | [3p-HexRaysPyTools-ida-plugin](https://github.com/igogo-x86/HexRaysPyTools) | IDA Pro plugin which improves work with HexRays decompiler and helps in process of reconstruction structures and classes by [igogo-x86](https://github.com/igogo-x86/HexRaysPyTools) |
 | [3p-hexlight-ida-plugin](https://github.com/stevemk14ebr/RETools) | Highlighting plugin for Hex-Rays Decompiler - highlights matching braces and allows navigation with 'B' key by [Milan Bohacek](https://github.com/stevemk14ebr/RETools) |
 | [3p-IDAFuzzy-ida-plugin](https://github.com/Ga-ryo/IDAFuzzy) | Fuzzy searching tool for IDA Pro by [Ga-ryo](https://github.com/Ga-ryo/IDAFuzzy) |
