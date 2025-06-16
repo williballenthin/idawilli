@@ -435,6 +435,34 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 """
 
+DESCRIBEKEY_PYPROJECT = """[project]
+name = "3p-describekey-ida-plugin"
+authors = [
+  {name = "Vincent Mallet"},
+]
+maintainers = [
+  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+]
+description = "IDA plugin to quickly learn what a shortcut does"
+version = "2025.6.16"
+readme = "README.md"
+license-files = [ "LICENSE" ]
+requires-python = ">=3.9"
+dependencies = []
+
+[project.urls]
+source = "https://github.com/vmallet/ida-describekey"
+repository = "https://github.com/vmallet/ida-describekey"
+plugin-source = "https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/3p-plugins/"
+
+[project.entry-points.'idapro.plugins']
+idapython = "describekey.plugin"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+"""
+
 
 @dataclass
 class PluginConfig:
@@ -789,6 +817,24 @@ PLUGINS = {
             MoveFile("plugins/highlighter_plugin.py", "ida_hex_highlighter/plugin.py"),
             DeleteDirectory("plugins"),
             CreateFile("pyproject.toml", HEXHIGHLIGHTER_PYPROJECT),
+        ],
+    ),
+    "describekey": PluginConfig(
+        name="describekey",
+        repo_url="https://github.com/vmallet/ida-describekey.git",
+        commit="0b781202d3c835001c063659a088d79f68714e82",
+        include_files=[
+            "describekey.py",
+            "LICENSE",
+            "README.md",
+        ],
+        transformations=[
+            # Move the main plugin file into a package structure
+            MoveFile("describekey.py", "describekey/plugin.py"),
+            # Create __init__.py for the package
+            CreateFile("describekey/__init__.py", "# DescribeKey Plugin Package"),
+            # Create pyproject.toml
+            CreateFile("pyproject.toml", DESCRIBEKEY_PYPROJECT),
         ],
     ),
 }
