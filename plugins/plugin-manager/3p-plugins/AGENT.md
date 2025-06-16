@@ -42,6 +42,18 @@ Before adding a plugin, examine its structure:
 - Identify the license and README files
 - Get the latest commit hash for pinning
 
+#### Repository Structure Deep Dive
+Before creating the migration config, carefully examine the actual file structure:
+- Don't assume file locations based on README descriptions
+- Use web interface or clone locally to see exact structure
+- Check for subdirectories that need to be preserved
+- Identify the actual main plugin file location
+
+**Example - hex-highlighter had unexpected structure:**
+- README mentioned `block_highlight.py` but actual structure was:
+  - `plugins/highlighter_plugin.py` (main file)
+  - `plugins/ida_hex_highlighter/` (subdirectory with core logic)
+
 **Example for LazyIDA:**
 - Repository: https://github.com/L4ys/LazyIDA
 - Single file plugin: `LazyIDA.py`
@@ -195,6 +207,11 @@ Commit all the changes:
 - Move subdirectories with `MoveFile("subdir", "package/subdir")`
 - May need import fixes with `ReplaceText()`
 
+### Plugins with Subdirectories and Complex Imports (like hex-highlighter)
+- Include entire subdirectories: `"plugins/ida_hex_highlighter/**"`
+- Move subdirectories preserving structure: `MoveFile("plugins/ida_hex_highlighter", "package_name/ida_hex_highlighter")`
+- Fix import paths after restructuring: `ReplaceText("*.py", "from ida_hex_highlighter.module", "from package_name.ida_hex_highlighter.module")`
+
 ### Simple Plugins (like HRDevHelper)
 - May have both a main file and subdirectory
 - Move main file into the subdirectory
@@ -204,6 +221,13 @@ Commit all the changes:
 
 ### Qt Import Issues
 Some plugins use `from PyQt5.Qt import QApplication` which may not work in all IDA Pro versions. The test script will catch these, but they can be ignored if the plugin otherwise works.
+
+### Import Path Issues After Restructuring
+When moving files into packages, imports often break. Add transformations to fix them:
+```python
+ReplaceText("plugin.py", "from original.import.path", "from new_package.import.path")
+```
+Test thoroughly after import changes.
 
 ### Dependency Management
 - Most IDA plugins should have minimal dependencies

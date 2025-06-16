@@ -7,6 +7,7 @@ help = "show profile (python)"
 
 [devshell]
 packages = [
+  "nodejs",
   "just",
   "python312",
   "just",
