@@ -1,0 +1,82 @@
+# use PyPI trusted publishing, as described here:
+# https://blog.trailofbits.com/2023/05/23/trusted-publishing-a-new-benchmark-for-packaging-security/
+name: publish native-ida-plugin to pypi
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pypi-publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          submodules: recursive
+      - name: Set up Python
+        uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # v5.0.0
+        with:
+          python-version: '3.13'
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.14.1
+      - uses: extractions/setup-just@v3
+      - name: Install dependencies
+        run: pip install setuptools==78.1.1 build==1.2.2
+      - name: fetch IDA SDK
+        env:
+          IDASDK_AGE_PRIVATE_KEY: ${{ secrets.IDASDK_AGE_PRIVATE_KEY }}
+        run: |
+            # this step fetches and decrypts a copy of the IDA SDK that we store in a public GitHub release.
+            # then it checks out ida-cmake
+            # the SDK will be available at the relative directory ./idasdk91/ and can be used in subsequent steps.
+
+            curl -L -o age.tar.gz https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz
+            tar -xzf age.tar.gz
+            # this provides:
+            #  .
+            #  └── age
+            #      ├── age
+            #      ├── age-keygen
+            #      └── LICENSE
+
+            # we store the encrypted IDA SDK on a public GitHub release page, as a convenient place to host it
+            curl -L -o idasdk91.zip.age https://github.com/williballenthin/idawilli/releases/download/v0.1.0a4/idasdk91.zip.age
+            echo "$IDASDK_AGE_PRIVATE_KEY" | ./age/age --decrypt --identity - -o idasdk91.zip idasdk91.zip.age
+
+            unzip idasdk91.zip
+            # produces: ./idasdk91/...
+            # set IDASDK=./idasdk91/
+
+            pushd ./idasdk91/
+            git clone https://github.com/allthingsida/ida-cmake.git
+            pushd ./ida-cmake
+            # this ref is the master branch as of 2025-06-17
+            git checkout 241dcab1870498af19731649cb9fbb38badbdfdd
+            readlink -f .
+            ls -lah
+            popd
+            popd
+      - name: build package
+        run: |
+          export IDASDK=$(readlink -f "./idasdk91")
+          cd plugins/plugin-manager/examples/native-ida-plugin
+          just build
+      - name: publish package
+        uses: pypa/gh-action-pypi-publish@v1.12.4
+        with:
+          skip-existing: false
+          packages-dir: plugins/plugin-manager/examples/native-ida-plugin/dist
+      # put the artifacts after the publish step, so that they are not uploaded if the publish fails
+      # since we may have multiple things to publish from the same trigger (release)
+      - name: upload package artifacts
+        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+        with:
+          path: plugins/plugin-manager/examples/native-ida-plugin/dist/*
+

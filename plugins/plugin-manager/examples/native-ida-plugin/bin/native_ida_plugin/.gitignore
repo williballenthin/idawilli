@@ -1,0 +1,4 @@
+mysample.so
+mysample.dll
+mysample_x86_64.dylib
+mysample_aarch64.dylib

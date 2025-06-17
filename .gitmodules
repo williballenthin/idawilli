@@ -1,0 +1,3 @@
+[submodule "plugins/plugin-manager/examples/native-ida-plugin/src/deps/zig-cross"]
+	path = plugins/plugin-manager/examples/native-ida-plugin/src/deps/zig-cross
+	url = git@github.com:mrexodia/zig-cross.git
