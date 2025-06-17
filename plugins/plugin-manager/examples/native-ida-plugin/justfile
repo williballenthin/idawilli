@@ -1,0 +1,33 @@
+_build target:
+    cmake -B "build-{{target}}" -DCMAKE_TOOLCHAIN_FILE="deps/zig-cross/{{target}}.cmake" -S src/ -Wno-dev
+    rm -f $IDASDK/bin/plugins/mysample.*
+    cmake --build "build-{{target}}" --target all
+    mv -f $IDASDK/bin/plugins/mysample.* "build-{{target}}/"
+
+build-linux-x86_64: (_build "x86_64-linux-gnu")
+build-macos-x86_64: (_build "x86_64-macos-none")
+build-macos-aarch64: (_build "aarch64-macos-none")
+build-windows-x86_64: (_build "x86_64-windows-gnu")
+
+build-wheel:
+    cp build-x86_64-linux-gnu/mysample.so bin/native_ida_plugin/mysample.so
+    cp build-x86_64-macos-none/mysample.dylib bin/native_ida_plugin/mysample_x86_64.dylib
+    cp build-aarch64-macos-none/mysample.dylib bin/native_ida_plugin/mysample_aarch64.dylib
+    cp build-x86_64-windows-gnu/mysample.dll bin/native_ida_plugin/mysample.dll
+    python -m build --wheel
+
+build: build-linux-x86_64 build-macos-x86_64 build-macos-aarch64 build-windows-x86_64 build-wheel
+
+clean-wheel:
+    rm -rf bin/native_ida_plugin/* build/ dist/
+
+_clean target:
+    -cmake --build "build-{{target}}" --target clean
+    rm -rf "build-{{target}}"
+
+clean-linux-x86_64: (_clean "x86_64-linux-gnu")
+clean-macos-x86_64: (_clean "x86_64-macos-none")
+clean-macos-aarch64: (_clean "aarch64-macos-none")
+clean-windows-x86_64: (_clean "x86_64-windows-gnu")
+
+clean: clean-linux-x86_64 clean-macos-x86_64 clean-macos-aarch64 clean-windows-x86_64 clean-wheel

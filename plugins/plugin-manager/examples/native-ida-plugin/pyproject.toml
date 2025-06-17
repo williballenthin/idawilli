@@ -1,0 +1,34 @@
+[project]
+name = "williballenthin-native-ida-plugin"
+authors = [
+  {name = "Willi Ballenthin", email = "wballenthin@google.com"},
+]
+description = "Example IDA Plugin (native)"
+version = "0.1.0"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.entry-points.'idapro.plugins']
+aarch64-apple-darwin = "native_ida_plugin:mysample_aarch64"
+x86_64-apple-darwin  = "native_ida_plugin:mysample_x86_64"
+x86_64-unknown-linux = "native_ida_plugin:mysample"
+x86_64-pc-windows    = "native_ida_plugin:mysample"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "bin"}  # Python package data is found in "bin/" directory.
+                            # "src/" is the default, but we'll use "bin/" for all this binary data.
+
+[tool.setuptools.package-data]
+"native_ida_plugin" = [
+    # filenames relative to: bin/native_ida_plugin/
+    "mysample.dll",
+    "mysample.so",
+    "mysample_aarch64.dylib",
+    "mysample_x86_64.dylib",
+]
