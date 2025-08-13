@@ -1,0 +1,7 @@
+{
+  "IDAMetadataDescriptorVersion": 1,
+  "plugin": {
+    "name": "extensible_hints",
+    "entryPoint": "extensible_hints.py"
+  }
+}
