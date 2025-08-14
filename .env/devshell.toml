@@ -7,7 +7,6 @@ help = "show profile (python)"
 
 [devshell]
 packages = [
-  "nodejs",
   "just",
   "python312",
   "just",
@@ -16,10 +15,10 @@ packages = [
   "pre-commit",
   # LSP for helix
   "basedpyright",
-  "ruff-lsp",
   "python312Packages.python-lsp-server",
   "python312Packages.pylsp-mypy",
   "python312Packages.black",
+  "python312Packages.ruff",
 ]
 
 # via: https://github.com/numtide/devshell/issues/172#issuecomment-1208745562
