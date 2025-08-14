@@ -1,0 +1,7 @@
+{
+  "IDAMetadataDescriptorVersion": 1,
+  "plugin": {
+    "name": "Bookmark Hints",
+    "entryPoint": "bookmark_hints.py"
+  }
+}
