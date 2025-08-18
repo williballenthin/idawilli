@@ -338,55 +338,6 @@ class RangeModel(BaseModel):
         )
     
 
-class FlowChartModel(BaseModel):
-    """Pydantic model for ida_gdl.qflow_chart_t structure."""
-
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True,
-        validate_assignment=True,
-        frozen=False,
-    )
-
-    pfn: int
-    flags: int
-    blocks_count: int
-    entry_ea: Optional[int] = None
-    function_name: Optional[str] = None
-
-    @classmethod
-    def from_qflow_chart_t(cls, fc: ida_gdl.qflow_chart_t) -> 'FlowChartModel':
-        """Create FlowChartModel from ida_gdl.qflow_chart_t instance.
-        
-        Args:
-            fc: The qflow_chart_t instance to convert.
-            
-        Returns:
-            FlowChartModel instance with populated attributes.
-        """
-        # Extract basic information from flow chart
-        pfn_addr = fc.pfn.start_ea if hasattr(fc, 'pfn') and fc.pfn else 0
-        blocks_count = len(fc) if hasattr(fc, '__len__') else 0
-        flags = fc.flags if hasattr(fc, 'flags') else 0
-        
-        # Try to get entry point
-        entry_ea = None
-        if hasattr(fc, 'pfn') and fc.pfn:
-            entry_ea = fc.pfn.start_ea
-        
-        # Try to get function name
-        function_name = None
-        if hasattr(fc, 'pfn') and fc.pfn and hasattr(fc.pfn, 'get_name'):
-            function_name = fc.pfn.get_name()
-        
-        return cls(
-            pfn=pfn_addr,
-            flags=flags,
-            blocks_count=blocks_count,
-            entry_ea=entry_ea,
-            function_name=function_name,
-        )
-
-
 class LochistEntryModel(BaseModel):
     """Pydantic model for ida_moves.lochist_entry_t structure."""
 
@@ -669,15 +620,15 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         )
 
     def flow_chart_created(self, fc: ida_gdl.qflow_chart_t) -> None:
-        """Gui has retrieved a function flow chart.
+        """GUI has retrieved a function flow chart.
 
         Plugins may modify the flow chart in this callback.
 
         Args:
             fc: Flow chart object.
         """
-        fc_ = FlowChartModel.from_qflow_chart_t(fc)
-        logger.info("flow_chart_created(fc=%s)", fc_.model_dump_json())
+        # not analytically relevant
+        return
 
     def compiler_changed(self, adjust_inf_fields: bool) -> None:
         """The kernel has changed the compiler information.
