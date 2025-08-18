@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 class FuncModel(BaseModel):
     """Pydantic model for ida_funcs.func_t structure."""
+
     start_ea: int
     end_ea: int
     flags: int
@@ -37,7 +38,7 @@ class FuncModel(BaseModel):
     name: str | None = None
 
     @classmethod
-    def from_func_t(cls, func: ida_funcs.func_t) -> 'FuncModel':
+    def from_func_t(cls, func: ida_funcs.func_t) -> "FuncModel":
         """Create FuncModel from ida_funcs.func_t instance."""
         return cls(
             start_ea=func.start_ea,
@@ -55,7 +56,7 @@ class FuncModel(BaseModel):
             tailqty=func.tailqty,
             owner=func.owner,
             refqty=func.refqty,
-            name=func.get_name() if hasattr(func, 'get_name') else None,
+            name=func.get_name() if hasattr(func, "get_name") else None,
         )
 
 
@@ -64,6 +65,7 @@ Func = ida_funcs.func_t | FuncModel
 
 class OpModel(BaseModel):
     """Pydantic model for ida_ua.op_t structure."""
+
     n: int
     type: int
     offb: int
@@ -81,7 +83,7 @@ class OpModel(BaseModel):
     specflag4: int
 
     @classmethod
-    def from_op_t(cls, op: ida_ua.op_t) -> 'OpModel':
+    def from_op_t(cls, op: ida_ua.op_t) -> "OpModel":
         """Create OpModel from ida_ua.op_t instance."""
         return cls(
             n=op.n,
@@ -107,6 +109,7 @@ Op = ida_ua.op_t | OpModel
 
 class InsnModel(BaseModel):
     """Pydantic model for ida_ua.insn_t structure."""
+
     cs: int
     ip: int
     ea: int
@@ -121,7 +124,7 @@ class InsnModel(BaseModel):
     ops: list[OpModel]
 
     @classmethod
-    def from_insn_t(cls, insn: ida_ua.insn_t) -> 'InsnModel':
+    def from_insn_t(cls, insn: ida_ua.insn_t) -> "InsnModel":
         """Create InsnModel from ida_ua.insn_t instance."""
         return cls(
             cs=insn.cs,
@@ -144,6 +147,7 @@ Insn = ida_ua.insn_t | InsnModel
 
 class SegmentModel(BaseModel):
     """Pydantic model for ida_segment.segment_t structure."""
+
     start_ea: int
     end_ea: int
     name: int
@@ -161,64 +165,64 @@ class SegmentModel(BaseModel):
     segment_name: str | None = None
     segment_class: str | None = None
 
-    @field_validator('bitness')
+    @field_validator("bitness")
     @classmethod
     def validate_bitness(cls, v: int) -> int:
         """Validate bitness is in range 0-2."""
         if v not in (0, 1, 2):
-            raise ValueError('bitness must be 0 (16bit), 1 (32bit), or 2 (64bit)')
+            raise ValueError("bitness must be 0 (16bit), 1 (32bit), or 2 (64bit)")
         return v
 
-    @field_validator('defsr')
+    @field_validator("defsr")
     @classmethod
     def validate_defsr_length(cls, v: list[int]) -> list[int]:
         """Validate defsr list has exactly 16 elements."""
         if len(v) != 16:
-            raise ValueError(f'defsr must have exactly 16 elements, got {len(v)}')
+            raise ValueError(f"defsr must have exactly 16 elements, got {len(v)}")
         return v
 
-    @field_validator('align')
+    @field_validator("align")
     @classmethod
     def validate_align(cls, v: int) -> int:
         """Validate align is in range 0-255."""
         if not (0 <= v <= 255):
-            raise ValueError(f'align must be in range 0-255, got {v}')
+            raise ValueError(f"align must be in range 0-255, got {v}")
         return v
 
-    @field_validator('comb')
+    @field_validator("comb")
     @classmethod
     def validate_comb(cls, v: int) -> int:
         """Validate comb is in range 0-255."""
         if not (0 <= v <= 255):
-            raise ValueError(f'comb must be in range 0-255, got {v}')
+            raise ValueError(f"comb must be in range 0-255, got {v}")
         return v
 
-    @field_validator('perm')
+    @field_validator("perm")
     @classmethod
     def validate_perm(cls, v: int) -> int:
         """Validate perm is in range 0-255."""
         if not (0 <= v <= 255):
-            raise ValueError(f'perm must be in range 0-255, got {v}')
+            raise ValueError(f"perm must be in range 0-255, got {v}")
         return v
 
-    @field_validator('type')
+    @field_validator("type")
     @classmethod
     def validate_type(cls, v: int) -> int:
         """Validate type is in range 0-255."""
         if not (0 <= v <= 255):
-            raise ValueError(f'type must be in range 0-255, got {v}')
+            raise ValueError(f"type must be in range 0-255, got {v}")
         return v
 
-    @field_validator('flags')
+    @field_validator("flags")
     @classmethod
     def validate_flags(cls, v: int) -> int:
         """Validate flags is in range 0-65535."""
         if not (0 <= v <= 65535):
-            raise ValueError(f'flags must be in range 0-65535, got {v}')
+            raise ValueError(f"flags must be in range 0-65535, got {v}")
         return v
 
     @classmethod
-    def from_segment_t(cls, segment: ida_segment.segment_t) -> 'SegmentModel':
+    def from_segment_t(cls, segment: ida_segment.segment_t) -> "SegmentModel":
         """Create SegmentModel from ida_segment.segment_t instance."""
         # Convert defsr array to list
         defsr_list = [segment.defsr[i] for i in range(16)]
@@ -248,11 +252,12 @@ Segment = ida_segment.segment_t | SegmentModel
 
 class RangeModel(BaseModel):
     """Pydantic model for ida_range.range_t structure."""
+
     start_ea: int
     end_ea: int
 
     @classmethod
-    def from_range_t(cls, range_obj: ida_range.range_t) -> 'RangeModel':
+    def from_range_t(cls, range_obj: ida_range.range_t) -> "RangeModel":
         """Create RangeModel from ida_range.range_t instance.
 
         Args:
@@ -272,6 +277,7 @@ Range = ida_range.range_t | RangeModel
 
 class UdmModel(BaseModel):
     """Pydantic model for ida_typeinf.udm_t structure."""
+
     offset: int
     size: int
     name: str
@@ -283,17 +289,17 @@ class UdmModel(BaseModel):
     fda: int
 
     @classmethod
-    def from_udm_t(cls, udm: ida_typeinf.udm_t) -> 'UdmModel':
+    def from_udm_t(cls, udm: ida_typeinf.udm_t) -> "UdmModel":
         return cls(
-            offset = udm.offset,
-            size = udm.size,
-            name = udm.name,
-            cmt = udm.cmt,
-            tid = udm.type.get_tid(),
-            repr = str(udm.repr),
-            effalign = udm.effalign,
-            tafld_bits = udm.tafld_bits,
-            fda = udm.fda,
+            offset=udm.offset,
+            size=udm.size,
+            name=udm.name,
+            cmt=udm.cmt,
+            tid=udm.type.get_tid(),
+            repr=str(udm.repr),
+            effalign=udm.effalign,
+            tafld_bits=udm.tafld_bits,
+            fda=udm.fda,
         )
 
 
@@ -302,13 +308,14 @@ Udm = ida_typeinf.udm_t | UdmModel
 
 class EdmModel(BaseModel):
     """Pydantic model for ida_typeinf.edm_t structure."""
+
     name: str
     comment: str
     value: int
     tid: int
 
     @classmethod
-    def from_edm_t(cls, edm: ida_typeinf.edm_t) -> 'EdmModel':
+    def from_edm_t(cls, edm: ida_typeinf.edm_t) -> "EdmModel":
         name = edm.name
         comment = edm.cmt
         value = edm.value
@@ -936,7 +943,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             new_start,
             segmod_flags,
         )
-        ev = changing_segm_start_event(event_name="changing_segm_start", s=s_model, new_start=new_start, segmod_flags=segmod_flags)
+        ev = changing_segm_start_event(
+            event_name="changing_segm_start", s=s_model, new_start=new_start, segmod_flags=segmod_flags
+        )
         cb(ev)
 
     def segm_start_changed(self, s: ida_segment.segment_t, oldstart: ida_idaapi.ea_t) -> None:
@@ -955,7 +964,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             new_end,
             segmod_flags,
         )
-        ev = changing_segm_end_event(event_name="changing_segm_end", s=s_model, new_end=new_end, segmod_flags=segmod_flags)
+        ev = changing_segm_end_event(
+            event_name="changing_segm_end", s=s_model, new_end=new_end, segmod_flags=segmod_flags
+        )
         cb(ev)
 
     def segm_end_changed(self, s: ida_segment.segment_t, oldend: ida_idaapi.ea_t) -> None:
@@ -1136,7 +1147,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             owner_func,
             old_owner,
         )
-        ev = tail_owner_changed_event(event_name="tail_owner_changed", tail=tail_model, owner_func=owner_func, old_owner=old_owner)
+        ev = tail_owner_changed_event(
+            event_name="tail_owner_changed", tail=tail_model, owner_func=owner_func, old_owner=old_owner
+        )
         cb(ev)
 
     def func_noret_changed(self, pfn: ida_funcs.func_t) -> None:
@@ -1195,7 +1208,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             cmt,
             repeatable,
         )
-        ev = changing_range_cmt_event(event_name="changing_range_cmt", kind=kind, a=a_model, cmt=cmt, repeatable=repeatable)
+        ev = changing_range_cmt_event(
+            event_name="changing_range_cmt", kind=kind, a=a_model, cmt=cmt, repeatable=repeatable
+        )
         cb(ev)
 
     # TODO: what is a range comment???
@@ -1209,7 +1224,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             cmt,
             repeatable,
         )
-        ev = range_cmt_changed_event(event_name="range_cmt_changed", kind=kind, a=a_model, cmt=cmt, repeatable=repeatable)
+        ev = range_cmt_changed_event(
+            event_name="range_cmt_changed", kind=kind, a=a_model, cmt=cmt, repeatable=repeatable
+        )
         cb(ev)
 
     def extra_cmt_changed(self, ea: ida_idaapi.ea_t, line_idx: int, cmt: str) -> None:
@@ -1239,7 +1256,15 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             old_value,
             tag,
         )
-        ev = sgr_changed_event(event_name="sgr_changed", start_ea=start_ea, end_ea=end_ea, regnum=regnum, value=value, old_value=old_value, tag=tag)
+        ev = sgr_changed_event(
+            event_name="sgr_changed",
+            start_ea=start_ea,
+            end_ea=end_ea,
+            regnum=regnum,
+            value=value,
+            old_value=old_value,
+            tag=tag,
+        )
         cb(ev)
 
     def sgr_deleted(self, start_ea: ida_idaapi.ea_t, end_ea: ida_idaapi.ea_t, regnum: int) -> None:
@@ -1269,7 +1294,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             ea2,
             will_disable_range,
         )
-        ev = destroyed_items_event(event_name="destroyed_items", ea1=ea1, ea2=ea2, will_disable_range=will_disable_range)
+        ev = destroyed_items_event(
+            event_name="destroyed_items", ea1=ea1, ea2=ea2, will_disable_range=will_disable_range
+        )
         cb(ev)
 
     def renamed(self, ea: ida_idaapi.ea_t, new_name: str, local_name: bool, old_name: str) -> None:
@@ -1487,7 +1514,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             udmold_model.model_dump_json(),
             udmnew_model.model_dump_json(),
         )
-        ev = lt_udm_changed_event(event_name="lt_udm_changed", udtname=udtname, udm_tid=udm_tid, udmold=udmold_model, udmnew=udmnew_model)
+        ev = lt_udm_changed_event(
+            event_name="lt_udm_changed", udtname=udtname, udm_tid=udm_tid, udmold=udmold_model, udmnew=udmnew_model
+        )
         cb(ev)
 
     def lt_udt_expanded(self, udtname: str, udm_tid: int, delta: int) -> None:
@@ -1539,7 +1568,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             edmold_model.model_dump_json(),
             edmnew_model.model_dump_json(),
         )
-        ev = lt_edm_changed_event(event_name="lt_edm_changed", enumname=enumname, edm_tid=edm_tid, edmold=edmold_model, edmnew=edmnew_model)
+        ev = lt_edm_changed_event(
+            event_name="lt_edm_changed", enumname=enumname, edm_tid=edm_tid, edmold=edmold_model, edmnew=edmnew_model
+        )
         cb(ev)
 
     ### frames
@@ -1619,11 +1650,14 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             udmold_model.model_dump_json(),
             udmnew_model.model_dump_json(),
         )
-        ev = frame_udm_changed_event(event_name="frame_udm_changed", func_ea=func_ea, udm_tid=udm_tid, udmold=udmold_model, udmnew=udmnew_model)
+        ev = frame_udm_changed_event(
+            event_name="frame_udm_changed", func_ea=func_ea, udm_tid=udm_tid, udmold=udmold_model, udmnew=udmnew_model
+        )
         cb(ev)
 
 
 # Remaining operation event classes
+
 
 class determined_main_event(BaseModel):
 
@@ -1647,7 +1681,7 @@ class idasgn_matched_ea_event(BaseModel):
     lib_name: str
 
 
-class ActivityLogPluginMod(ida_idaapi.plugmod_t):
+class OplogPluginMod(ida_idaapi.plugmod_t):
     def __init__(self):
         self.idb_hooks: IDBChangedHook | None = None
 
@@ -1661,16 +1695,16 @@ class ActivityLogPluginMod(ida_idaapi.plugmod_t):
             self.idb_hooks.unhook()
 
 
-class ActivityLogPlugin(ida_idaapi.plugin_t):
+class OplogPlugin(ida_idaapi.plugin_t):
     flags = ida_idaapi.PLUGIN_MULTI
     help = "Log activity in the current IDB"
     comment = ""
-    wanted_name = "Activity Log"
+    wanted_name = "Operation Log"
     wanted_hotkey = ""
 
     def init(self):
-        return ActivityLogPluginMod()
+        return OplogPluginMod()
 
 
 def PLUGIN_ENTRY():
-    return ActivityLogPlugin()
+    return OplogPlugin()
