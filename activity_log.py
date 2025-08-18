@@ -1,5 +1,4 @@
 import logging
-from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -22,7 +21,7 @@ class FuncModel(BaseModel):
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         validate_assignment=True,
-        frozen=False,
+        frozen=True,
     )
 
     start_ea: int
@@ -40,7 +39,7 @@ class FuncModel(BaseModel):
     tailqty: int
     owner: int
     refqty: int
-    name: Optional[str] = None
+    name: str | None = None
     
     @classmethod
     def from_func_t(cls, func: ida_funcs.func_t) -> 'FuncModel':
@@ -70,7 +69,9 @@ class FuncModel(BaseModel):
             refqty=func.refqty,
             name=func.get_name() if hasattr(func, 'get_name') else None,
         )
-   
+
+
+Func = ida_funcs.func_t | FuncModel
 
 
 class OpModel(BaseModel):
@@ -79,7 +80,7 @@ class OpModel(BaseModel):
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         validate_assignment=True,
-        frozen=False,
+        frozen=True,
     )
 
     n: int
@@ -127,13 +128,16 @@ class OpModel(BaseModel):
         )
 
 
+Op = ida_ua.op_t | OpModel
+
+
 class InsnModel(BaseModel):
     """Pydantic model for ida_ua.insn_t structure."""
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         validate_assignment=True,
-        frozen=False,
+        frozen=True,
     )
 
     cs: int
@@ -142,12 +146,12 @@ class InsnModel(BaseModel):
     itype: int
     size: int
     auxpref: int
-    auxpref_u16: List[int]
-    auxpref_u8: List[int]
+    auxpref_u16: list[int]
+    auxpref_u8: list[int]
     segpref: int
     insnpref: int
     flags: int
-    ops: List[OpModel]
+    ops: list[OpModel]
 
     @classmethod
     def from_insn_t(cls, insn: ida_ua.insn_t) -> 'InsnModel':
@@ -202,13 +206,16 @@ class InsnModel(BaseModel):
         )
 
 
+Insn = ida_ua.insn_t | InsnModel
+
+
 class SegmentModel(BaseModel):
     """Pydantic model for ida_segment.segment_t structure."""
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         validate_assignment=True,
-        frozen=False,
+        frozen=True,
     )
 
     start_ea: int
@@ -222,11 +229,11 @@ class SegmentModel(BaseModel):
     bitness: int
     flags: int
     sel: int
-    defsr: List[int]
+    defsr: list[int]
     type: int
     color: int
-    segment_name: Optional[str] = None
-    segment_class: Optional[str] = None
+    segment_name: str | None = None
+    segment_class: str | None = None
     
     @field_validator('bitness')
     @classmethod
@@ -238,7 +245,7 @@ class SegmentModel(BaseModel):
     
     @field_validator('defsr')
     @classmethod
-    def validate_defsr_length(cls, v: List[int]) -> List[int]:
+    def validate_defsr_length(cls, v: list[int]) -> list[int]:
         """Validate defsr list has exactly 16 elements."""
         if len(v) != 16:
             raise ValueError(f'defsr must have exactly 16 elements, got {len(v)}')
@@ -310,13 +317,16 @@ class SegmentModel(BaseModel):
         )
 
 
+Segment = ida_segment.segment_t | SegmentModel
+
+
 class RangeModel(BaseModel):
     """Pydantic model for ida_range.range_t structure."""
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         validate_assignment=True,
-        frozen=False,
+        frozen=True,
     )
 
     start_ea: int
@@ -338,13 +348,16 @@ class RangeModel(BaseModel):
         )
     
 
+Range = ida_range.range_t | RangeModel
+    
+
 class LochistEntryModel(BaseModel):
     """Pydantic model for ida_moves.lochist_entry_t structure."""
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         validate_assignment=True,
-        frozen=False,
+        frozen=True,
     )
 
     ea: int
@@ -352,7 +365,7 @@ class LochistEntryModel(BaseModel):
     x: int
     y: int
     flags: int
-    place_type: Optional[str] = None
+    place_type: str | None = None
 
     @classmethod
     def from_lochist_entry_t(cls, entry: ida_moves.lochist_entry_t) -> 'LochistEntryModel':
@@ -372,7 +385,9 @@ class LochistEntryModel(BaseModel):
             flags=entry.flags if hasattr(entry, 'flags') else 0,
             place_type=str(type(entry.place)) if hasattr(entry, 'place') and entry.place else None,
         )
-   
+
+
+LocHistEntry = ida_moves.lochist_entry_t | LochistEntryModel
 
 
 class DirtreeModel(BaseModel):
@@ -381,13 +396,13 @@ class DirtreeModel(BaseModel):
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         validate_assignment=True,
-        frozen=False,
+        frozen=True,
     )
 
     dirtree_id: int
     flags: int
-    root_cursor_ea: Optional[int] = None
-    title: Optional[str] = None
+    root_cursor_ea: int | None = None
+    title: str | None = None
 
     @classmethod
     def from_dirtree_t(cls, dt: ida_dirtree.dirtree_t) -> 'DirtreeModel':
@@ -429,6 +444,8 @@ class DirtreeModel(BaseModel):
         )
    
 
+Dirtree = ida_dirtree.dirtree_t | DirtreeModel
+
 
 class UdmModel(BaseModel):
     """Pydantic model for ida_typeinf.udm_t structure."""
@@ -436,7 +453,7 @@ class UdmModel(BaseModel):
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         validate_assignment=True,
-        frozen=False,
+        frozen=True,
     )
 
     name: str
@@ -444,8 +461,8 @@ class UdmModel(BaseModel):
     offset: int
     size: int
     flags: int
-    type_id: Optional[int] = None
-    comment: Optional[str] = None
+    type_id: int | None = None
+    comment: str | None = None
 
     @classmethod
     def from_udm_t(cls, udm: ida_typeinf.udm_t) -> 'UdmModel':
@@ -490,20 +507,23 @@ class UdmModel(BaseModel):
         )
 
 
+Udm = ida_typeinf.udm_t | UdmModel
+
+
 class EdmModel(BaseModel):
     """Pydantic model for ida_typeinf.edm_t structure."""
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         validate_assignment=True,
-        frozen=False,
+        frozen=True,
     )
 
     name: str
     value: int
     serial: int
     bmask: int
-    comment: Optional[str] = None
+    comment: str | None = None
 
     @classmethod
     def from_edm_t(cls, edm: ida_typeinf.edm_t) -> 'EdmModel':
@@ -533,6 +553,9 @@ class EdmModel(BaseModel):
             bmask=bmask,
             comment=comment,
         )
+
+
+Edm = ida_typeinf.edm_t | EdmModel
 
 
 class IDBChangedHook(ida_idp.IDB_Hooks):
