@@ -351,102 +351,6 @@ class RangeModel(BaseModel):
 Range = ida_range.range_t | RangeModel
 
 
-class LochistEntryModel(BaseModel):
-    """Pydantic model for ida_moves.lochist_entry_t structure."""
-
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True,
-        validate_assignment=True,
-        frozen=True,
-    )
-
-    ea: int
-    lnnum: int
-    x: int
-    y: int
-    flags: int
-    place_type: str | None = None
-
-    @classmethod
-    def from_lochist_entry_t(cls, entry: ida_moves.lochist_entry_t) -> 'LochistEntryModel':
-        """Create LochistEntryModel from ida_moves.lochist_entry_t instance.
-
-        Args:
-            entry: The lochist_entry_t instance to convert.
-
-        Returns:
-            LochistEntryModel instance with populated attributes.
-        """
-        return cls(
-            ea=entry.ea if hasattr(entry, 'ea') else 0,
-            lnnum=entry.lnnum if hasattr(entry, 'lnnum') else 0,
-            x=entry.x if hasattr(entry, 'x') else 0,
-            y=entry.y if hasattr(entry, 'y') else 0,
-            flags=entry.flags if hasattr(entry, 'flags') else 0,
-            place_type=str(type(entry.place)) if hasattr(entry, 'place') and entry.place else None,
-        )
-
-
-LocHistEntry = ida_moves.lochist_entry_t | LochistEntryModel
-
-
-class DirtreeModel(BaseModel):
-    """Pydantic model for ida_dirtree.dirtree_t structure."""
-
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True,
-        validate_assignment=True,
-        frozen=True,
-    )
-
-    dirtree_id: int
-    flags: int
-    root_cursor_ea: int | None = None
-    title: str | None = None
-
-    @classmethod
-    def from_dirtree_t(cls, dt: ida_dirtree.dirtree_t) -> 'DirtreeModel':
-        """Create DirtreeModel from ida_dirtree.dirtree_t instance.
-
-        Args:
-            dt: The dirtree_t instance to convert.
-
-        Returns:
-            DirtreeModel instance with populated attributes.
-        """
-        # Extract basic information
-        dirtree_id = id(dt)  # Use Python object id as identifier
-        flags = dt.flags if hasattr(dt, 'flags') else 0
-
-        # Try to get cursor information
-        root_cursor_ea = None
-        if hasattr(dt, 'get_cursor') and hasattr(dt, 'get_root_cursor'):
-            try:
-                cursor = dt.get_root_cursor()
-                if cursor and hasattr(cursor, 'ea'):
-                    root_cursor_ea = cursor.ea
-            except:
-                pass
-
-        # Try to get title
-        title = None
-        if hasattr(dt, 'get_title'):
-            try:
-                title = dt.get_title()
-            except:
-                pass
-
-        return cls(
-            dirtree_id=dirtree_id,
-            flags=flags,
-            root_cursor_ea=root_cursor_ea,
-            title=title,
-        )
-
-
-Dirtree = ida_dirtree.dirtree_t | DirtreeModel
-
-
 class UdmModel(BaseModel):
     """Pydantic model for ida_typeinf.udm_t structure."""
 
@@ -989,16 +893,16 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """Callee address has been updated by the user."""
         logger.info("callee_addr_changed(ea=%d, callee=%d)", ea, callee)
 
-    # TODO: use pos.place.toea() and remove lochist_entry_t
     def bookmark_changed(self, index: int, pos: ida_moves.lochist_entry_t, desc: str, operation: int) -> None:
         """Bookmarked position changed.
 
         If desc==None, then the bookmark was deleted."""
-        pos_model = LochistEntryModel.from_lochist_entry_t(pos)
+        # TODO: this can fail
+        ea = pos.place().toea()
         logger.info(
-            "bookmark_changed(index=%d, pos=%s, desc=%s, operation=%d)",
+            "bookmark_changed(index=%d, ea=%d, desc=%s, operation=%d)",
             index,
-            pos_model.model_dump_json(),
+            ea,
             desc,
             operation,
         )
@@ -1016,40 +920,34 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """A function has been deleted."""
         logger.info("func_deleted(func_ea=%d)", func_ea)
 
+    # TODO: figure out how to get the dirtree type (bookmarks/functions/etc.)
     def dirtree_mkdir(self, dt: ida_dirtree.dirtree_t, path: str) -> None:
         """Dirtree: a directory has been created."""
-        dt_model = DirtreeModel.from_dirtree_t(dt)
-        logger.info("dirtree_mkdir(dt=%s, path=%s)", dt_model.model_dump_json(), path)
+        logger.info("dirtree_mkdir(path=%s)", path)
 
     def dirtree_rmdir(self, dt: ida_dirtree.dirtree_t, path: str) -> None:
         """Dirtree: a directory has been deleted."""
-        dt_model = DirtreeModel.from_dirtree_t(dt)
-        logger.info("dirtree_rmdir(dt=%s, path=%s)", dt_model.model_dump_json(), path)
+        logger.info("dirtree_rmdir(path=%s)", path)
 
     def dirtree_link(self, dt: ida_dirtree.dirtree_t, path: str, link: bool) -> None:
         """Dirtree: an item has been linked/unlinked."""
-        dt_model = DirtreeModel.from_dirtree_t(dt)
-        logger.info("dirtree_link(dt=%s, path=%s, link=%s)", dt_model.model_dump_json(), path, link)
+        logger.info("dirtree_link(path=%s, link=%s)", path, link)
 
     def dirtree_move(self, dt: ida_dirtree.dirtree_t, _from: str, to: str) -> None:
         """Dirtree: a directory or item has been moved."""
-        dt_model = DirtreeModel.from_dirtree_t(dt)
-        logger.info("dirtree_move(dt=%s, _from=%s, to=%s)", dt_model.model_dump_json(), _from, to)
+        logger.info("dirtree_move(_from=%s, to=%s)", _from, to)
 
     def dirtree_rank(self, dt: ida_dirtree.dirtree_t, path: str, rank: int) -> None:
         """Dirtree: a directory or item rank has been changed."""
-        dt_model = DirtreeModel.from_dirtree_t(dt)
-        logger.info("dirtree_rank(dt=%s, path=%s, rank=%d)", dt_model.model_dump_json(), path, rank)
+        logger.info("dirtree_rank(path=%s, rank=%d)", path, rank)
 
     def dirtree_rminode(self, dt: ida_dirtree.dirtree_t, inode: int) -> None:
         """Dirtree: an inode became unavailable."""
-        dt_model = DirtreeModel.from_dirtree_t(dt)
-        logger.info("dirtree_rminode(dt=%s, inode=%d)", dt_model.model_dump_json(), inode)
+        logger.info("dirtree_rminode(inode=%d)", inode)
 
     def dirtree_segm_moved(self, dt: ida_dirtree.dirtree_t) -> None:
         """Dirtree: inodes were changed due to a segment movement or a program rebasing."""
-        dt_model = DirtreeModel.from_dirtree_t(dt)
-        logger.info("dirtree_segm_moved(dt=%s)", dt_model.model_dump_json())
+        logger.info("dirtree_segm_moved()")
 
     # TODO: type of ltc
     def local_types_changed(self, ltc, ordinal: int, name: str) -> None:
