@@ -1,4 +1,7 @@
 import logging
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, field_validator
 
 import ida_ua
 import ida_gdl
@@ -12,6 +15,573 @@ import ida_segment
 import ida_typeinf
 
 logger = logging.getLogger(__name__)
+
+
+class FuncModel(BaseModel):
+    """Pydantic model for ida_funcs.func_t structure."""
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        validate_assignment=True,
+        frozen=False,
+    )
+
+    start_ea: int
+    end_ea: int  
+    flags: int
+    frame: int
+    frsize: int
+    frregs: int
+    argsize: int
+    fpd: int
+    color: int
+    pntqty: int
+    regvarqty: int
+    regargqty: int
+    tailqty: int
+    owner: int
+    refqty: int
+    name: Optional[str] = None
+    
+    @classmethod
+    def from_func_t(cls, func: ida_funcs.func_t) -> 'FuncModel':
+        """Create FuncModel from ida_funcs.func_t instance.
+        
+        Args:
+            func: The func_t instance to convert.
+            
+        Returns:
+            FuncModel instance with populated attributes.
+        """
+        return cls(
+            start_ea=func.start_ea,
+            end_ea=func.end_ea,
+            flags=func.flags,
+            frame=func.frame,
+            frsize=func.frsize,
+            frregs=func.frregs,
+            argsize=func.argsize,
+            fpd=func.fpd,
+            color=func.color,
+            pntqty=func.pntqty,
+            regvarqty=func.regvarqty,
+            regargqty=func.regargqty,
+            tailqty=func.tailqty,
+            owner=func.owner,
+            refqty=func.refqty,
+            name=func.get_name() if hasattr(func, 'get_name') else None,
+        )
+   
+
+
+class OpModel(BaseModel):
+    """Pydantic model for ida_ua.op_t structure."""
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        validate_assignment=True,
+        frozen=False,
+    )
+
+    n: int
+    type: int
+    offb: int
+    offo: int
+    flags: int
+    dtype: int
+    reg: int
+    phrase: int
+    value: int
+    addr: int
+    specval: int
+    specflag1: int
+    specflag2: int
+    specflag3: int
+    specflag4: int
+
+    @classmethod
+    def from_op_t(cls, op: ida_ua.op_t) -> 'OpModel':
+        """Create OpModel from ida_ua.op_t instance.
+        
+        Args:
+            op: The op_t instance to convert.
+            
+        Returns:
+            OpModel instance with populated attributes.
+        """
+        return cls(
+            n=op.n,
+            type=op.type,
+            offb=op.offb,
+            offo=op.offo,
+            flags=op.flags,
+            dtype=op.dtype,
+            reg=op.reg,
+            phrase=op.phrase,
+            value=op.value,
+            addr=op.addr,
+            specval=op.specval,
+            specflag1=op.specflag1,
+            specflag2=op.specflag2,
+            specflag3=op.specflag3,
+            specflag4=op.specflag4,
+        )
+
+
+class InsnModel(BaseModel):
+    """Pydantic model for ida_ua.insn_t structure."""
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        validate_assignment=True,
+        frozen=False,
+    )
+
+    cs: int
+    ip: int
+    ea: int
+    itype: int
+    size: int
+    auxpref: int
+    auxpref_u16: List[int]
+    auxpref_u8: List[int]
+    segpref: int
+    insnpref: int
+    flags: int
+    ops: List[OpModel]
+
+    @classmethod
+    def from_insn_t(cls, insn: ida_ua.insn_t) -> 'InsnModel':
+        """Create InsnModel from ida_ua.insn_t instance.
+        
+        Args:
+            insn: The insn_t instance to convert.
+            
+        Returns:
+            InsnModel instance with populated attributes.
+        """
+        # Convert auxpref to arrays
+        auxpref_u16 = [
+            insn.auxpref_u16[0] if hasattr(insn, 'auxpref_u16') and len(insn.auxpref_u16) > 0 else 0,
+            insn.auxpref_u16[1] if hasattr(insn, 'auxpref_u16') and len(insn.auxpref_u16) > 1 else 0,
+        ]
+        
+        auxpref_u8 = [
+            insn.auxpref_u8[0] if hasattr(insn, 'auxpref_u8') and len(insn.auxpref_u8) > 0 else 0,
+            insn.auxpref_u8[1] if hasattr(insn, 'auxpref_u8') and len(insn.auxpref_u8) > 1 else 0,
+            insn.auxpref_u8[2] if hasattr(insn, 'auxpref_u8') and len(insn.auxpref_u8) > 2 else 0,
+            insn.auxpref_u8[3] if hasattr(insn, 'auxpref_u8') and len(insn.auxpref_u8) > 3 else 0,
+        ]
+        
+        # Convert operands array to OpModel list
+        ops = []
+        for i in range(8):  # insn_t has 8 operands max
+            try:
+                op = insn.ops[i] if hasattr(insn, 'ops') and i < len(insn.ops) else insn[i]
+                ops.append(OpModel.from_op_t(op))
+            except (IndexError, AttributeError):
+                # Create a void operand if not available
+                ops.append(OpModel(
+                    n=i, type=ida_ua.o_void, offb=0, offo=0, flags=0, dtype=0,
+                    reg=0, phrase=0, value=0, addr=0, specval=0,
+                    specflag1=0, specflag2=0, specflag3=0, specflag4=0
+                ))
+        
+        return cls(
+            cs=insn.cs,
+            ip=insn.ip,
+            ea=insn.ea,
+            itype=insn.itype,
+            size=insn.size,
+            auxpref=insn.auxpref,
+            auxpref_u16=auxpref_u16,
+            auxpref_u8=auxpref_u8,
+            segpref=insn.segpref,
+            insnpref=insn.insnpref,
+            flags=insn.flags,
+            ops=ops,
+        )
+
+
+class SegmentModel(BaseModel):
+    """Pydantic model for ida_segment.segment_t structure."""
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        validate_assignment=True,
+        frozen=False,
+    )
+
+    start_ea: int
+    end_ea: int  
+    name: int
+    sclass: int
+    orgbase: int
+    align: int
+    comb: int
+    perm: int
+    bitness: int
+    flags: int
+    sel: int
+    defsr: List[int]
+    type: int
+    color: int
+    segment_name: Optional[str] = None
+    segment_class: Optional[str] = None
+    
+    @field_validator('bitness')
+    @classmethod
+    def validate_bitness(cls, v: int) -> int:
+        """Validate bitness is in range 0-2."""
+        if v not in (0, 1, 2):
+            raise ValueError('bitness must be 0 (16bit), 1 (32bit), or 2 (64bit)')
+        return v
+    
+    @field_validator('defsr')
+    @classmethod
+    def validate_defsr_length(cls, v: List[int]) -> List[int]:
+        """Validate defsr list has exactly 16 elements."""
+        if len(v) != 16:
+            raise ValueError(f'defsr must have exactly 16 elements, got {len(v)}')
+        return v
+    
+    @field_validator('align')
+    @classmethod
+    def validate_align(cls, v: int) -> int:
+        """Validate align is in range 0-255."""
+        if not (0 <= v <= 255):
+            raise ValueError(f'align must be in range 0-255, got {v}')
+        return v
+    
+    @field_validator('comb')
+    @classmethod
+    def validate_comb(cls, v: int) -> int:
+        """Validate comb is in range 0-255."""
+        if not (0 <= v <= 255):
+            raise ValueError(f'comb must be in range 0-255, got {v}')
+        return v
+    
+    @field_validator('perm')
+    @classmethod  
+    def validate_perm(cls, v: int) -> int:
+        """Validate perm is in range 0-255."""
+        if not (0 <= v <= 255):
+            raise ValueError(f'perm must be in range 0-255, got {v}')
+        return v
+    
+    @field_validator('type')
+    @classmethod
+    def validate_type(cls, v: int) -> int:
+        """Validate type is in range 0-255."""
+        if not (0 <= v <= 255):
+            raise ValueError(f'type must be in range 0-255, got {v}')
+        return v
+    
+    @field_validator('flags')
+    @classmethod
+    def validate_flags(cls, v: int) -> int:
+        """Validate flags is in range 0-65535."""
+        if not (0 <= v <= 65535):
+            raise ValueError(f'flags must be in range 0-65535, got {v}')
+        return v
+    
+    @classmethod
+    def from_segment_t(cls, segment: ida_segment.segment_t) -> 'SegmentModel':
+        """Create SegmentModel from ida_segment.segment_t instance."""
+        # Convert defsr array to list
+        defsr_list = [segment.defsr[i] for i in range(16)]
+        
+        return cls(
+            start_ea=segment.start_ea,
+            end_ea=segment.end_ea,
+            name=segment.name,
+            sclass=segment.sclass,
+            orgbase=segment.orgbase,
+            align=segment.align,
+            comb=segment.comb,
+            perm=segment.perm,
+            bitness=segment.bitness,
+            flags=segment.flags,
+            sel=segment.sel,
+            defsr=defsr_list,
+            type=segment.type,
+            color=segment.color,
+            segment_name=ida_segment.get_segm_name(segment) if segment else None,
+            segment_class=ida_segment.get_segm_class(segment) if segment else None,
+        )
+
+
+class RangeModel(BaseModel):
+    """Pydantic model for ida_range.range_t structure."""
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        validate_assignment=True,
+        frozen=False,
+    )
+
+    start_ea: int
+    end_ea: int
+
+    @classmethod
+    def from_range_t(cls, range_obj: ida_range.range_t) -> 'RangeModel':
+        """Create RangeModel from ida_range.range_t instance.
+        
+        Args:
+            range_obj: The range_t instance to convert.
+            
+        Returns:
+            RangeModel instance with populated attributes.
+        """
+        return cls(
+            start_ea=range_obj.start_ea,
+            end_ea=range_obj.end_ea,
+        )
+    
+
+class FlowChartModel(BaseModel):
+    """Pydantic model for ida_gdl.qflow_chart_t structure."""
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        validate_assignment=True,
+        frozen=False,
+    )
+
+    pfn: int
+    flags: int
+    blocks_count: int
+    entry_ea: Optional[int] = None
+    function_name: Optional[str] = None
+
+    @classmethod
+    def from_qflow_chart_t(cls, fc: ida_gdl.qflow_chart_t) -> 'FlowChartModel':
+        """Create FlowChartModel from ida_gdl.qflow_chart_t instance.
+        
+        Args:
+            fc: The qflow_chart_t instance to convert.
+            
+        Returns:
+            FlowChartModel instance with populated attributes.
+        """
+        # Extract basic information from flow chart
+        pfn_addr = fc.pfn.start_ea if hasattr(fc, 'pfn') and fc.pfn else 0
+        blocks_count = len(fc) if hasattr(fc, '__len__') else 0
+        flags = fc.flags if hasattr(fc, 'flags') else 0
+        
+        # Try to get entry point
+        entry_ea = None
+        if hasattr(fc, 'pfn') and fc.pfn:
+            entry_ea = fc.pfn.start_ea
+        
+        # Try to get function name
+        function_name = None
+        if hasattr(fc, 'pfn') and fc.pfn and hasattr(fc.pfn, 'get_name'):
+            function_name = fc.pfn.get_name()
+        
+        return cls(
+            pfn=pfn_addr,
+            flags=flags,
+            blocks_count=blocks_count,
+            entry_ea=entry_ea,
+            function_name=function_name,
+        )
+
+
+class LochistEntryModel(BaseModel):
+    """Pydantic model for ida_moves.lochist_entry_t structure."""
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        validate_assignment=True,
+        frozen=False,
+    )
+
+    ea: int
+    lnnum: int
+    x: int
+    y: int
+    flags: int
+    place_type: Optional[str] = None
+
+    @classmethod
+    def from_lochist_entry_t(cls, entry: ida_moves.lochist_entry_t) -> 'LochistEntryModel':
+        """Create LochistEntryModel from ida_moves.lochist_entry_t instance.
+        
+        Args:
+            entry: The lochist_entry_t instance to convert.
+            
+        Returns:
+            LochistEntryModel instance with populated attributes.
+        """
+        return cls(
+            ea=entry.ea if hasattr(entry, 'ea') else 0,
+            lnnum=entry.lnnum if hasattr(entry, 'lnnum') else 0,
+            x=entry.x if hasattr(entry, 'x') else 0,
+            y=entry.y if hasattr(entry, 'y') else 0,
+            flags=entry.flags if hasattr(entry, 'flags') else 0,
+            place_type=str(type(entry.place)) if hasattr(entry, 'place') and entry.place else None,
+        )
+   
+
+
+class DirtreeModel(BaseModel):
+    """Pydantic model for ida_dirtree.dirtree_t structure."""
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        validate_assignment=True,
+        frozen=False,
+    )
+
+    dirtree_id: int
+    flags: int
+    root_cursor_ea: Optional[int] = None
+    title: Optional[str] = None
+
+    @classmethod
+    def from_dirtree_t(cls, dt: ida_dirtree.dirtree_t) -> 'DirtreeModel':
+        """Create DirtreeModel from ida_dirtree.dirtree_t instance.
+        
+        Args:
+            dt: The dirtree_t instance to convert.
+            
+        Returns:
+            DirtreeModel instance with populated attributes.
+        """
+        # Extract basic information
+        dirtree_id = id(dt)  # Use Python object id as identifier
+        flags = dt.flags if hasattr(dt, 'flags') else 0
+        
+        # Try to get cursor information
+        root_cursor_ea = None
+        if hasattr(dt, 'get_cursor') and hasattr(dt, 'get_root_cursor'):
+            try:
+                cursor = dt.get_root_cursor()
+                if cursor and hasattr(cursor, 'ea'):
+                    root_cursor_ea = cursor.ea
+            except:
+                pass
+        
+        # Try to get title
+        title = None
+        if hasattr(dt, 'get_title'):
+            try:
+                title = dt.get_title()
+            except:
+                pass
+        
+        return cls(
+            dirtree_id=dirtree_id,
+            flags=flags,
+            root_cursor_ea=root_cursor_ea,
+            title=title,
+        )
+   
+
+
+class UdmModel(BaseModel):
+    """Pydantic model for ida_typeinf.udm_t structure."""
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        validate_assignment=True,
+        frozen=False,
+    )
+
+    name: str
+    type_str: str
+    offset: int
+    size: int
+    flags: int
+    type_id: Optional[int] = None
+    comment: Optional[str] = None
+
+    @classmethod
+    def from_udm_t(cls, udm: ida_typeinf.udm_t) -> 'UdmModel':
+        """Create UdmModel from ida_typeinf.udm_t instance.
+        
+        Args:
+            udm: The udm_t instance to convert.
+            
+        Returns:
+            UdmModel instance with populated attributes.
+        """
+        # Extract member information
+        name = udm.name if hasattr(udm, 'name') else ""
+        type_str = str(udm.type) if hasattr(udm, 'type') else ""
+        offset = udm.offset if hasattr(udm, 'offset') else 0
+        size = udm.size if hasattr(udm, 'size') else 0
+        flags = udm.flags if hasattr(udm, 'flags') else 0
+        
+        # Try to get type ID
+        type_id = None
+        if hasattr(udm, 'tid'):
+            type_id = udm.tid
+        elif hasattr(udm, 'type') and hasattr(udm.type, 'get_tid'):
+            try:
+                type_id = udm.type.get_tid()
+            except:
+                pass
+        
+        # Try to get comment
+        comment = None
+        if hasattr(udm, 'cmt'):
+            comment = udm.cmt
+        
+        return cls(
+            name=name,
+            type_str=type_str,
+            offset=offset,
+            size=size,
+            flags=flags,
+            type_id=type_id,
+            comment=comment,
+        )
+
+
+class EdmModel(BaseModel):
+    """Pydantic model for ida_typeinf.edm_t structure."""
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        validate_assignment=True,
+        frozen=False,
+    )
+
+    name: str
+    value: int
+    serial: int
+    bmask: int
+    comment: Optional[str] = None
+
+    @classmethod
+    def from_edm_t(cls, edm: ida_typeinf.edm_t) -> 'EdmModel':
+        """Create EdmModel from ida_typeinf.edm_t instance.
+        
+        Args:
+            edm: The edm_t instance to convert.
+            
+        Returns:
+            EdmModel instance with populated attributes.
+        """
+        # Extract enum member information
+        name = edm.name if hasattr(edm, 'name') else ""
+        value = edm.value if hasattr(edm, 'value') else 0
+        serial = edm.serial if hasattr(edm, 'serial') else 0
+        bmask = edm.bmask if hasattr(edm, 'bmask') else 0
+        
+        # Try to get comment
+        comment = None
+        if hasattr(edm, 'cmt'):
+            comment = edm.cmt
+        
+        return cls(
+            name=name,
+            value=value,
+            serial=serial,
+            bmask=bmask,
+            comment=comment,
+        )
 
 
 class IDBChangedHook(ida_idp.IDB_Hooks):
@@ -106,7 +676,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         Args:
             fc: Flow chart object.
         """
-        logger.info("flow_chart_created(fc=%s)", fc)
+        fc_ = FlowChartModel.from_qflow_chart_t(fc)
+        logger.info("flow_chart_created(fc=%s)", fc_.model_dump_json())
 
     def compiler_changed(self, adjust_inf_fields: bool) -> None:
         """The kernel has changed the compiler information.
@@ -210,7 +781,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         Args:
             s: Segment object.
         """
-        logger.info("segm_added(s=%s)", s)
+        s_model = SegmentModel.from_segment_t(s)
+        logger.info("segm_added(s=%s)", s_model.model_dump_json())
 
     def deleting_segm(self, start_ea: ida_idaapi.ea_t) -> None:
         """A segment is to be deleted.
@@ -238,9 +810,10 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             new_start: New start address.
             segmod_flags: Segment modification flags.
         """
+        s_model = SegmentModel.from_segment_t(s)
         logger.info(
             "changing_segm_start(s=%s, new_start=%d, segmod_flags=%d)",
-            s,
+            s_model.model_dump_json(),
             new_start,
             segmod_flags,
         )
@@ -252,7 +825,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             s: Segment object.
             oldstart: Old start address.
         """
-        logger.info("segm_start_changed(s=%s, oldstart=%d)", s, oldstart)
+        s_model = SegmentModel.from_segment_t(s)
+        logger.info("segm_start_changed(s=%s, oldstart=%d)", s_model.model_dump_json(), oldstart)
 
     def changing_segm_end(self, s: ida_segment.segment_t, new_end: ida_idaapi.ea_t, segmod_flags: int) -> None:
         """Segment end address is to be changed.
@@ -262,9 +836,10 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             new_end: New end address.
             segmod_flags: Segment modification flags.
         """
+        s_model = SegmentModel.from_segment_t(s)
         logger.info(
             "changing_segm_end(s=%s, new_end=%d, segmod_flags=%d)",
-            s,
+            s_model.model_dump_json(),
             new_end,
             segmod_flags,
         )
@@ -276,7 +851,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             s: Segment object.
             oldend: Old end address.
         """
-        logger.info("segm_end_changed(s=%s, oldend=%d)", s, oldend)
+        s_model = SegmentModel.from_segment_t(s)
+        logger.info("segm_end_changed(s=%s, oldend=%d)", s_model.model_dump_json(), oldend)
 
     def changing_segm_name(self, s: ida_segment.segment_t, oldname: str) -> None:
         """Segment name is being changed.
@@ -285,7 +861,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             s: Segment object.
             oldname: Old segment name.
         """
-        logger.info("changing_segm_name(s=%s, oldname=%s)", s, oldname)
+        s_model = SegmentModel.from_segment_t(s)
+        logger.info("changing_segm_name(s=%s, oldname=%s)", s_model.model_dump_json(), oldname)
 
     def segm_name_changed(self, s: ida_segment.segment_t, name: str) -> None:
         """Segment name has been changed.
@@ -294,7 +871,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             s: Segment object.
             name: New segment name.
         """
-        logger.info("segm_name_changed(s=%s, name=%s)", s, name)
+        s_model = SegmentModel.from_segment_t(s)
+        logger.info("segm_name_changed(s=%s, name=%s)", s_model.model_dump_json(), name)
 
     def changing_segm_class(self, s: ida_segment.segment_t) -> None:
         """Segment class is being changed.
@@ -302,7 +880,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         Args:
             s: Segment object.
         """
-        logger.info("changing_segm_class(s=%s)", s)
+        s_model = SegmentModel.from_segment_t(s)
+        logger.info("changing_segm_class(s=%s)", s_model.model_dump_json())
 
     def segm_class_changed(self, s: ida_segment.segment_t, sclass: str) -> None:
         """Segment class has been changed.
@@ -311,7 +890,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             s: Segment object.
             sclass: New segment class.
         """
-        logger.info("segm_class_changed(s=%s, sclass=%s)", s, sclass)
+        s_model = SegmentModel.from_segment_t(s)
+        logger.info("segm_class_changed(s=%s, sclass=%s)", s_model.model_dump_json(), sclass)
 
     def segm_attrs_updated(self, s: ida_segment.segment_t) -> None:
         """Segment attributes has been changed.
@@ -321,7 +901,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         Args:
             s: Segment object.
         """
-        logger.info("segm_attrs_updated(s=%s)", s)
+        s_model = SegmentModel.from_segment_t(s)
+        logger.info("segm_attrs_updated(s=%s)", s_model.model_dump_json())
 
     def segm_moved(
         self,
@@ -364,7 +945,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         Args:
             pfn: Function object.
         """
-        logger.info("func_added(pfn=%s)", pfn)
+        pfn_model = FuncModel.from_func_t(pfn)
+        logger.info("func_added(pfn=%s)", pfn_model.model_dump_json())
 
     def func_updated(self, pfn: ida_funcs.func_t) -> None:
         """The kernel has updated a function.
@@ -372,7 +954,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         Args:
             pfn: Function object.
         """
-        logger.info("func_updated(pfn=%s)", pfn)
+        pfn_model = FuncModel.from_func_t(pfn)
+        logger.info("func_updated(pfn=%s)", pfn_model.model_dump_json())
 
     def set_func_start(self, pfn: ida_funcs.func_t, new_start: ida_idaapi.ea_t) -> None:
         """Function chunk start address will be changed.
@@ -381,7 +964,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             pfn: Function object.
             new_start: New start address.
         """
-        logger.info("set_func_start(pfn=%s, new_start=%d)", pfn, new_start)
+        pfn_model = FuncModel.from_func_t(pfn)
+        logger.info("set_func_start(pfn=%s, new_start=%d)", pfn_model.model_dump_json(), new_start)
 
     def set_func_end(self, pfn: ida_funcs.func_t, new_end: ida_idaapi.ea_t) -> None:
         """Function chunk end address will be changed.
@@ -390,7 +974,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             pfn: Function object.
             new_end: New end address.
         """
-        logger.info("set_func_end(pfn=%s, new_end=%d)", pfn, new_end)
+        pfn_model = FuncModel.from_func_t(pfn)
+        logger.info("set_func_end(pfn=%s, new_end=%d)", pfn_model.model_dump_json(), new_end)
 
     def deleting_func(self, pfn: ida_funcs.func_t) -> None:
         """The kernel is about to delete a function.
@@ -398,7 +983,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         Args:
             pfn: Function object.
         """
-        logger.info("deleting_func(pfn=%s)", pfn)
+        pfn_model = FuncModel.from_func_t(pfn)
+        logger.info("deleting_func(pfn=%s)", pfn_model.model_dump_json())
 
     def frame_deleted(self, pfn: ida_funcs.func_t) -> None:
         """The kernel has deleted a function frame.
@@ -408,7 +994,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         Args:
             pfn: Function object.
         """
-        logger.info("frame_deleted(pfn=%s)", pfn)
+        pfn_model = FuncModel.from_func_t(pfn)
+        logger.info("frame_deleted(pfn=%s)", pfn_model.model_dump_json())
 
     def thunk_func_created(self, pfn: ida_funcs.func_t) -> None:
         """A thunk bit has been set for a function.
@@ -416,7 +1003,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         Args:
             pfn: Function object.
         """
-        logger.info("thunk_func_created(pfn=%s)", pfn)
+        pfn_model = FuncModel.from_func_t(pfn)
+        logger.info("thunk_func_created(pfn=%s)", pfn_model.model_dump_json())
 
     def func_tail_appended(self, pfn: ida_funcs.func_t, tail: ida_funcs.func_t) -> None:
         """A function tail chunk has been appended.
@@ -425,7 +1013,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             pfn: Function object.
             tail: Tail function object.
         """
-        logger.info("func_tail_appended(pfn=%s, tail=%s)", pfn, tail)
+        pfn_model = FuncModel.from_func_t(pfn)
+        tail_model = FuncModel.from_func_t(tail)
+        logger.info("func_tail_appended(pfn=%s, tail=%s)", pfn_model.model_dump_json(), tail_model.model_dump_json())
 
     def deleting_func_tail(self, pfn: ida_funcs.func_t, tail: ida_range.range_t) -> None:
         """A function tail chunk is to be removed.
@@ -434,7 +1024,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             pfn: Function object.
             tail: Range of tail to be removed.
         """
-        logger.info("deleting_func_tail(pfn=%s, tail=%s)", pfn, tail)
+        pfn_model = FuncModel.from_func_t(pfn)
+        tail_model = RangeModel.from_range_t(tail)
+        logger.info("deleting_func_tail(pfn=%s, tail=%s)", pfn_model.model_dump_json(), tail_model.model_dump_json())
 
     def func_tail_deleted(self, pfn: ida_funcs.func_t, tail_ea: ida_idaapi.ea_t) -> None:
         """A function tail chunk has been removed.
@@ -443,7 +1035,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             pfn: Function object.
             tail_ea: Address of removed tail.
         """
-        logger.info("func_tail_deleted(pfn=%s, tail_ea=%d)", pfn, tail_ea)
+        pfn_model = FuncModel.from_func_t(pfn)
+        logger.info("func_tail_deleted(pfn=%s, tail_ea=%d)", pfn_model.model_dump_json(), tail_ea)
 
     def tail_owner_changed(
         self,
@@ -458,9 +1051,10 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             owner_func: New owner function address.
             old_owner: Old owner function address.
         """
+        tail_model = FuncModel.from_func_t(tail)
         logger.info(
             "tail_owner_changed(tail=%s, owner_func=%d, old_owner=%d)",
-            tail,
+            tail_model.model_dump_json(),
             owner_func,
             old_owner,
         )
@@ -471,7 +1065,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         Args:
             pfn: Function object.
         """
-        logger.info("func_noret_changed(pfn=%s)", pfn)
+        pfn_model = FuncModel.from_func_t(pfn)
+        logger.info("func_noret_changed(pfn=%s)", pfn_model.model_dump_json())
 
     def stkpnts_changed(self, pfn: ida_funcs.func_t) -> None:
         """Stack change points have been modified.
@@ -479,7 +1074,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         Args:
             pfn: Function object.
         """
-        logger.info("stkpnts_changed(pfn=%s)", pfn)
+        pfn_model = FuncModel.from_func_t(pfn)
+        logger.info("stkpnts_changed(pfn=%s)", pfn_model.model_dump_json())
 
     def updating_tryblks(self, tbv) -> None:
         """About to update tryblk information.
@@ -503,7 +1099,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         Args:
             range: Range to delete tryblks from.
         """
-        logger.info("deleting_tryblks(range=%s)", range)
+        range_model = RangeModel.from_range_t(range)
+        logger.info("deleting_tryblks(range=%s)", range_model.model_dump_json())
 
     def sgr_changed(
         self,
@@ -540,7 +1137,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         Args:
             insn: Instruction object.
         """
-        logger.info("make_code(insn=%s)", insn)
+        insn_model = InsnModel.from_insn_t(insn)
+        logger.info("make_code(insn=%s)", insn_model.model_dump_json())
 
     def make_data(self, ea: ida_idaapi.ea_t, flags: int, tid: int, len: int) -> None:
         """A data item is being created.
@@ -629,10 +1227,11 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             cmt: Comment text.
             repeatable: Whether it's repeatable.
         """
+        a_model = RangeModel.from_range_t(a)
         logger.info(
             "changing_range_cmt(kind=%s, a=%s, cmt=%s, repeatable=%s)",
             kind,
-            a,
+            a_model.model_dump_json(),
             cmt,
             repeatable,
         )
@@ -646,10 +1245,11 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             cmt: Comment text.
             repeatable: Whether it's repeatable.
         """
+        a_model = RangeModel.from_range_t(a)
         logger.info(
             "range_cmt_changed(kind=%s, a=%s, cmt=%s, repeatable=%s)",
             kind,
-            a,
+            a_model.model_dump_json(),
             cmt,
             repeatable,
         )
@@ -695,10 +1295,11 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             desc: Bookmark description.
             operation: 0-added, 1-updated, 2-deleted.
         """
+        pos_model = LochistEntryModel.from_lochist_entry_t(pos)
         logger.info(
             "bookmark_changed(index=%d, pos=%s, desc=%s, operation=%d)",
             index,
-            pos,
+            pos_model.model_dump_json(),
             desc,
             operation,
         )
@@ -719,7 +1320,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         Args:
             s: Segment object.
         """
-        logger.info("adding_segm(s=%s)", s)
+        s_model = SegmentModel.from_segment_t(s)
+        logger.info("adding_segm(s=%s)", s_model.model_dump_json())
 
     def func_deleted(self, func_ea: ida_idaapi.ea_t) -> None:
         """A function has been deleted.
@@ -736,7 +1338,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             dt: Directory tree object.
             path: Directory path.
         """
-        logger.info("dirtree_mkdir(dt=%s, path=%s)", dt, path)
+        dt_model = DirtreeModel.from_dirtree_t(dt)
+        logger.info("dirtree_mkdir(dt=%s, path=%s)", dt_model.model_dump_json(), path)
 
     def dirtree_rmdir(self, dt: ida_dirtree.dirtree_t, path: str) -> None:
         """Dirtree: a directory has been deleted.
@@ -745,7 +1348,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             dt: Directory tree object.
             path: Directory path.
         """
-        logger.info("dirtree_rmdir(dt=%s, path=%s)", dt, path)
+        dt_model = DirtreeModel.from_dirtree_t(dt)
+        logger.info("dirtree_rmdir(dt=%s, path=%s)", dt_model.model_dump_json(), path)
 
     def dirtree_link(self, dt: ida_dirtree.dirtree_t, path: str, link: bool) -> None:
         """Dirtree: an item has been linked/unlinked.
@@ -755,7 +1359,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             path: Item path.
             link: Whether item is being linked.
         """
-        logger.info("dirtree_link(dt=%s, path=%s, link=%s)", dt, path, link)
+        dt_model = DirtreeModel.from_dirtree_t(dt)
+        logger.info("dirtree_link(dt=%s, path=%s, link=%s)", dt_model.model_dump_json(), path, link)
 
     def dirtree_move(self, dt: ida_dirtree.dirtree_t, _from: str, to: str) -> None:
         """Dirtree: a directory or item has been moved.
@@ -765,7 +1370,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             _from: Source path.
             to: Destination path.
         """
-        logger.info("dirtree_move(dt=%s, _from=%s, to=%s)", dt, _from, to)
+        dt_model = DirtreeModel.from_dirtree_t(dt)
+        logger.info("dirtree_move(dt=%s, _from=%s, to=%s)", dt_model.model_dump_json(), _from, to)
 
     def dirtree_rank(self, dt: ida_dirtree.dirtree_t, path: str, rank: int) -> None:
         """Dirtree: a directory or item rank has been changed.
@@ -775,7 +1381,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             path: Item path.
             rank: New rank.
         """
-        logger.info("dirtree_rank(dt=%s, path=%s, rank=%d)", dt, path, rank)
+        dt_model = DirtreeModel.from_dirtree_t(dt)
+        logger.info("dirtree_rank(dt=%s, path=%s, rank=%d)", dt_model.model_dump_json(), path, rank)
 
     def dirtree_rminode(self, dt: ida_dirtree.dirtree_t, inode: int) -> None:
         """Dirtree: an inode became unavailable.
@@ -784,7 +1391,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             dt: Directory tree object.
             inode: Inode number.
         """
-        logger.info("dirtree_rminode(dt=%s, inode=%d)", dt, inode)
+        dt_model = DirtreeModel.from_dirtree_t(dt)
+        logger.info("dirtree_rminode(dt=%s, inode=%d)", dt_model.model_dump_json(), inode)
 
     def dirtree_segm_moved(self, dt: ida_dirtree.dirtree_t) -> None:
         """Dirtree: inodes were changed due to a segment movement or a program rebasing.
@@ -792,7 +1400,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         Args:
             dt: Directory tree object.
         """
-        logger.info("dirtree_segm_moved(dt=%s)", dt)
+        dt_model = DirtreeModel.from_dirtree_t(dt)
+        logger.info("dirtree_segm_moved(dt=%s)", dt_model.model_dump_json())
 
     def local_types_changed(self, ltc, ordinal: int, name: str) -> None:
         """Local types have been changed.
@@ -811,7 +1420,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             udtname: UDT name.
             udm: UDT member object.
         """
-        logger.info("lt_udm_created(udtname=%s, udm=%s)", udtname, udm)
+        udm_model = UdmModel.from_udm_t(udm)
+        logger.info("lt_udm_created(udtname=%s, udm=%s)", udtname, udm_model.model_dump_json())
 
     def lt_udm_deleted(self, udtname: str, udm_tid: int, udm: ida_typeinf.udm_t) -> None:
         """Local type udt member has been deleted.
@@ -821,7 +1431,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             udm_tid: UDT member type ID.
             udm: UDT member object.
         """
-        logger.info("lt_udm_deleted(udtname=%s, udm_tid=%d, udm=%s)", udtname, udm_tid, udm)
+        udm_model = UdmModel.from_udm_t(udm)
+        logger.info("lt_udm_deleted(udtname=%s, udm_tid=%d, udm=%s)", udtname, udm_tid, udm_model.model_dump_json())
 
     def lt_udm_renamed(self, udtname: str, udm: ida_typeinf.udm_t, oldname: str) -> None:
         """Local type udt member has been renamed.
@@ -831,7 +1442,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             udm: UDT member object.
             oldname: Old member name.
         """
-        logger.info("lt_udm_renamed(udtname=%s, udm=%s, oldname=%s)", udtname, udm, oldname)
+        udm_model = UdmModel.from_udm_t(udm)
+        logger.info("lt_udm_renamed(udtname=%s, udm=%s, oldname=%s)", udtname, udm_model.model_dump_json(), oldname)
 
     def lt_udm_changed(
         self,
@@ -848,12 +1460,14 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             udmold: Old UDT member object.
             udmnew: New UDT member object.
         """
+        udmold_model = UdmModel.from_udm_t(udmold)
+        udmnew_model = UdmModel.from_udm_t(udmnew)
         logger.info(
             "lt_udm_changed(udtname=%s, udm_tid=%d, udmold=%s, udmnew=%s)",
             udtname,
             udm_tid,
-            udmold,
-            udmnew,
+            udmold_model.model_dump_json(),
+            udmnew_model.model_dump_json(),
         )
 
     def lt_udt_expanded(self, udtname: str, udm_tid: int, delta: int) -> None:
@@ -883,7 +1497,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             func_ea: Function address.
             udm: UDT member object.
         """
-        logger.info("frame_udm_created(func_ea=%d, udm=%s)", func_ea, udm)
+        udm_model = UdmModel.from_udm_t(udm)
+        logger.info("frame_udm_created(func_ea=%d, udm=%s)", func_ea, udm_model.model_dump_json())
 
     def frame_udm_deleted(self, func_ea: ida_idaapi.ea_t, udm_tid: int, udm: ida_typeinf.udm_t) -> None:
         """Frame member has been deleted.
@@ -893,7 +1508,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             udm_tid: UDT member type ID.
             udm: UDT member object.
         """
-        logger.info("frame_udm_deleted(func_ea=%d, udm_tid=%d, udm=%s)", func_ea, udm_tid, udm)
+        udm_model = UdmModel.from_udm_t(udm)
+        logger.info("frame_udm_deleted(func_ea=%d, udm_tid=%d, udm=%s)", func_ea, udm_tid, udm_model.model_dump_json())
 
     def frame_udm_renamed(self, func_ea: ida_idaapi.ea_t, udm: ida_typeinf.udm_t, oldname: str) -> None:
         """Frame member has been renamed.
@@ -903,7 +1519,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             udm: UDT member object.
             oldname: Old member name.
         """
-        logger.info("frame_udm_renamed(func_ea=%d, udm=%s, oldname=%s)", func_ea, udm, oldname)
+        udm_model = UdmModel.from_udm_t(udm)
+        logger.info("frame_udm_renamed(func_ea=%d, udm=%s, oldname=%s)", func_ea, udm_model.model_dump_json(), oldname)
 
     def frame_udm_changed(
         self,
@@ -920,12 +1537,14 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             udmold: Old UDT member object.
             udmnew: New UDT member object.
         """
+        udmold_model = UdmModel.from_udm_t(udmold)
+        udmnew_model = UdmModel.from_udm_t(udmnew)
         logger.info(
             "frame_udm_changed(func_ea=%d, udm_tid=%d, udmold=%s, udmnew=%s)",
             func_ea,
             udm_tid,
-            udmold,
-            udmnew,
+            udmold_model.model_dump_json(),
+            udmnew_model.model_dump_json(),
         )
 
     def frame_expanded(self, func_ea: ida_idaapi.ea_t, udm_tid: int, delta: int) -> None:
@@ -955,7 +1574,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             enumname: Enum name.
             edm: Enum member object.
         """
-        logger.info("lt_edm_created(enumname=%s, edm=%s)", enumname, edm)
+        edm_model = EdmModel.from_edm_t(edm)
+        logger.info("lt_edm_created(enumname=%s, edm=%s)", enumname, edm_model.model_dump_json())
 
     def lt_edm_deleted(self, enumname: str, edm_tid: int, edm: ida_typeinf.edm_t) -> None:
         """Local type enum member has been deleted.
@@ -965,7 +1585,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             edm_tid: Enum member type ID.
             edm: Enum member object.
         """
-        logger.info("lt_edm_deleted(enumname=%s, edm_tid=%d, edm=%s)", enumname, edm_tid, edm)
+        edm_model = EdmModel.from_edm_t(edm)
+        logger.info("lt_edm_deleted(enumname=%s, edm_tid=%d, edm=%s)", enumname, edm_tid, edm_model.model_dump_json())
 
     def lt_edm_renamed(self, enumname: str, edm: ida_typeinf.edm_t, oldname: str) -> None:
         """Local type enum member has been renamed.
@@ -975,7 +1596,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             edm: Enum member object.
             oldname: Old member name.
         """
-        logger.info("lt_edm_renamed(enumname=%s, edm=%s, oldname=%s)", enumname, edm, oldname)
+        edm_model = EdmModel.from_edm_t(edm)
+        logger.info("lt_edm_renamed(enumname=%s, edm=%s, oldname=%s)", enumname, edm_model.model_dump_json(), oldname)
 
     def lt_edm_changed(
         self,
@@ -992,12 +1614,14 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             edmold: Old enum member object.
             edmnew: New enum member object.
         """
+        edmold_model = EdmModel.from_edm_t(edmold)
+        edmnew_model = EdmModel.from_edm_t(edmnew)
         logger.info(
             "lt_edm_changed(enumname=%s, edm_tid=%d, edmold=%s, edmnew=%s)",
             enumname,
             edm_tid,
-            edmold,
-            edmnew,
+            edmold_model.model_dump_json(),
+            edmnew_model.model_dump_json(),
         )
 
 
