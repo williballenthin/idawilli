@@ -360,54 +360,28 @@ class UdmModel(BaseModel):
         frozen=True,
     )
 
-    name: str
-    type_str: str
     offset: int
     size: int
-    flags: int
-    type_id: int | None = None
-    comment: str | None = None
+    name: str
+    cmt: str
+    tid: str  # from udm.type.get_tid()
+    repr: str
+    effalign: int
+    tafld_bits: int
+    fda: int
 
     @classmethod
     def from_udm_t(cls, udm: ida_typeinf.udm_t) -> 'UdmModel':
-        """Create UdmModel from ida_typeinf.udm_t instance.
-
-        Args:
-            udm: The udm_t instance to convert.
-
-        Returns:
-            UdmModel instance with populated attributes.
-        """
-        # Extract member information
-        name = udm.name if hasattr(udm, 'name') else ""
-        type_str = str(udm.type) if hasattr(udm, 'type') else ""
-        offset = udm.offset if hasattr(udm, 'offset') else 0
-        size = udm.size if hasattr(udm, 'size') else 0
-        flags = udm.flags if hasattr(udm, 'flags') else 0
-
-        # Try to get type ID
-        type_id = None
-        if hasattr(udm, 'tid'):
-            type_id = udm.tid
-        elif hasattr(udm, 'type') and hasattr(udm.type, 'get_tid'):
-            try:
-                type_id = udm.type.get_tid()
-            except:
-                pass
-
-        # Try to get comment
-        comment = None
-        if hasattr(udm, 'cmt'):
-            comment = udm.cmt
-
         return cls(
-            name=name,
-            type_str=type_str,
-            offset=offset,
-            size=size,
-            flags=flags,
-            type_id=type_id,
-            comment=comment,
+            offset = udm.offset,
+            size = udm.size,
+            name = udm.name,
+            cmt = udm.cmt,
+            tid = udm.type.get_tid(),
+            repr = str(udm.repr),
+            effalign = udm.effalign,
+            tafld_bits = udm.tafld_bits,
+            fda = udm.fda,
         )
 
 
@@ -422,40 +396,23 @@ class EdmModel(BaseModel):
         validate_assignment=True,
         frozen=True,
     )
-
     name: str
+    comment: str
     value: int
-    serial: int
-    bmask: int
-    comment: str | None = None
+    tid: int
 
     @classmethod
     def from_edm_t(cls, edm: ida_typeinf.edm_t) -> 'EdmModel':
-        """Create EdmModel from ida_typeinf.edm_t instance.
-
-        Args:
-            edm: The edm_t instance to convert.
-
-        Returns:
-            EdmModel instance with populated attributes.
-        """
-        # Extract enum member information
-        name = edm.name if hasattr(edm, 'name') else ""
-        value = edm.value if hasattr(edm, 'value') else 0
-        serial = edm.serial if hasattr(edm, 'serial') else 0
-        bmask = edm.bmask if hasattr(edm, 'bmask') else 0
-
-        # Try to get comment
-        comment = None
-        if hasattr(edm, 'cmt'):
-            comment = edm.cmt
+        name = edm.name
+        comment = edm.cmt
+        value = edm.value
+        tid = edm.get_tid()
 
         return cls(
             name=name,
-            value=value,
-            serial=serial,
-            bmask=bmask,
             comment=comment,
+            value=value,
+            tid=tid,
         )
 
 
@@ -463,6 +420,8 @@ Edm = ida_typeinf.edm_t | EdmModel
 
 
 class IDBChangedHook(ida_idp.IDB_Hooks):
+    ### loading events
+
     def closebase(self) -> None:
         """The database will be closed now."""
         # not analytically relevant
@@ -507,6 +466,10 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         # not analytically relevant
         pass
 
+    def idasgn_matched_ea(self, ea: ida_idaapi.ea_t, name: str, lib_name: str) -> None:
+        """A FLIRT match has been found."""
+        logger.info("idasgn_matched_ea(ea=%d, name=%s, lib_name=%s)", ea, name, lib_name)
+
     def kernel_config_loaded(self, pass_number: int) -> None:
         """This event is issued when ida.cfg is parsed."""
         # not analytically relevant
@@ -535,59 +498,12 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         # not analytically relevant
         pass
 
-    def changing_ti(
-        self,
-        ea: ida_idaapi.ea_t,
-        new_type,
-        new_fnames,
-    ) -> None:
-        """An item typestring (C/C++ prototype) is to be changed."""
-        logger.info("changing_ti(ea=%d, new_type=%s, new_fnames=%s)", ea, new_type, new_fnames)
+    ### segment operations
 
-    def ti_changed(self, ea: ida_idaapi.ea_t, type, fnames) -> None:
-        """An item typestring (C/C++ prototype) has been changed."""
-        logger.info("ti_changed(ea=%d, type=%s, fnames=%s)", ea, type, fnames)
-
-    def changing_op_ti(
-        self,
-        ea: ida_idaapi.ea_t,
-        n: int,
-        new_type,
-        new_fnames,
-    ) -> None:
-        """An operand typestring (c/c++ prototype) is to be changed."""
-        logger.info(
-            "changing_op_ti(ea=%d, n=%d, new_type=%s, new_fnames=%s)",
-            ea,
-            n,
-            new_type,
-            new_fnames,
-        )
-
-    def op_ti_changed(
-        self,
-        ea: ida_idaapi.ea_t,
-        n: int,
-        type,
-        fnames,
-    ) -> None:
-        """An operand typestring (c/c++ prototype) has been changed."""
-        logger.info("op_ti_changed(ea=%d, n=%d, type=%s, fnames=%s)", ea, n, type, fnames)
-
-    # TODO: what is opinfo? type?
-    # this has more info than op_type_changed
-    def changing_op_type(self, ea: ida_idaapi.ea_t, n: int, opinfo) -> None:
-        """An operand type (offset, hex, etc...) is to be changed."""
-        logger.info("changing_op_type(ea=%d, n=%d, opinfo=%s)", ea, n, opinfo)
-
-    def op_type_changed(self, ea: ida_idaapi.ea_t, n: int) -> None:
-        """An operand type (offset, hex, etc...) has been set or deleted.
-
-        Args:
-            ea: Address.
-            n: Operand number, eventually or'ed with OPND_OUTER or OPND_ALL.
-        """
-        logger.info("op_type_changed(ea=%d, n=%d)", ea, n)
+    def adding_segm(self, s: ida_segment.segment_t) -> None:
+        """A segment is being created."""
+        s_model = SegmentModel.from_segment_t(s)
+        logger.info("adding_segm(s=%s)", s_model.model_dump_json())
 
     def segm_added(self, s: ida_segment.segment_t) -> None:
         """A new segment has been created.
@@ -696,6 +612,23 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """
         logger.info("allsegs_moved(info=%s)", info)
 
+    # TODO: what is opinfo? type?
+    # this has more info than op_type_changed
+    def changing_op_type(self, ea: ida_idaapi.ea_t, n: int, opinfo) -> None:
+        """An operand type (offset, hex, etc...) is to be changed."""
+        logger.info("changing_op_type(ea=%d, n=%d, opinfo=%s)", ea, n, opinfo)
+
+    def op_type_changed(self, ea: ida_idaapi.ea_t, n: int) -> None:
+        """An operand type (offset, hex, etc...) has been set or deleted.
+
+        Args:
+            ea: Address.
+            n: Operand number, eventually or'ed with OPND_OUTER or OPND_ALL.
+        """
+        logger.info("op_type_changed(ea=%d, n=%d)", ea, n)
+
+    ### function operations
+
     def func_added(self, pfn: ida_funcs.func_t) -> None:
         """The kernel has added a function."""
         pfn_model = FuncModel.from_func_t(pfn)
@@ -721,13 +654,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         pfn_model = FuncModel.from_func_t(pfn)
         logger.info("deleting_func(pfn=%s)", pfn_model.model_dump_json())
 
-    def frame_deleted(self, pfn: ida_funcs.func_t) -> None:
-        """The kernel has deleted a function frame.
-
-        See also idb_event::frame_created.
-        """
-        pfn_model = FuncModel.from_func_t(pfn)
-        logger.info("frame_deleted(pfn=%s)", pfn_model.model_dump_json())
+    def func_deleted(self, func_ea: ida_idaapi.ea_t) -> None:
+        """A function has been deleted."""
+        logger.info("func_deleted(func_ea=%d)", func_ea)
 
     def thunk_func_created(self, pfn: ida_funcs.func_t) -> None:
         """A thunk bit has been set for a function."""
@@ -771,11 +700,6 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         pfn_model = FuncModel.from_func_t(pfn)
         logger.info("func_noret_changed(pfn=%s)", pfn_model.model_dump_json())
 
-    def stkpnts_changed(self, pfn: ida_funcs.func_t) -> None:
-        """Stack change points have been modified."""
-        pfn_model = FuncModel.from_func_t(pfn)
-        logger.info("stkpnts_changed(pfn=%s)", pfn_model.model_dump_json())
-
     # TODO: type of tbv
     def updating_tryblks(self, tbv) -> None:
         """About to update tryblk information."""
@@ -790,59 +714,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         range_model = RangeModel.from_range_t(range)
         logger.info("deleting_tryblks(range=%s)", range_model.model_dump_json())
 
-    def sgr_changed(
-        self,
-        start_ea: ida_idaapi.ea_t,
-        end_ea: ida_idaapi.ea_t,
-        regnum: int,
-        value,
-        old_value,
-        tag: int,
-    ) -> None:
-        """The kernel has changed a segment register value."""
-        logger.info(
-            "sgr_changed(start_ea=%d, end_ea=%d, regnum=%d, value=%s, old_value=%s, tag=%d)",
-            start_ea,
-            end_ea,
-            regnum,
-            value,
-            old_value,
-            tag,
-        )
-
-    def make_code(self, insn: ida_ua.insn_t) -> None:
-        """An instruction is being created."""
-        insn_model = InsnModel.from_insn_t(insn)
-        logger.info("make_code(insn=%s)", insn_model.model_dump_json())
-
-    def make_data(self, ea: ida_idaapi.ea_t, flags: int, tid: int, len: int) -> None:
-        """A data item is being created."""
-        logger.info("make_data(ea=%d, flags=%d, tid=%d, len=%d)", ea, flags, tid, len)
-
-    def destroyed_items(self, ea1: ida_idaapi.ea_t, ea2: ida_idaapi.ea_t, will_disable_range: bool) -> None:
-        """Instructions/data have been destroyed in [ea1,ea2)."""
-        logger.info(
-            "destroyed_items(ea1=%d, ea2=%d, will_disable_range=%s)",
-            ea1,
-            ea2,
-            will_disable_range,
-        )
-
-    def renamed(self, ea: ida_idaapi.ea_t, new_name: str, local_name: bool, old_name: str) -> None:
-        """The kernel has renamed a byte.
-
-        See also the rename event."""
-        logger.info(
-            "renamed(ea=%d, new_name=%s, local_name=%s, old_name=%s)",
-            ea,
-            new_name,
-            local_name,
-            old_name,
-        )
-
-    def byte_patched(self, ea: ida_idaapi.ea_t, old_value: int) -> None:
-        """A byte has been patched."""
-        logger.info("byte_patched(ea=%d, old_value=%d)", ea, old_value)
+    ### comments
 
     def changing_cmt(self, ea: ida_idaapi.ea_t, repeatable_cmt: bool, newcmt: str) -> None:
         """An item comment is to be changed."""
@@ -883,6 +755,66 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """An extra comment has been changed."""
         logger.info("extra_cmt_changed(ea=%d, line_idx=%d, cmt=%s)", ea, line_idx, cmt)
 
+    ### item operations
+
+    def sgr_changed(
+        self,
+        start_ea: ida_idaapi.ea_t,
+        end_ea: ida_idaapi.ea_t,
+        regnum: int,
+        value,
+        old_value,
+        tag: int,
+    ) -> None:
+        """The kernel has changed a segment register value."""
+        logger.info(
+            "sgr_changed(start_ea=%d, end_ea=%d, regnum=%d, value=%s, old_value=%s, tag=%d)",
+            start_ea,
+            end_ea,
+            regnum,
+            value,
+            old_value,
+            tag,
+        )
+
+    def sgr_deleted(self, start_ea: ida_idaapi.ea_t, end_ea: ida_idaapi.ea_t, regnum: int) -> None:
+        """The kernel has deleted a segment register value."""
+        logger.info("sgr_deleted(start_ea=%d, end_ea=%d, regnum=%d)", start_ea, end_ea, regnum)
+
+    def make_code(self, insn: ida_ua.insn_t) -> None:
+        """An instruction is being created."""
+        insn_model = InsnModel.from_insn_t(insn)
+        logger.info("make_code(insn=%s)", insn_model.model_dump_json())
+
+    def make_data(self, ea: ida_idaapi.ea_t, flags: int, tid: int, len: int) -> None:
+        """A data item is being created."""
+        logger.info("make_data(ea=%d, flags=%d, tid=%d, len=%d)", ea, flags, tid, len)
+
+    def destroyed_items(self, ea1: ida_idaapi.ea_t, ea2: ida_idaapi.ea_t, will_disable_range: bool) -> None:
+        """Instructions/data have been destroyed in [ea1,ea2)."""
+        logger.info(
+            "destroyed_items(ea1=%d, ea2=%d, will_disable_range=%s)",
+            ea1,
+            ea2,
+            will_disable_range,
+        )
+
+    def renamed(self, ea: ida_idaapi.ea_t, new_name: str, local_name: bool, old_name: str) -> None:
+        """The kernel has renamed a byte.
+
+        See also the rename event."""
+        logger.info(
+            "renamed(ea=%d, new_name=%s, local_name=%s, old_name=%s)",
+            ea,
+            new_name,
+            local_name,
+            old_name,
+        )
+
+    def byte_patched(self, ea: ida_idaapi.ea_t, old_value: int) -> None:
+        """A byte has been patched."""
+        logger.info("byte_patched(ea=%d, old_value=%d)", ea, old_value)
+
     def item_color_changed(self, ea: ida_idaapi.ea_t, color) -> None:
         """An item color has been changed.
 
@@ -907,18 +839,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             operation,
         )
 
-    def sgr_deleted(self, start_ea: ida_idaapi.ea_t, end_ea: ida_idaapi.ea_t, regnum: int) -> None:
-        """The kernel has deleted a segment register value."""
-        logger.info("sgr_deleted(start_ea=%d, end_ea=%d, regnum=%d)", start_ea, end_ea, regnum)
-
-    def adding_segm(self, s: ida_segment.segment_t) -> None:
-        """A segment is being created."""
-        s_model = SegmentModel.from_segment_t(s)
-        logger.info("adding_segm(s=%s)", s_model.model_dump_json())
-
-    def func_deleted(self, func_ea: ida_idaapi.ea_t) -> None:
-        """A function has been deleted."""
-        logger.info("func_deleted(func_ea=%d)", func_ea)
+    ### dirtree
 
     # TODO: figure out how to get the dirtree type (bookmarks/functions/etc.)
     def dirtree_mkdir(self, dt: ida_dirtree.dirtree_t, path: str) -> None:
@@ -948,6 +869,49 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
     def dirtree_segm_moved(self, dt: ida_dirtree.dirtree_t) -> None:
         """Dirtree: inodes were changed due to a segment movement or a program rebasing."""
         logger.info("dirtree_segm_moved()")
+
+    ### types
+
+    def changing_ti(
+        self,
+        ea: ida_idaapi.ea_t,
+        new_type,
+        new_fnames,
+    ) -> None:
+        """An item typestring (C/C++ prototype) is to be changed."""
+        logger.info("changing_ti(ea=%d, new_type=%s, new_fnames=%s)", ea, new_type, new_fnames)
+
+    def ti_changed(self, ea: ida_idaapi.ea_t, type, fnames) -> None:
+        """An item typestring (C/C++ prototype) has been changed."""
+        logger.info("ti_changed(ea=%d, type=%s, fnames=%s)", ea, type, fnames)
+
+    def changing_op_ti(
+        self,
+        ea: ida_idaapi.ea_t,
+        n: int,
+        new_type,
+        new_fnames,
+    ) -> None:
+        """An operand typestring (c/c++ prototype) is to be changed."""
+        logger.info(
+            "changing_op_ti(ea=%d, n=%d, new_type=%s, new_fnames=%s)",
+            ea,
+            n,
+            new_type,
+            new_fnames,
+        )
+
+    def op_ti_changed(
+        self,
+        ea: ida_idaapi.ea_t,
+        n: int,
+        type,
+        fnames,
+    ) -> None:
+        """An operand typestring (c/c++ prototype) has been changed."""
+        logger.info("op_ti_changed(ea=%d, n=%d, type=%s, fnames=%s)", ea, n, type, fnames)
+
+    ### local types
 
     # TODO: type of ltc
     def local_types_changed(self, ltc, ordinal: int, name: str) -> None:
@@ -996,59 +960,6 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """
         logger.info("lt_udt_expanded(udtname=%s, udm_tid=%d, delta=%d)", udtname, udm_tid, delta)
 
-    def frame_created(self, func_ea: ida_idaapi.ea_t) -> None:
-        """A function frame has been created.
-
-        See also idb_event::frame_deleted.
-        """
-        logger.info("frame_created(func_ea=%d)", func_ea)
-
-    def frame_udm_created(self, func_ea: ida_idaapi.ea_t, udm: ida_typeinf.udm_t) -> None:
-        """Frame member has been added."""
-        udm_model = UdmModel.from_udm_t(udm)
-        logger.info("frame_udm_created(func_ea=%d, udm=%s)", func_ea, udm_model.model_dump_json())
-
-    def frame_udm_deleted(self, func_ea: ida_idaapi.ea_t, udm_tid: int, udm: ida_typeinf.udm_t) -> None:
-        """Frame member has been deleted."""
-        udm_model = UdmModel.from_udm_t(udm)
-        logger.info("frame_udm_deleted(func_ea=%d, udm_tid=%d, udm=%s)", func_ea, udm_tid, udm_model.model_dump_json())
-
-    def frame_udm_renamed(self, func_ea: ida_idaapi.ea_t, udm: ida_typeinf.udm_t, oldname: str) -> None:
-        """Frame member has been renamed."""
-        udm_model = UdmModel.from_udm_t(udm)
-        logger.info("frame_udm_renamed(func_ea=%d, udm=%s, oldname=%s)", func_ea, udm_model.model_dump_json(), oldname)
-
-    def frame_udm_changed(
-        self,
-        func_ea: ida_idaapi.ea_t,
-        udm_tid: int,
-        udmold: ida_typeinf.udm_t,
-        udmnew: ida_typeinf.udm_t,
-    ) -> None:
-        """Frame member has been changed."""
-        udmold_model = UdmModel.from_udm_t(udmold)
-        udmnew_model = UdmModel.from_udm_t(udmnew)
-        logger.info(
-            "frame_udm_changed(func_ea=%d, udm_tid=%d, udmold=%s, udmnew=%s)",
-            func_ea,
-            udm_tid,
-            udmold_model.model_dump_json(),
-            udmnew_model.model_dump_json(),
-        )
-
-    def frame_expanded(self, func_ea: ida_idaapi.ea_t, udm_tid: int, delta: int) -> None:
-        """A frame type has been expanded/shrank.
-
-        Args:
-            udm_tid: The gap was added/removed before this member.
-            delta: Number of added/removed bytes.
-        """
-        logger.info("frame_expanded(func_ea=%d, udm_tid=%d, delta=%d)", func_ea, udm_tid, delta)
-
-    def idasgn_matched_ea(self, ea: ida_idaapi.ea_t, name: str, lib_name: str) -> None:
-        """A FLIRT match has been found."""
-        logger.info("idasgn_matched_ea(ea=%d, name=%s, lib_name=%s)", ea, name, lib_name)
-
     def lt_edm_created(self, enumname: str, edm: ida_typeinf.edm_t) -> None:
         """Local type enum member has been added."""
         edm_model = EdmModel.from_edm_t(edm)
@@ -1082,6 +993,69 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             edmnew_model.model_dump_json(),
         )
 
+    ### frames
+
+    def stkpnts_changed(self, pfn: ida_funcs.func_t) -> None:
+        """Stack change points have been modified."""
+        pfn_model = FuncModel.from_func_t(pfn)
+        logger.info("stkpnts_changed(pfn=%s)", pfn_model.model_dump_json())
+
+    def frame_created(self, func_ea: ida_idaapi.ea_t) -> None:
+        """A function frame has been created.
+
+        See also idb_event::frame_deleted.
+        """
+        logger.info("frame_created(func_ea=%d)", func_ea)
+
+    def frame_expanded(self, func_ea: ida_idaapi.ea_t, udm_tid: int, delta: int) -> None:
+        """A frame type has been expanded/shrank.
+
+        Args:
+            udm_tid: The gap was added/removed before this member.
+            delta: Number of added/removed bytes.
+        """
+        logger.info("frame_expanded(func_ea=%d, udm_tid=%d, delta=%d)", func_ea, udm_tid, delta)
+
+    def frame_deleted(self, pfn: ida_funcs.func_t) -> None:
+        """The kernel has deleted a function frame.
+
+        See also idb_event::frame_created.
+        """
+        pfn_model = FuncModel.from_func_t(pfn)
+        logger.info("frame_deleted(pfn=%s)", pfn_model.model_dump_json())
+
+    def frame_udm_created(self, func_ea: ida_idaapi.ea_t, udm: ida_typeinf.udm_t) -> None:
+        """Frame member has been added."""
+        udm_model = UdmModel.from_udm_t(udm)
+        logger.info("frame_udm_created(func_ea=%d, udm=%s)", func_ea, udm_model.model_dump_json())
+
+    def frame_udm_deleted(self, func_ea: ida_idaapi.ea_t, udm_tid: int, udm: ida_typeinf.udm_t) -> None:
+        """Frame member has been deleted."""
+        udm_model = UdmModel.from_udm_t(udm)
+        logger.info("frame_udm_deleted(func_ea=%d, udm_tid=%d, udm=%s)", func_ea, udm_tid, udm_model.model_dump_json())
+
+    def frame_udm_renamed(self, func_ea: ida_idaapi.ea_t, udm: ida_typeinf.udm_t, oldname: str) -> None:
+        """Frame member has been renamed."""
+        udm_model = UdmModel.from_udm_t(udm)
+        logger.info("frame_udm_renamed(func_ea=%d, udm=%s, oldname=%s)", func_ea, udm_model.model_dump_json(), oldname)
+
+    def frame_udm_changed(
+        self,
+        func_ea: ida_idaapi.ea_t,
+        udm_tid: int,
+        udmold: ida_typeinf.udm_t,
+        udmnew: ida_typeinf.udm_t,
+    ) -> None:
+        """Frame member has been changed."""
+        udmold_model = UdmModel.from_udm_t(udmold)
+        udmnew_model = UdmModel.from_udm_t(udmnew)
+        logger.info(
+            "frame_udm_changed(func_ea=%d, udm_tid=%d, udmold=%s, udmnew=%s)",
+            func_ea,
+            udm_tid,
+            udmold_model.model_dump_json(),
+            udmnew_model.model_dump_json(),
+        )
 
 class ActivityLogPluginMod(ida_idaapi.plugmod_t):
     def __init__(self):
