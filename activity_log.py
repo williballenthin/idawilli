@@ -555,12 +555,24 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         logger.info("segm_end_changed(s=%s, oldend=%d)", s_model.model_dump_json(), oldend)
 
     def changing_segm_name(self, s: ida_segment.segment_t, oldname: str) -> None:
-        """Segment name is being changed."""
+        """Segment name is being changed.
+
+        s.name == oldname
+
+        See also segm_name_changed, which has the new name.
+        There's not an event with both old and new names.
+        """
         s_model = SegmentModel.from_segment_t(s)
         logger.info("changing_segm_name(s=%s, oldname=%s)", s_model.model_dump_json(), oldname)
 
     def segm_name_changed(self, s: ida_segment.segment_t, name: str) -> None:
-        """Segment name has been changed."""
+        """Segment name has been changed.
+
+        s.name == name (new name)
+
+        See also changing_segm_name, which has the old name.
+        There's not an event with both old and new names.
+        """
         s_model = SegmentModel.from_segment_t(s)
         logger.info("segm_name_changed(s=%s, name=%s)", s_model.model_dump_json(), name)
 
@@ -611,21 +623,6 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             info: Segment move information.
         """
         logger.info("allsegs_moved(info=%s)", info)
-
-    # TODO: what is opinfo? type?
-    # this has more info than op_type_changed
-    def changing_op_type(self, ea: ida_idaapi.ea_t, n: int, opinfo) -> None:
-        """An operand type (offset, hex, etc...) is to be changed."""
-        logger.info("changing_op_type(ea=%d, n=%d, opinfo=%s)", ea, n, opinfo)
-
-    def op_type_changed(self, ea: ida_idaapi.ea_t, n: int) -> None:
-        """An operand type (offset, hex, etc...) has been set or deleted.
-
-        Args:
-            ea: Address.
-            n: Operand number, eventually or'ed with OPND_OUTER or OPND_ALL.
-        """
-        logger.info("op_type_changed(ea=%d, n=%d)", ea, n)
 
     ### function operations
 
@@ -740,6 +737,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             repeatable,
         )
 
+    # TODO: what is a range comment???
     def range_cmt_changed(self, kind, a: ida_range.range_t, cmt: str, repeatable: bool) -> None:
         """Range comment has been changed."""
         a_model = RangeModel.from_range_t(a)
@@ -839,6 +837,21 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             operation,
         )
 
+    # TODO: what is opinfo? type?
+    # this has more info than op_type_changed
+    def changing_op_type(self, ea: ida_idaapi.ea_t, n: int, opinfo) -> None:
+        """An operand type (offset, hex, etc...) is to be changed."""
+        logger.info("changing_op_type(ea=%d, n=%d, opinfo=%s)", ea, n, opinfo)
+
+    def op_type_changed(self, ea: ida_idaapi.ea_t, n: int) -> None:
+        """An operand type (offset, hex, etc...) has been set or deleted.
+
+        Args:
+            ea: Address.
+            n: Operand number, eventually or'ed with OPND_OUTER or OPND_ALL.
+        """
+        logger.info("op_type_changed(ea=%d, n=%d)", ea, n)
+
     ### dirtree
 
     # TODO: figure out how to get the dirtree type (bookmarks/functions/etc.)
@@ -913,9 +926,14 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
 
     ### local types
 
-    # TODO: type of ltc
     def local_types_changed(self, ltc, ordinal: int, name: str) -> None:
-        """Local types have been changed."""
+        """Local types have been changed.
+
+        Args:
+            ltc (local_type_change_t):
+            ordinal: 0 means ordinal is unknown
+            name: nullptr means name is unknown
+        """
         logger.info("local_types_changed(ltc=%s, ordinal=%d, name=%s)", ltc, ordinal, name)
 
     def lt_udm_created(self, udtname: str, udm: ida_typeinf.udm_t) -> None:
@@ -1059,7 +1077,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
 
 class ActivityLogPluginMod(ida_idaapi.plugmod_t):
     def __init__(self):
-        self.idb_hooks: IDBChangedHook = None
+        self.idb_hooks: IDBChangedHook | None = None
 
     def run(self, arg):
         self.idb_hooks = IDBChangedHook()
