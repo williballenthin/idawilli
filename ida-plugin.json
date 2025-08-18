@@ -1,0 +1,8 @@
+{
+  "IDAMetadataDescriptorVersion": 1,
+  "plugin": {
+    "name": "activity_log",
+    "entryPoint": "activity_log.py",
+    "version": "v0.1.0"
+  }
+}
