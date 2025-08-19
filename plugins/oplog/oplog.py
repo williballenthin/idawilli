@@ -1,7 +1,6 @@
 import logging
 from typing import Any, Literal
-
-from pydantic import BaseModel, ConfigDict, field_validator
+from datetime import datetime
 
 import ida_ua
 import ida_gdl
@@ -13,6 +12,7 @@ import ida_idaapi
 import ida_dirtree
 import ida_segment
 import ida_typeinf
+from pydantic import BaseModel, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -334,21 +334,25 @@ Edm = ida_typeinf.edm_t | EdmModel
 
 class adding_segm_event(BaseModel):
     event_name: Literal["adding_segm"]
+    timestamp: datetime
     s: SegmentModel
 
 
 class segm_added_event(BaseModel):
     event_name: Literal["segm_added"]
+    timestamp: datetime
     s: SegmentModel
 
 
 class deleting_segm_event(BaseModel):
     event_name: Literal["deleting_segm"]
+    timestamp: datetime
     start_ea: int
 
 
 class segm_deleted_event(BaseModel):
     event_name: Literal["segm_deleted"]
+    timestamp: datetime
     start_ea: int
     end_ea: int
     flags: int
@@ -356,6 +360,7 @@ class segm_deleted_event(BaseModel):
 
 class changing_segm_start_event(BaseModel):
     event_name: Literal["changing_segm_start"]
+    timestamp: datetime
     s: SegmentModel
     new_start: int
     segmod_flags: int
@@ -363,12 +368,14 @@ class changing_segm_start_event(BaseModel):
 
 class segm_start_changed_event(BaseModel):
     event_name: Literal["segm_start_changed"]
+    timestamp: datetime
     s: SegmentModel
     oldstart: int
 
 
 class changing_segm_end_event(BaseModel):
     event_name: Literal["changing_segm_end"]
+    timestamp: datetime
     s: SegmentModel
     new_end: int
     segmod_flags: int
@@ -376,40 +383,47 @@ class changing_segm_end_event(BaseModel):
 
 class segm_end_changed_event(BaseModel):
     event_name: Literal["segm_end_changed"]
+    timestamp: datetime
     s: SegmentModel
     oldend: int
 
 
 class changing_segm_name_event(BaseModel):
     event_name: Literal["changing_segm_name"]
+    timestamp: datetime
     s: SegmentModel
     oldname: str
 
 
 class segm_name_changed_event(BaseModel):
     event_name: Literal["segm_name_changed"]
+    timestamp: datetime
     s: SegmentModel
     name: str
 
 
 class changing_segm_class_event(BaseModel):
     event_name: Literal["changing_segm_class"]
+    timestamp: datetime
     s: SegmentModel
 
 
 class segm_class_changed_event(BaseModel):
     event_name: Literal["segm_class_changed"]
+    timestamp: datetime
     s: SegmentModel
     sclass: str
 
 
 class segm_attrs_updated_event(BaseModel):
     event_name: Literal["segm_attrs_updated"]
+    timestamp: datetime
     s: SegmentModel
 
 
 class segm_moved_event(BaseModel):
     event_name: Literal["segm_moved"]
+    timestamp: datetime
     _from: int
     to: int
     size: int
@@ -418,66 +432,78 @@ class segm_moved_event(BaseModel):
 
 class allsegs_moved_event(BaseModel):
     event_name: Literal["allsegs_moved"]
+    timestamp: datetime
     info: Any
 
 
 class func_added_event(BaseModel):
     event_name: Literal["func_added"]
+    timestamp: datetime
     pfn: FuncModel
 
 
 class func_updated_event(BaseModel):
     event_name: Literal["func_updated"]
+    timestamp: datetime
     pfn: FuncModel
 
 
 class set_func_start_event(BaseModel):
     event_name: Literal["set_func_start"]
+    timestamp: datetime
     pfn: FuncModel
     new_start: int
 
 
 class set_func_end_event(BaseModel):
     event_name: Literal["set_func_end"]
+    timestamp: datetime
     pfn: FuncModel
     new_end: int
 
 
 class deleting_func_event(BaseModel):
     event_name: Literal["deleting_func"]
+    timestamp: datetime
     pfn: FuncModel
 
 
 class func_deleted_event(BaseModel):
     event_name: Literal["func_deleted"]
+    timestamp: datetime
     func_ea: int
 
 
 class thunk_func_created_event(BaseModel):
     event_name: Literal["thunk_func_created"]
+    timestamp: datetime
     pfn: FuncModel
 
 
 class func_tail_appended_event(BaseModel):
     event_name: Literal["func_tail_appended"]
+    timestamp: datetime
     pfn: FuncModel
     tail: FuncModel
 
 
 class deleting_func_tail_event(BaseModel):
     event_name: Literal["deleting_func_tail"]
+    timestamp: datetime
     pfn: FuncModel
     tail: RangeModel
 
 
 class func_tail_deleted_event(BaseModel):
     event_name: Literal["func_tail_deleted"]
+    timestamp: datetime
     pfn: FuncModel
     tail_ea: int
 
 
 class tail_owner_changed_event(BaseModel):
     event_name: Literal["tail_owner_changed"]
+    timestamp: datetime
     tail: FuncModel
     owner_func: int
     old_owner: int
@@ -485,26 +511,31 @@ class tail_owner_changed_event(BaseModel):
 
 class func_noret_changed_event(BaseModel):
     event_name: Literal["func_noret_changed"]
+    timestamp: datetime
     pfn: FuncModel
 
 
 class updating_tryblks_event(BaseModel):
     event_name: Literal["updating_tryblks"]
+    timestamp: datetime
     tbv: Any
 
 
 class tryblks_updated_event(BaseModel):
     event_name: Literal["tryblks_updated"]
+    timestamp: datetime
     tbv: Any
 
 
 class deleting_tryblks_event(BaseModel):
     event_name: Literal["deleting_tryblks"]
+    timestamp: datetime
     range: RangeModel
 
 
 class changing_cmt_event(BaseModel):
     event_name: Literal["changing_cmt"]
+    timestamp: datetime
     ea: int
     repeatable_cmt: bool
     newcmt: str
@@ -512,12 +543,14 @@ class changing_cmt_event(BaseModel):
 
 class cmt_changed_event(BaseModel):
     event_name: Literal["cmt_changed"]
+    timestamp: datetime
     ea: int
     repeatable_cmt: bool
 
 
 class changing_range_cmt_event(BaseModel):
     event_name: Literal["changing_range_cmt"]
+    timestamp: datetime
     kind: Any
     a: RangeModel
     cmt: str
@@ -526,6 +559,7 @@ class changing_range_cmt_event(BaseModel):
 
 class range_cmt_changed_event(BaseModel):
     event_name: Literal["range_cmt_changed"]
+    timestamp: datetime
     kind: Any
     a: RangeModel
     cmt: str
@@ -534,6 +568,7 @@ class range_cmt_changed_event(BaseModel):
 
 class extra_cmt_changed_event(BaseModel):
     event_name: Literal["extra_cmt_changed"]
+    timestamp: datetime
     ea: int
     line_idx: int
     cmt: str
@@ -541,6 +576,7 @@ class extra_cmt_changed_event(BaseModel):
 
 class sgr_changed_event(BaseModel):
     event_name: Literal["sgr_changed"]
+    timestamp: datetime
     start_ea: int
     end_ea: int
     regnum: int
@@ -551,6 +587,7 @@ class sgr_changed_event(BaseModel):
 
 class sgr_deleted_event(BaseModel):
     event_name: Literal["sgr_deleted"]
+    timestamp: datetime
     start_ea: int
     end_ea: int
     regnum: int
@@ -558,11 +595,13 @@ class sgr_deleted_event(BaseModel):
 
 class make_code_event(BaseModel):
     event_name: Literal["make_code"]
+    timestamp: datetime
     insn: InsnModel
 
 
 class make_data_event(BaseModel):
     event_name: Literal["make_data"]
+    timestamp: datetime
     ea: int
     flags: int
     tid: int
@@ -571,6 +610,7 @@ class make_data_event(BaseModel):
 
 class destroyed_items_event(BaseModel):
     event_name: Literal["destroyed_items"]
+    timestamp: datetime
     ea1: int
     ea2: int
     will_disable_range: bool
@@ -578,6 +618,7 @@ class destroyed_items_event(BaseModel):
 
 class renamed_event(BaseModel):
     event_name: Literal["renamed"]
+    timestamp: datetime
     ea: int
     new_name: str
     local_name: bool
@@ -586,24 +627,28 @@ class renamed_event(BaseModel):
 
 class byte_patched_event(BaseModel):
     event_name: Literal["byte_patched"]
+    timestamp: datetime
     ea: int
     old_value: int
 
 
 class item_color_changed_event(BaseModel):
     event_name: Literal["item_color_changed"]
+    timestamp: datetime
     ea: int
     color: Any
 
 
 class callee_addr_changed_event(BaseModel):
     event_name: Literal["callee_addr_changed"]
+    timestamp: datetime
     ea: int
     callee: int
 
 
 class bookmark_changed_event(BaseModel):
     event_name: Literal["bookmark_changed"]
+    timestamp: datetime
     index: int
     ea: int
     desc: str
@@ -612,6 +657,7 @@ class bookmark_changed_event(BaseModel):
 
 class changing_op_type_event(BaseModel):
     event_name: Literal["changing_op_type"]
+    timestamp: datetime
     ea: int
     n: int
     opinfo: Any
@@ -619,49 +665,58 @@ class changing_op_type_event(BaseModel):
 
 class op_type_changed_event(BaseModel):
     event_name: Literal["op_type_changed"]
+    timestamp: datetime
     ea: int
     n: int
 
 
 class dirtree_mkdir_event(BaseModel):
     event_name: Literal["dirtree_mkdir"]
+    timestamp: datetime
     path: str
 
 
 class dirtree_rmdir_event(BaseModel):
     event_name: Literal["dirtree_rmdir"]
+    timestamp: datetime
     path: str
 
 
 class dirtree_link_event(BaseModel):
     event_name: Literal["dirtree_link"]
+    timestamp: datetime
     path: str
     link: bool
 
 
 class dirtree_move_event(BaseModel):
     event_name: Literal["dirtree_move"]
+    timestamp: datetime
     _from: str
     to: str
 
 
 class dirtree_rank_event(BaseModel):
     event_name: Literal["dirtree_rank"]
+    timestamp: datetime
     path: str
     rank: int
 
 
 class dirtree_rminode_event(BaseModel):
     event_name: Literal["dirtree_rminode"]
+    timestamp: datetime
     inode: int
 
 
 class dirtree_segm_moved_event(BaseModel):
     event_name: Literal["dirtree_segm_moved"]
+    timestamp: datetime
 
 
 class changing_ti_event(BaseModel):
     event_name: Literal["changing_ti"]
+    timestamp: datetime
     ea: int
     new_type: Any
     new_fnames: Any
@@ -669,6 +724,7 @@ class changing_ti_event(BaseModel):
 
 class ti_changed_event(BaseModel):
     event_name: Literal["ti_changed"]
+    timestamp: datetime
     ea: int
     type: Any
     fnames: Any
@@ -676,6 +732,7 @@ class ti_changed_event(BaseModel):
 
 class changing_op_ti_event(BaseModel):
     event_name: Literal["changing_op_ti"]
+    timestamp: datetime
     ea: int
     n: int
     new_type: Any
@@ -684,6 +741,7 @@ class changing_op_ti_event(BaseModel):
 
 class op_ti_changed_event(BaseModel):
     event_name: Literal["op_ti_changed"]
+    timestamp: datetime
     ea: int
     n: int
     type: Any
@@ -692,6 +750,7 @@ class op_ti_changed_event(BaseModel):
 
 class local_types_changed_event(BaseModel):
     event_name: Literal["local_types_changed"]
+    timestamp: datetime
     ltc: Any
     ordinal: int
     name: str
@@ -699,12 +758,14 @@ class local_types_changed_event(BaseModel):
 
 class lt_udm_created_event(BaseModel):
     event_name: Literal["lt_udm_created"]
+    timestamp: datetime
     udtname: str
     udm: UdmModel
 
 
 class lt_udm_deleted_event(BaseModel):
     event_name: Literal["lt_udm_deleted"]
+    timestamp: datetime
     udtname: str
     udm_tid: int
     udm: UdmModel
@@ -712,6 +773,7 @@ class lt_udm_deleted_event(BaseModel):
 
 class lt_udm_renamed_event(BaseModel):
     event_name: Literal["lt_udm_renamed"]
+    timestamp: datetime
     udtname: str
     udm: UdmModel
     oldname: str
@@ -719,6 +781,7 @@ class lt_udm_renamed_event(BaseModel):
 
 class lt_udm_changed_event(BaseModel):
     event_name: Literal["lt_udm_changed"]
+    timestamp: datetime
     udtname: str
     udm_tid: int
     udmold: UdmModel
@@ -727,6 +790,7 @@ class lt_udm_changed_event(BaseModel):
 
 class lt_udt_expanded_event(BaseModel):
     event_name: Literal["lt_udt_expanded"]
+    timestamp: datetime
     udtname: str
     udm_tid: int
     delta: int
@@ -734,12 +798,14 @@ class lt_udt_expanded_event(BaseModel):
 
 class lt_edm_created_event(BaseModel):
     event_name: Literal["lt_edm_created"]
+    timestamp: datetime
     enumname: str
     edm: EdmModel
 
 
 class lt_edm_deleted_event(BaseModel):
     event_name: Literal["lt_edm_deleted"]
+    timestamp: datetime
     enumname: str
     edm_tid: int
     edm: EdmModel
@@ -747,6 +813,7 @@ class lt_edm_deleted_event(BaseModel):
 
 class lt_edm_renamed_event(BaseModel):
     event_name: Literal["lt_edm_renamed"]
+    timestamp: datetime
     enumname: str
     edm: EdmModel
     oldname: str
@@ -754,6 +821,7 @@ class lt_edm_renamed_event(BaseModel):
 
 class lt_edm_changed_event(BaseModel):
     event_name: Literal["lt_edm_changed"]
+    timestamp: datetime
     enumname: str
     edm_tid: int
     edmold: EdmModel
@@ -762,16 +830,19 @@ class lt_edm_changed_event(BaseModel):
 
 class stkpnts_changed_event(BaseModel):
     event_name: Literal["stkpnts_changed"]
+    timestamp: datetime
     pfn: FuncModel
 
 
 class frame_created_event(BaseModel):
     event_name: Literal["frame_created"]
+    timestamp: datetime
     func_ea: int
 
 
 class frame_expanded_event(BaseModel):
     event_name: Literal["frame_expanded"]
+    timestamp: datetime
     func_ea: int
     udm_tid: int
     delta: int
@@ -779,17 +850,20 @@ class frame_expanded_event(BaseModel):
 
 class frame_deleted_event(BaseModel):
     event_name: Literal["frame_deleted"]
+    timestamp: datetime
     pfn: FuncModel
 
 
 class frame_udm_created_event(BaseModel):
     event_name: Literal["frame_udm_created"]
+    timestamp: datetime
     func_ea: int
     udm: UdmModel
 
 
 class frame_udm_deleted_event(BaseModel):
     event_name: Literal["frame_udm_deleted"]
+    timestamp: datetime
     func_ea: int
     udm_tid: int
     udm: UdmModel
@@ -797,6 +871,7 @@ class frame_udm_deleted_event(BaseModel):
 
 class frame_udm_renamed_event(BaseModel):
     event_name: Literal["frame_udm_renamed"]
+    timestamp: datetime
     func_ea: int
     udm: UdmModel
     oldname: str
@@ -804,10 +879,33 @@ class frame_udm_renamed_event(BaseModel):
 
 class frame_udm_changed_event(BaseModel):
     event_name: Literal["frame_udm_changed"]
+    timestamp: datetime
     func_ea: int
     udm_tid: int
     udmold: UdmModel
     udmnew: UdmModel
+
+
+class determined_main_event(BaseModel):
+    event_name: Literal["determined_main"]
+    timestamp: datetime
+    main: int
+
+
+class extlang_changed_event(BaseModel):
+    event_name: Literal["extlang_changed"]
+    timestamp: datetime
+    kind: int
+    el: Any
+    idx: int
+
+
+class idasgn_matched_ea_event(BaseModel):
+    event_name: Literal["idasgn_matched_ea"]
+    timestamp: datetime
+    ea: int
+    name: str
+    lib_name: str
 
 
 def cb(ev: Any):
@@ -846,7 +944,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
     def determined_main(self, main: ida_idaapi.ea_t) -> None:
         """The main() function has been determined."""
         logger.info("determined_main(main=%d)", main)
-        ev = determined_main_event(event_name="determined_main", main=main)
+        ev = determined_main_event(event_name="determined_main", timestamp=datetime.now(), main=main)
         cb(ev)
 
     def extlang_changed(self, kind: int, el, idx: int) -> None:
@@ -858,7 +956,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             idx: Extlang index.
         """
         logger.info("extlang_changed(kind=%d, el=%s, idx=%d)", kind, el, idx)
-        ev = extlang_changed_event(event_name="extlang_changed", kind=kind, el=el, idx=idx)
+        ev = extlang_changed_event(event_name="extlang_changed", timestamp=datetime.now(), kind=kind, el=el, idx=idx)
         cb(ev)
 
     def idasgn_loaded(self, short_sig_name: str) -> None:
@@ -869,7 +967,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
     def idasgn_matched_ea(self, ea: ida_idaapi.ea_t, name: str, lib_name: str) -> None:
         """A FLIRT match has been found."""
         logger.info("idasgn_matched_ea(ea=%d, name=%s, lib_name=%s)", ea, name, lib_name)
-        ev = idasgn_matched_ea_event(event_name="idasgn_matched_ea", ea=ea, name=name, lib_name=lib_name)
+        ev = idasgn_matched_ea_event(
+            event_name="idasgn_matched_ea", timestamp=datetime.now(), ea=ea, name=name, lib_name=lib_name
+        )
         cb(ev)
 
     def kernel_config_loaded(self, pass_number: int) -> None:
@@ -906,7 +1006,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """A segment is being created."""
         s_model = SegmentModel.from_segment_t(s)
         logger.info("adding_segm(s=%s)", s_model.model_dump_json())
-        ev = adding_segm_event(event_name="adding_segm", s=s_model)
+        ev = adding_segm_event(event_name="adding_segm", timestamp=datetime.now(), s=s_model)
         cb(ev)
 
     def segm_added(self, s: ida_segment.segment_t) -> None:
@@ -919,19 +1019,21 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """
         s_model = SegmentModel.from_segment_t(s)
         logger.info("segm_added(s=%s)", s_model.model_dump_json())
-        ev = segm_added_event(event_name="segm_added", s=s_model)
+        ev = segm_added_event(event_name="segm_added", timestamp=datetime.now(), s=s_model)
         cb(ev)
 
     def deleting_segm(self, start_ea: ida_idaapi.ea_t) -> None:
         """A segment is to be deleted."""
         logger.info("deleting_segm(start_ea=%d)", start_ea)
-        ev = deleting_segm_event(event_name="deleting_segm", start_ea=start_ea)
+        ev = deleting_segm_event(event_name="deleting_segm", timestamp=datetime.now(), start_ea=start_ea)
         cb(ev)
 
     def segm_deleted(self, start_ea: ida_idaapi.ea_t, end_ea: ida_idaapi.ea_t, flags: int) -> None:
         """A segment has been deleted."""
         logger.info("segm_deleted(start_ea=%d, end_ea=%d, flags=%d)", start_ea, end_ea, flags)
-        ev = segm_deleted_event(event_name="segm_deleted", start_ea=start_ea, end_ea=end_ea, flags=flags)
+        ev = segm_deleted_event(
+            event_name="segm_deleted", timestamp=datetime.now(), start_ea=start_ea, end_ea=end_ea, flags=flags
+        )
         cb(ev)
 
     def changing_segm_start(self, s: ida_segment.segment_t, new_start: ida_idaapi.ea_t, segmod_flags: int) -> None:
@@ -944,7 +1046,11 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             segmod_flags,
         )
         ev = changing_segm_start_event(
-            event_name="changing_segm_start", s=s_model, new_start=new_start, segmod_flags=segmod_flags
+            event_name="changing_segm_start",
+            timestamp=datetime.now(),
+            s=s_model,
+            new_start=new_start,
+            segmod_flags=segmod_flags,
         )
         cb(ev)
 
@@ -952,7 +1058,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """Segment start address has been changed."""
         s_model = SegmentModel.from_segment_t(s)
         logger.info("segm_start_changed(s=%s, oldstart=%d)", s_model.model_dump_json(), oldstart)
-        ev = segm_start_changed_event(event_name="segm_start_changed", s=s_model, oldstart=oldstart)
+        ev = segm_start_changed_event(
+            event_name="segm_start_changed", timestamp=datetime.now(), s=s_model, oldstart=oldstart
+        )
         cb(ev)
 
     def changing_segm_end(self, s: ida_segment.segment_t, new_end: ida_idaapi.ea_t, segmod_flags: int) -> None:
@@ -965,7 +1073,11 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             segmod_flags,
         )
         ev = changing_segm_end_event(
-            event_name="changing_segm_end", s=s_model, new_end=new_end, segmod_flags=segmod_flags
+            event_name="changing_segm_end",
+            timestamp=datetime.now(),
+            s=s_model,
+            new_end=new_end,
+            segmod_flags=segmod_flags,
         )
         cb(ev)
 
@@ -973,7 +1085,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """Segment end address has been changed."""
         s_model = SegmentModel.from_segment_t(s)
         logger.info("segm_end_changed(s=%s, oldend=%d)", s_model.model_dump_json(), oldend)
-        ev = segm_end_changed_event(event_name="segm_end_changed", s=s_model, oldend=oldend)
+        ev = segm_end_changed_event(event_name="segm_end_changed", timestamp=datetime.now(), s=s_model, oldend=oldend)
         cb(ev)
 
     def changing_segm_name(self, s: ida_segment.segment_t, oldname: str) -> None:
@@ -986,7 +1098,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """
         s_model = SegmentModel.from_segment_t(s)
         logger.info("changing_segm_name(s=%s, oldname=%s)", s_model.model_dump_json(), oldname)
-        ev = changing_segm_name_event(event_name="changing_segm_name", s=s_model, oldname=oldname)
+        ev = changing_segm_name_event(
+            event_name="changing_segm_name", timestamp=datetime.now(), s=s_model, oldname=oldname
+        )
         cb(ev)
 
     def segm_name_changed(self, s: ida_segment.segment_t, name: str) -> None:
@@ -999,21 +1113,23 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """
         s_model = SegmentModel.from_segment_t(s)
         logger.info("segm_name_changed(s=%s, name=%s)", s_model.model_dump_json(), name)
-        ev = segm_name_changed_event(event_name="segm_name_changed", s=s_model, name=name)
+        ev = segm_name_changed_event(event_name="segm_name_changed", timestamp=datetime.now(), s=s_model, name=name)
         cb(ev)
 
     def changing_segm_class(self, s: ida_segment.segment_t) -> None:
         """Segment class is being changed."""
         s_model = SegmentModel.from_segment_t(s)
         logger.info("changing_segm_class(s=%s)", s_model.model_dump_json())
-        ev = changing_segm_class_event(event_name="changing_segm_class", s=s_model)
+        ev = changing_segm_class_event(event_name="changing_segm_class", timestamp=datetime.now(), s=s_model)
         cb(ev)
 
     def segm_class_changed(self, s: ida_segment.segment_t, sclass: str) -> None:
         """Segment class has been changed."""
         s_model = SegmentModel.from_segment_t(s)
         logger.info("segm_class_changed(s=%s, sclass=%s)", s_model.model_dump_json(), sclass)
-        ev = segm_class_changed_event(event_name="segm_class_changed", s=s_model, sclass=sclass)
+        ev = segm_class_changed_event(
+            event_name="segm_class_changed", timestamp=datetime.now(), s=s_model, sclass=sclass
+        )
         cb(ev)
 
     def segm_attrs_updated(self, s: ida_segment.segment_t) -> None:
@@ -1023,7 +1139,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """
         s_model = SegmentModel.from_segment_t(s)
         logger.info("segm_attrs_updated(s=%s)", s_model.model_dump_json())
-        ev = segm_attrs_updated_event(event_name="segm_attrs_updated", s=s_model)
+        ev = segm_attrs_updated_event(event_name="segm_attrs_updated", timestamp=datetime.now(), s=s_model)
         cb(ev)
 
     def segm_moved(
@@ -1044,7 +1160,14 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             size,
             changed_netmap,
         )
-        ev = segm_moved_event(event_name="segm_moved", _from=_from, to=to, size=size, changed_netmap=changed_netmap)
+        ev = segm_moved_event(
+            event_name="segm_moved",
+            timestamp=datetime.now(),
+            _from=_from,
+            to=to,
+            size=size,
+            changed_netmap=changed_netmap,
+        )
         cb(ev)
 
     # TODO: type of info
@@ -1057,7 +1180,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             info: Segment move information.
         """
         logger.info("allsegs_moved(info=%s)", info)
-        ev = allsegs_moved_event(event_name="allsegs_moved", info=info)
+        ev = allsegs_moved_event(event_name="allsegs_moved", timestamp=datetime.now(), info=info)
         cb(ev)
 
     ### function operations
@@ -1066,48 +1189,50 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """The kernel has added a function."""
         pfn_model = FuncModel.from_func_t(pfn)
         logger.info("func_added(pfn=%s)", pfn_model.model_dump_json())
-        ev = func_added_event(event_name="func_added", pfn=pfn_model)
+        ev = func_added_event(event_name="func_added", timestamp=datetime.now(), pfn=pfn_model)
         cb(ev)
 
     def func_updated(self, pfn: ida_funcs.func_t) -> None:
         """The kernel has updated a function."""
         pfn_model = FuncModel.from_func_t(pfn)
         logger.info("func_updated(pfn=%s)", pfn_model.model_dump_json())
-        ev = func_updated_event(event_name="func_updated", pfn=pfn_model)
+        ev = func_updated_event(event_name="func_updated", timestamp=datetime.now(), pfn=pfn_model)
         cb(ev)
 
     def set_func_start(self, pfn: ida_funcs.func_t, new_start: ida_idaapi.ea_t) -> None:
         """Function chunk start address will be changed."""
         pfn_model = FuncModel.from_func_t(pfn)
         logger.info("set_func_start(pfn=%s, new_start=%d)", pfn_model.model_dump_json(), new_start)
-        ev = set_func_start_event(event_name="set_func_start", pfn=pfn_model, new_start=new_start)
+        ev = set_func_start_event(
+            event_name="set_func_start", timestamp=datetime.now(), pfn=pfn_model, new_start=new_start
+        )
         cb(ev)
 
     def set_func_end(self, pfn: ida_funcs.func_t, new_end: ida_idaapi.ea_t) -> None:
         """Function chunk end address will be changed."""
         pfn_model = FuncModel.from_func_t(pfn)
         logger.info("set_func_end(pfn=%s, new_end=%d)", pfn_model.model_dump_json(), new_end)
-        ev = set_func_end_event(event_name="set_func_end", pfn=pfn_model, new_end=new_end)
+        ev = set_func_end_event(event_name="set_func_end", timestamp=datetime.now(), pfn=pfn_model, new_end=new_end)
         cb(ev)
 
     def deleting_func(self, pfn: ida_funcs.func_t) -> None:
         """The kernel is about to delete a function."""
         pfn_model = FuncModel.from_func_t(pfn)
         logger.info("deleting_func(pfn=%s)", pfn_model.model_dump_json())
-        ev = deleting_func_event(event_name="deleting_func", pfn=pfn_model)
+        ev = deleting_func_event(event_name="deleting_func", timestamp=datetime.now(), pfn=pfn_model)
         cb(ev)
 
     def func_deleted(self, func_ea: ida_idaapi.ea_t) -> None:
         """A function has been deleted."""
         logger.info("func_deleted(func_ea=%d)", func_ea)
-        ev = func_deleted_event(event_name="func_deleted", func_ea=func_ea)
+        ev = func_deleted_event(event_name="func_deleted", timestamp=datetime.now(), func_ea=func_ea)
         cb(ev)
 
     def thunk_func_created(self, pfn: ida_funcs.func_t) -> None:
         """A thunk bit has been set for a function."""
         pfn_model = FuncModel.from_func_t(pfn)
         logger.info("thunk_func_created(pfn=%s)", pfn_model.model_dump_json())
-        ev = thunk_func_created_event(event_name="thunk_func_created", pfn=pfn_model)
+        ev = thunk_func_created_event(event_name="thunk_func_created", timestamp=datetime.now(), pfn=pfn_model)
         cb(ev)
 
     def func_tail_appended(self, pfn: ida_funcs.func_t, tail: ida_funcs.func_t) -> None:
@@ -1115,7 +1240,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         pfn_model = FuncModel.from_func_t(pfn)
         tail_model = FuncModel.from_func_t(tail)
         logger.info("func_tail_appended(pfn=%s, tail=%s)", pfn_model.model_dump_json(), tail_model.model_dump_json())
-        ev = func_tail_appended_event(event_name="func_tail_appended", pfn=pfn_model, tail=tail_model)
+        ev = func_tail_appended_event(
+            event_name="func_tail_appended", timestamp=datetime.now(), pfn=pfn_model, tail=tail_model
+        )
         cb(ev)
 
     def deleting_func_tail(self, pfn: ida_funcs.func_t, tail: ida_range.range_t) -> None:
@@ -1123,14 +1250,18 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         pfn_model = FuncModel.from_func_t(pfn)
         tail_model = RangeModel.from_range_t(tail)
         logger.info("deleting_func_tail(pfn=%s, tail=%s)", pfn_model.model_dump_json(), tail_model.model_dump_json())
-        ev = deleting_func_tail_event(event_name="deleting_func_tail", pfn=pfn_model, tail=tail_model)
+        ev = deleting_func_tail_event(
+            event_name="deleting_func_tail", timestamp=datetime.now(), pfn=pfn_model, tail=tail_model
+        )
         cb(ev)
 
     def func_tail_deleted(self, pfn: ida_funcs.func_t, tail_ea: ida_idaapi.ea_t) -> None:
         """A function tail chunk has been removed."""
         pfn_model = FuncModel.from_func_t(pfn)
         logger.info("func_tail_deleted(pfn=%s, tail_ea=%d)", pfn_model.model_dump_json(), tail_ea)
-        ev = func_tail_deleted_event(event_name="func_tail_deleted", pfn=pfn_model, tail_ea=tail_ea)
+        ev = func_tail_deleted_event(
+            event_name="func_tail_deleted", timestamp=datetime.now(), pfn=pfn_model, tail_ea=tail_ea
+        )
         cb(ev)
 
     def tail_owner_changed(
@@ -1148,7 +1279,11 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             old_owner,
         )
         ev = tail_owner_changed_event(
-            event_name="tail_owner_changed", tail=tail_model, owner_func=owner_func, old_owner=old_owner
+            event_name="tail_owner_changed",
+            timestamp=datetime.now(),
+            tail=tail_model,
+            owner_func=owner_func,
+            old_owner=old_owner,
         )
         cb(ev)
 
@@ -1156,27 +1291,27 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """FUNC_NORET bit has been changed."""
         pfn_model = FuncModel.from_func_t(pfn)
         logger.info("func_noret_changed(pfn=%s)", pfn_model.model_dump_json())
-        ev = func_noret_changed_event(event_name="func_noret_changed", pfn=pfn_model)
+        ev = func_noret_changed_event(event_name="func_noret_changed", timestamp=datetime.now(), pfn=pfn_model)
         cb(ev)
 
     # TODO: type of tbv
     def updating_tryblks(self, tbv) -> None:
         """About to update tryblk information."""
         logger.info("updating_tryblks(tbv=%s)", tbv)
-        ev = updating_tryblks_event(event_name="updating_tryblks", tbv=tbv)
+        ev = updating_tryblks_event(event_name="updating_tryblks", timestamp=datetime.now(), tbv=tbv)
         cb(ev)
 
     def tryblks_updated(self, tbv) -> None:
         """Updated tryblk information."""
         logger.info("tryblks_updated(tbv=%s)", tbv)
-        ev = tryblks_updated_event(event_name="tryblks_updated", tbv=tbv)
+        ev = tryblks_updated_event(event_name="tryblks_updated", timestamp=datetime.now(), tbv=tbv)
         cb(ev)
 
     def deleting_tryblks(self, range: ida_range.range_t) -> None:
         """About to delete tryblk information in given range."""
         range_model = RangeModel.from_range_t(range)
         logger.info("deleting_tryblks(range=%s)", range_model.model_dump_json())
-        ev = deleting_tryblks_event(event_name="deleting_tryblks", range=range_model)
+        ev = deleting_tryblks_event(event_name="deleting_tryblks", timestamp=datetime.now(), range=range_model)
         cb(ev)
 
     ### comments
@@ -1189,13 +1324,15 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             repeatable_cmt,
             newcmt,
         )
-        ev = changing_cmt_event(event_name="changing_cmt", ea=ea, repeatable_cmt=repeatable_cmt, newcmt=newcmt)
+        ev = changing_cmt_event(
+            event_name="changing_cmt", timestamp=datetime.now(), ea=ea, repeatable_cmt=repeatable_cmt, newcmt=newcmt
+        )
         cb(ev)
 
     def cmt_changed(self, ea: ida_idaapi.ea_t, repeatable_cmt: bool) -> None:
         """An item comment has been changed."""
         logger.info("cmt_changed(ea=%d, repeatable_cmt=%s)", ea, repeatable_cmt)
-        ev = cmt_changed_event(event_name="cmt_changed", ea=ea, repeatable_cmt=repeatable_cmt)
+        ev = cmt_changed_event(event_name="cmt_changed", timestamp=datetime.now(), ea=ea, repeatable_cmt=repeatable_cmt)
         cb(ev)
 
     def changing_range_cmt(self, kind, a: ida_range.range_t, cmt: str, repeatable: bool) -> None:
@@ -1209,7 +1346,12 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             repeatable,
         )
         ev = changing_range_cmt_event(
-            event_name="changing_range_cmt", kind=kind, a=a_model, cmt=cmt, repeatable=repeatable
+            event_name="changing_range_cmt",
+            timestamp=datetime.now(),
+            kind=kind,
+            a=a_model,
+            cmt=cmt,
+            repeatable=repeatable,
         )
         cb(ev)
 
@@ -1225,14 +1367,21 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             repeatable,
         )
         ev = range_cmt_changed_event(
-            event_name="range_cmt_changed", kind=kind, a=a_model, cmt=cmt, repeatable=repeatable
+            event_name="range_cmt_changed",
+            timestamp=datetime.now(),
+            kind=kind,
+            a=a_model,
+            cmt=cmt,
+            repeatable=repeatable,
         )
         cb(ev)
 
     def extra_cmt_changed(self, ea: ida_idaapi.ea_t, line_idx: int, cmt: str) -> None:
         """An extra comment has been changed."""
         logger.info("extra_cmt_changed(ea=%d, line_idx=%d, cmt=%s)", ea, line_idx, cmt)
-        ev = extra_cmt_changed_event(event_name="extra_cmt_changed", ea=ea, line_idx=line_idx, cmt=cmt)
+        ev = extra_cmt_changed_event(
+            event_name="extra_cmt_changed", timestamp=datetime.now(), ea=ea, line_idx=line_idx, cmt=cmt
+        )
         cb(ev)
 
     ### item operations
@@ -1258,6 +1407,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         )
         ev = sgr_changed_event(
             event_name="sgr_changed",
+            timestamp=datetime.now(),
             start_ea=start_ea,
             end_ea=end_ea,
             regnum=regnum,
@@ -1270,20 +1420,22 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
     def sgr_deleted(self, start_ea: ida_idaapi.ea_t, end_ea: ida_idaapi.ea_t, regnum: int) -> None:
         """The kernel has deleted a segment register value."""
         logger.info("sgr_deleted(start_ea=%d, end_ea=%d, regnum=%d)", start_ea, end_ea, regnum)
-        ev = sgr_deleted_event(event_name="sgr_deleted", start_ea=start_ea, end_ea=end_ea, regnum=regnum)
+        ev = sgr_deleted_event(
+            event_name="sgr_deleted", timestamp=datetime.now(), start_ea=start_ea, end_ea=end_ea, regnum=regnum
+        )
         cb(ev)
 
     def make_code(self, insn: ida_ua.insn_t) -> None:
         """An instruction is being created."""
         insn_model = InsnModel.from_insn_t(insn)
         logger.info("make_code(insn=%s)", insn_model.model_dump_json())
-        ev = make_code_event(event_name="make_code", insn=insn_model)
+        ev = make_code_event(event_name="make_code", timestamp=datetime.now(), insn=insn_model)
         cb(ev)
 
     def make_data(self, ea: ida_idaapi.ea_t, flags: int, tid: int, len: int) -> None:
         """A data item is being created."""
         logger.info("make_data(ea=%d, flags=%d, tid=%d, len=%d)", ea, flags, tid, len)
-        ev = make_data_event(event_name="make_data", ea=ea, flags=flags, tid=tid, len=len)
+        ev = make_data_event(event_name="make_data", timestamp=datetime.now(), ea=ea, flags=flags, tid=tid, len=len)
         cb(ev)
 
     def destroyed_items(self, ea1: ida_idaapi.ea_t, ea2: ida_idaapi.ea_t, will_disable_range: bool) -> None:
@@ -1295,7 +1447,11 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             will_disable_range,
         )
         ev = destroyed_items_event(
-            event_name="destroyed_items", ea1=ea1, ea2=ea2, will_disable_range=will_disable_range
+            event_name="destroyed_items",
+            timestamp=datetime.now(),
+            ea1=ea1,
+            ea2=ea2,
+            will_disable_range=will_disable_range,
         )
         cb(ev)
 
@@ -1310,13 +1466,20 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             local_name,
             old_name,
         )
-        ev = renamed_event(event_name="renamed", ea=ea, new_name=new_name, local_name=local_name, old_name=old_name)
+        ev = renamed_event(
+            event_name="renamed",
+            timestamp=datetime.now(),
+            ea=ea,
+            new_name=new_name,
+            local_name=local_name,
+            old_name=old_name,
+        )
         cb(ev)
 
     def byte_patched(self, ea: ida_idaapi.ea_t, old_value: int) -> None:
         """A byte has been patched."""
         logger.info("byte_patched(ea=%d, old_value=%d)", ea, old_value)
-        ev = byte_patched_event(event_name="byte_patched", ea=ea, old_value=old_value)
+        ev = byte_patched_event(event_name="byte_patched", timestamp=datetime.now(), ea=ea, old_value=old_value)
         cb(ev)
 
     def item_color_changed(self, ea: ida_idaapi.ea_t, color) -> None:
@@ -1324,13 +1487,13 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
 
         If color==DEFCOLOR, then the color is deleted."""
         logger.info("item_color_changed(ea=%d, color=%s)", ea, color)
-        ev = item_color_changed_event(event_name="item_color_changed", ea=ea, color=color)
+        ev = item_color_changed_event(event_name="item_color_changed", timestamp=datetime.now(), ea=ea, color=color)
         cb(ev)
 
     def callee_addr_changed(self, ea: ida_idaapi.ea_t, callee: ida_idaapi.ea_t) -> None:
         """Callee address has been updated by the user."""
         logger.info("callee_addr_changed(ea=%d, callee=%d)", ea, callee)
-        ev = callee_addr_changed_event(event_name="callee_addr_changed", ea=ea, callee=callee)
+        ev = callee_addr_changed_event(event_name="callee_addr_changed", timestamp=datetime.now(), ea=ea, callee=callee)
         cb(ev)
 
     def bookmark_changed(self, index: int, pos: ida_moves.lochist_entry_t, desc: str, operation: int) -> None:
@@ -1346,7 +1509,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             desc,
             operation,
         )
-        ev = bookmark_changed_event(event_name="bookmark_changed", index=index, ea=ea, desc=desc, operation=operation)
+        ev = bookmark_changed_event(
+            event_name="bookmark_changed", timestamp=datetime.now(), index=index, ea=ea, desc=desc, operation=operation
+        )
         cb(ev)
 
     # TODO: what is opinfo? type?
@@ -1354,7 +1519,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
     def changing_op_type(self, ea: ida_idaapi.ea_t, n: int, opinfo) -> None:
         """An operand type (offset, hex, etc...) is to be changed."""
         logger.info("changing_op_type(ea=%d, n=%d, opinfo=%s)", ea, n, opinfo)
-        ev = changing_op_type_event(event_name="changing_op_type", ea=ea, n=n, opinfo=opinfo)
+        ev = changing_op_type_event(event_name="changing_op_type", timestamp=datetime.now(), ea=ea, n=n, opinfo=opinfo)
         cb(ev)
 
     def op_type_changed(self, ea: ida_idaapi.ea_t, n: int) -> None:
@@ -1365,7 +1530,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             n: Operand number, eventually or'ed with OPND_OUTER or OPND_ALL.
         """
         logger.info("op_type_changed(ea=%d, n=%d)", ea, n)
-        ev = op_type_changed_event(event_name="op_type_changed", ea=ea, n=n)
+        ev = op_type_changed_event(event_name="op_type_changed", timestamp=datetime.now(), ea=ea, n=n)
         cb(ev)
 
     ### dirtree
@@ -1374,37 +1539,37 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
     def dirtree_mkdir(self, dt: ida_dirtree.dirtree_t, path: str) -> None:
         """Dirtree: a directory has been created."""
         logger.info("dirtree_mkdir(path=%s)", path)
-        ev = dirtree_mkdir_event(event_name="dirtree_mkdir", path=path)
+        ev = dirtree_mkdir_event(event_name="dirtree_mkdir", timestamp=datetime.now(), path=path)
         cb(ev)
 
     def dirtree_rmdir(self, dt: ida_dirtree.dirtree_t, path: str) -> None:
         """Dirtree: a directory has been deleted."""
         logger.info("dirtree_rmdir(path=%s)", path)
-        ev = dirtree_rmdir_event(event_name="dirtree_rmdir", path=path)
+        ev = dirtree_rmdir_event(event_name="dirtree_rmdir", timestamp=datetime.now(), path=path)
         cb(ev)
 
     def dirtree_link(self, dt: ida_dirtree.dirtree_t, path: str, link: bool) -> None:
         """Dirtree: an item has been linked/unlinked."""
         logger.info("dirtree_link(path=%s, link=%s)", path, link)
-        ev = dirtree_link_event(event_name="dirtree_link", path=path, link=link)
+        ev = dirtree_link_event(event_name="dirtree_link", timestamp=datetime.now(), path=path, link=link)
         cb(ev)
 
     def dirtree_move(self, dt: ida_dirtree.dirtree_t, _from: str, to: str) -> None:
         """Dirtree: a directory or item has been moved."""
         logger.info("dirtree_move(_from=%s, to=%s)", _from, to)
-        ev = dirtree_move_event(event_name="dirtree_move", _from=_from, to=to)
+        ev = dirtree_move_event(event_name="dirtree_move", timestamp=datetime.now(), _from=_from, to=to)
         cb(ev)
 
     def dirtree_rank(self, dt: ida_dirtree.dirtree_t, path: str, rank: int) -> None:
         """Dirtree: a directory or item rank has been changed."""
         logger.info("dirtree_rank(path=%s, rank=%d)", path, rank)
-        ev = dirtree_rank_event(event_name="dirtree_rank", path=path, rank=rank)
+        ev = dirtree_rank_event(event_name="dirtree_rank", timestamp=datetime.now(), path=path, rank=rank)
         cb(ev)
 
     def dirtree_rminode(self, dt: ida_dirtree.dirtree_t, inode: int) -> None:
         """Dirtree: an inode became unavailable."""
         logger.info("dirtree_rminode(inode=%d)", inode)
-        ev = dirtree_rminode_event(event_name="dirtree_rminode", inode=inode)
+        ev = dirtree_rminode_event(event_name="dirtree_rminode", timestamp=datetime.now(), inode=inode)
         cb(ev)
 
     def dirtree_segm_moved(self, dt: ida_dirtree.dirtree_t) -> None:
@@ -1423,13 +1588,15 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
     ) -> None:
         """An item typestring (C/C++ prototype) is to be changed."""
         logger.info("changing_ti(ea=%d, new_type=%s, new_fnames=%s)", ea, new_type, new_fnames)
-        ev = changing_ti_event(event_name="changing_ti", ea=ea, new_type=new_type, new_fnames=new_fnames)
+        ev = changing_ti_event(
+            event_name="changing_ti", timestamp=datetime.now(), ea=ea, new_type=new_type, new_fnames=new_fnames
+        )
         cb(ev)
 
     def ti_changed(self, ea: ida_idaapi.ea_t, type, fnames) -> None:
         """An item typestring (C/C++ prototype) has been changed."""
         logger.info("ti_changed(ea=%d, type=%s, fnames=%s)", ea, type, fnames)
-        ev = ti_changed_event(event_name="ti_changed", ea=ea, type=type, fnames=fnames)
+        ev = ti_changed_event(event_name="ti_changed", timestamp=datetime.now(), ea=ea, type=type, fnames=fnames)
         cb(ev)
 
     def changing_op_ti(
@@ -1447,7 +1614,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             new_type,
             new_fnames,
         )
-        ev = changing_op_ti_event(event_name="changing_op_ti", ea=ea, n=n, new_type=new_type, new_fnames=new_fnames)
+        ev = changing_op_ti_event(
+            event_name="changing_op_ti", timestamp=datetime.now(), ea=ea, n=n, new_type=new_type, new_fnames=new_fnames
+        )
         cb(ev)
 
     def op_ti_changed(
@@ -1459,7 +1628,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
     ) -> None:
         """An operand typestring (c/c++ prototype) has been changed."""
         logger.info("op_ti_changed(ea=%d, n=%d, type=%s, fnames=%s)", ea, n, type, fnames)
-        ev = op_ti_changed_event(event_name="op_ti_changed", ea=ea, n=n, type=type, fnames=fnames)
+        ev = op_ti_changed_event(
+            event_name="op_ti_changed", timestamp=datetime.now(), ea=ea, n=n, type=type, fnames=fnames
+        )
         cb(ev)
 
     ### local types
@@ -1473,28 +1644,34 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             name: nullptr means name is unknown
         """
         logger.info("local_types_changed(ltc=%s, ordinal=%d, name=%s)", ltc, ordinal, name)
-        ev = local_types_changed_event(event_name="local_types_changed", ltc=ltc, ordinal=ordinal, name=name)
+        ev = local_types_changed_event(
+            event_name="local_types_changed", timestamp=datetime.now(), ltc=ltc, ordinal=ordinal, name=name
+        )
         cb(ev)
 
     def lt_udm_created(self, udtname: str, udm: ida_typeinf.udm_t) -> None:
         """Local type udt member has been added."""
         udm_model = UdmModel.from_udm_t(udm)
         logger.info("lt_udm_created(udtname=%s, udm=%s)", udtname, udm_model.model_dump_json())
-        ev = lt_udm_created_event(event_name="lt_udm_created", udtname=udtname, udm=udm_model)
+        ev = lt_udm_created_event(event_name="lt_udm_created", timestamp=datetime.now(), udtname=udtname, udm=udm_model)
         cb(ev)
 
     def lt_udm_deleted(self, udtname: str, udm_tid: int, udm: ida_typeinf.udm_t) -> None:
         """Local type udt member has been deleted."""
         udm_model = UdmModel.from_udm_t(udm)
         logger.info("lt_udm_deleted(udtname=%s, udm_tid=%d, udm=%s)", udtname, udm_tid, udm_model.model_dump_json())
-        ev = lt_udm_deleted_event(event_name="lt_udm_deleted", udtname=udtname, udm_tid=udm_tid, udm=udm_model)
+        ev = lt_udm_deleted_event(
+            event_name="lt_udm_deleted", timestamp=datetime.now(), udtname=udtname, udm_tid=udm_tid, udm=udm_model
+        )
         cb(ev)
 
     def lt_udm_renamed(self, udtname: str, udm: ida_typeinf.udm_t, oldname: str) -> None:
         """Local type udt member has been renamed."""
         udm_model = UdmModel.from_udm_t(udm)
         logger.info("lt_udm_renamed(udtname=%s, udm=%s, oldname=%s)", udtname, udm_model.model_dump_json(), oldname)
-        ev = lt_udm_renamed_event(event_name="lt_udm_renamed", udtname=udtname, udm=udm_model, oldname=oldname)
+        ev = lt_udm_renamed_event(
+            event_name="lt_udm_renamed", timestamp=datetime.now(), udtname=udtname, udm=udm_model, oldname=oldname
+        )
         cb(ev)
 
     def lt_udm_changed(
@@ -1515,7 +1692,12 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             udmnew_model.model_dump_json(),
         )
         ev = lt_udm_changed_event(
-            event_name="lt_udm_changed", udtname=udtname, udm_tid=udm_tid, udmold=udmold_model, udmnew=udmnew_model
+            event_name="lt_udm_changed",
+            timestamp=datetime.now(),
+            udtname=udtname,
+            udm_tid=udm_tid,
+            udmold=udmold_model,
+            udmnew=udmnew_model,
         )
         cb(ev)
 
@@ -1527,28 +1709,36 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             delta: Number of added/removed bytes.
         """
         logger.info("lt_udt_expanded(udtname=%s, udm_tid=%d, delta=%d)", udtname, udm_tid, delta)
-        ev = lt_udt_expanded_event(event_name="lt_udt_expanded", udtname=udtname, udm_tid=udm_tid, delta=delta)
+        ev = lt_udt_expanded_event(
+            event_name="lt_udt_expanded", timestamp=datetime.now(), udtname=udtname, udm_tid=udm_tid, delta=delta
+        )
         cb(ev)
 
     def lt_edm_created(self, enumname: str, edm: ida_typeinf.edm_t) -> None:
         """Local type enum member has been added."""
         edm_model = EdmModel.from_edm_t(edm)
         logger.info("lt_edm_created(enumname=%s, edm=%s)", enumname, edm_model.model_dump_json())
-        ev = lt_edm_created_event(event_name="lt_edm_created", enumname=enumname, edm=edm_model)
+        ev = lt_edm_created_event(
+            event_name="lt_edm_created", timestamp=datetime.now(), enumname=enumname, edm=edm_model
+        )
         cb(ev)
 
     def lt_edm_deleted(self, enumname: str, edm_tid: int, edm: ida_typeinf.edm_t) -> None:
         """Local type enum member has been deleted."""
         edm_model = EdmModel.from_edm_t(edm)
         logger.info("lt_edm_deleted(enumname=%s, edm_tid=%d, edm=%s)", enumname, edm_tid, edm_model.model_dump_json())
-        ev = lt_edm_deleted_event(event_name="lt_edm_deleted", enumname=enumname, edm_tid=edm_tid, edm=edm_model)
+        ev = lt_edm_deleted_event(
+            event_name="lt_edm_deleted", timestamp=datetime.now(), enumname=enumname, edm_tid=edm_tid, edm=edm_model
+        )
         cb(ev)
 
     def lt_edm_renamed(self, enumname: str, edm: ida_typeinf.edm_t, oldname: str) -> None:
         """Local type enum member has been renamed."""
         edm_model = EdmModel.from_edm_t(edm)
         logger.info("lt_edm_renamed(enumname=%s, edm=%s, oldname=%s)", enumname, edm_model.model_dump_json(), oldname)
-        ev = lt_edm_renamed_event(event_name="lt_edm_renamed", enumname=enumname, edm=edm_model, oldname=oldname)
+        ev = lt_edm_renamed_event(
+            event_name="lt_edm_renamed", timestamp=datetime.now(), enumname=enumname, edm=edm_model, oldname=oldname
+        )
         cb(ev)
 
     def lt_edm_changed(
@@ -1569,7 +1759,12 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             edmnew_model.model_dump_json(),
         )
         ev = lt_edm_changed_event(
-            event_name="lt_edm_changed", enumname=enumname, edm_tid=edm_tid, edmold=edmold_model, edmnew=edmnew_model
+            event_name="lt_edm_changed",
+            timestamp=datetime.now(),
+            enumname=enumname,
+            edm_tid=edm_tid,
+            edmold=edmold_model,
+            edmnew=edmnew_model,
         )
         cb(ev)
 
@@ -1579,7 +1774,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """Stack change points have been modified."""
         pfn_model = FuncModel.from_func_t(pfn)
         logger.info("stkpnts_changed(pfn=%s)", pfn_model.model_dump_json())
-        ev = stkpnts_changed_event(event_name="stkpnts_changed", pfn=pfn_model)
+        ev = stkpnts_changed_event(event_name="stkpnts_changed", timestamp=datetime.now(), pfn=pfn_model)
         cb(ev)
 
     def frame_created(self, func_ea: ida_idaapi.ea_t) -> None:
@@ -1588,7 +1783,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         See also idb_event::frame_deleted.
         """
         logger.info("frame_created(func_ea=%d)", func_ea)
-        ev = frame_created_event(event_name="frame_created", func_ea=func_ea)
+        ev = frame_created_event(event_name="frame_created", timestamp=datetime.now(), func_ea=func_ea)
         cb(ev)
 
     def frame_expanded(self, func_ea: ida_idaapi.ea_t, udm_tid: int, delta: int) -> None:
@@ -1599,7 +1794,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             delta: Number of added/removed bytes.
         """
         logger.info("frame_expanded(func_ea=%d, udm_tid=%d, delta=%d)", func_ea, udm_tid, delta)
-        ev = frame_expanded_event(event_name="frame_expanded", func_ea=func_ea, udm_tid=udm_tid, delta=delta)
+        ev = frame_expanded_event(
+            event_name="frame_expanded", timestamp=datetime.now(), func_ea=func_ea, udm_tid=udm_tid, delta=delta
+        )
         cb(ev)
 
     def frame_deleted(self, pfn: ida_funcs.func_t) -> None:
@@ -1609,28 +1806,34 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """
         pfn_model = FuncModel.from_func_t(pfn)
         logger.info("frame_deleted(pfn=%s)", pfn_model.model_dump_json())
-        ev = frame_deleted_event(event_name="frame_deleted", pfn=pfn_model)
+        ev = frame_deleted_event(event_name="frame_deleted", timestamp=datetime.now(), pfn=pfn_model)
         cb(ev)
 
     def frame_udm_created(self, func_ea: ida_idaapi.ea_t, udm: ida_typeinf.udm_t) -> None:
         """Frame member has been added."""
         udm_model = UdmModel.from_udm_t(udm)
         logger.info("frame_udm_created(func_ea=%d, udm=%s)", func_ea, udm_model.model_dump_json())
-        ev = frame_udm_created_event(event_name="frame_udm_created", func_ea=func_ea, udm=udm_model)
+        ev = frame_udm_created_event(
+            event_name="frame_udm_created", timestamp=datetime.now(), func_ea=func_ea, udm=udm_model
+        )
         cb(ev)
 
     def frame_udm_deleted(self, func_ea: ida_idaapi.ea_t, udm_tid: int, udm: ida_typeinf.udm_t) -> None:
         """Frame member has been deleted."""
         udm_model = UdmModel.from_udm_t(udm)
         logger.info("frame_udm_deleted(func_ea=%d, udm_tid=%d, udm=%s)", func_ea, udm_tid, udm_model.model_dump_json())
-        ev = frame_udm_deleted_event(event_name="frame_udm_deleted", func_ea=func_ea, udm_tid=udm_tid, udm=udm_model)
+        ev = frame_udm_deleted_event(
+            event_name="frame_udm_deleted", timestamp=datetime.now(), func_ea=func_ea, udm_tid=udm_tid, udm=udm_model
+        )
         cb(ev)
 
     def frame_udm_renamed(self, func_ea: ida_idaapi.ea_t, udm: ida_typeinf.udm_t, oldname: str) -> None:
         """Frame member has been renamed."""
         udm_model = UdmModel.from_udm_t(udm)
         logger.info("frame_udm_renamed(func_ea=%d, udm=%s, oldname=%s)", func_ea, udm_model.model_dump_json(), oldname)
-        ev = frame_udm_renamed_event(event_name="frame_udm_renamed", func_ea=func_ea, udm=udm_model, oldname=oldname)
+        ev = frame_udm_renamed_event(
+            event_name="frame_udm_renamed", timestamp=datetime.now(), func_ea=func_ea, udm=udm_model, oldname=oldname
+        )
         cb(ev)
 
     def frame_udm_changed(
@@ -1651,34 +1854,14 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             udmnew_model.model_dump_json(),
         )
         ev = frame_udm_changed_event(
-            event_name="frame_udm_changed", func_ea=func_ea, udm_tid=udm_tid, udmold=udmold_model, udmnew=udmnew_model
+            event_name="frame_udm_changed",
+            timestamp=datetime.now(),
+            func_ea=func_ea,
+            udm_tid=udm_tid,
+            udmold=udmold_model,
+            udmnew=udmnew_model,
         )
         cb(ev)
-
-
-# Remaining operation event classes
-
-
-class determined_main_event(BaseModel):
-
-    event_name: Literal["determined_main"]
-    main: int
-
-
-class extlang_changed_event(BaseModel):
-
-    event_name: Literal["extlang_changed"]
-    kind: int
-    el: Any
-    idx: int
-
-
-class idasgn_matched_ea_event(BaseModel):
-
-    event_name: Literal["idasgn_matched_ea"]
-    ea: int
-    name: str
-    lib_name: str
 
 
 class OplogPluginMod(ida_idaapi.plugmod_t):
