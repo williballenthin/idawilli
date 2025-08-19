@@ -13,7 +13,7 @@ import ida_dirtree
 import ida_segment
 import ida_typeinf
 
-from .oplog_events import (
+from oplog_events import (
     EdmModel,
     UdmModel,
     FuncModel,
