@@ -55,9 +55,6 @@ class FuncModel(BaseModel):
         )
 
 
-Func = ida_funcs.func_t | FuncModel
-
-
 class OpModel(BaseModel):
     """Pydantic model for ida_ua.op_t structure."""
 
@@ -99,9 +96,6 @@ class OpModel(BaseModel):
         )
 
 
-Op = ida_ua.op_t | OpModel
-
-
 class InsnModel(BaseModel):
     """Pydantic model for ida_ua.insn_t structure."""
 
@@ -135,9 +129,6 @@ class InsnModel(BaseModel):
             flags=insn.flags,
             ops=[OpModel.from_op_t(insn.ops[i]) for i in range(8)],
         )
-
-
-Insn = ida_ua.insn_t | InsnModel
 
 
 class SegmentModel(BaseModel):
@@ -242,9 +233,6 @@ class SegmentModel(BaseModel):
         )
 
 
-Segment = ida_segment.segment_t | SegmentModel
-
-
 class RangeModel(BaseModel):
     """Pydantic model for ida_range.range_t structure."""
 
@@ -267,9 +255,6 @@ class RangeModel(BaseModel):
         )
 
 
-Range = ida_range.range_t | RangeModel
-
-
 class UdmModel(BaseModel):
     """Pydantic model for ida_typeinf.udm_t structure."""
 
@@ -277,7 +262,7 @@ class UdmModel(BaseModel):
     size: int
     name: str
     cmt: str
-    tid: str  # from udm.type.get_tid()
+    tid: int  # from udm.type.get_tid()
     repr: str
     effalign: int
     tafld_bits: int
@@ -296,9 +281,6 @@ class UdmModel(BaseModel):
             tafld_bits=udm.tafld_bits,
             fda=udm.fda,
         )
-
-
-Udm = ida_typeinf.udm_t | UdmModel
 
 
 class EdmModel(BaseModel):
@@ -322,9 +304,6 @@ class EdmModel(BaseModel):
             value=value,
             tid=tid,
         )
-
-
-Edm = ida_typeinf.edm_t | EdmModel
 
 
 class adding_segm_event(BaseModel):
@@ -901,3 +880,86 @@ class idasgn_matched_ea_event(BaseModel):
     ea: int
     name: str
     lib_name: str
+
+
+idb_event = (
+    renamed_event |
+    make_code_event |
+    make_data_event |
+    func_added_event |
+    segm_added_event |
+    segm_moved_event |
+    ti_changed_event |
+    adding_segm_event |
+    changing_ti_event |
+    cmt_changed_event |
+    sgr_changed_event |
+    sgr_deleted_event |
+    byte_patched_event |
+    changing_cmt_event |
+    dirtree_link_event |
+    dirtree_move_event |
+    dirtree_rank_event |
+    func_deleted_event |
+    func_updated_event |
+    segm_deleted_event |
+    set_func_end_event |
+    allsegs_moved_event |
+    deleting_func_event |
+    deleting_segm_event |
+    dirtree_mkdir_event |
+    dirtree_rmdir_event |
+    frame_created_event |
+    frame_deleted_event |
+    op_ti_changed_event |
+    changing_op_ti_event |
+    frame_expanded_event |
+    lt_edm_changed_event |
+    lt_edm_created_event |
+    lt_edm_deleted_event |
+    lt_edm_renamed_event |
+    lt_udm_changed_event |
+    lt_udm_created_event |
+    lt_udm_deleted_event |
+    lt_udm_renamed_event |
+    set_func_start_event |
+    destroyed_items_event |
+    determined_main_event |
+    dirtree_rminode_event |
+    extlang_changed_event |
+    lt_udt_expanded_event |
+    op_type_changed_event |
+    stkpnts_changed_event |
+    tryblks_updated_event |
+    bookmark_changed_event |
+    changing_op_type_event |
+    deleting_tryblks_event |
+    segm_end_changed_event |
+    updating_tryblks_event |
+    changing_segm_end_event |
+    extra_cmt_changed_event |
+    frame_udm_changed_event |
+    frame_udm_created_event |
+    frame_udm_deleted_event |
+    frame_udm_renamed_event |
+    func_tail_deleted_event |
+    idasgn_matched_ea_event |
+    range_cmt_changed_event |
+    segm_name_changed_event |
+    changing_range_cmt_event |
+    changing_segm_name_event |
+    deleting_func_tail_event |
+    dirtree_segm_moved_event |
+    func_noret_changed_event |
+    func_tail_appended_event |
+    item_color_changed_event |
+    segm_attrs_updated_event |
+    segm_class_changed_event |
+    segm_start_changed_event |
+    tail_owner_changed_event |
+    thunk_func_created_event |
+    callee_addr_changed_event |
+    changing_segm_class_event |
+    changing_segm_start_event |
+    local_types_changed_event
+)
