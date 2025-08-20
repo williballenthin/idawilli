@@ -512,6 +512,7 @@ class changing_cmt_event(BaseModel):
     timestamp: datetime
     ea: int
     repeatable_cmt: bool
+    # TODO: add existing comment
     newcmt: str
 
 
@@ -519,6 +520,7 @@ class cmt_changed_event(BaseModel):
     event_name: Literal["cmt_changed"]
     timestamp: datetime
     ea: int
+    # TODO: add the new comment string
     repeatable_cmt: bool
 
 
@@ -692,6 +694,7 @@ class changing_ti_event(BaseModel):
     event_name: Literal["changing_ti"]
     timestamp: datetime
     ea: int
+    # TODO add existing TI
     new_type: Any
     new_fnames: Any
 
