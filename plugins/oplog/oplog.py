@@ -1,8 +1,10 @@
 import logging
 from datetime import datetime
+from dataclasses import dataclass
 
 from PyQt5 import QtCore
 
+import ida_name
 import ida_lines
 import ida_funcs
 import ida_idaapi
@@ -63,7 +65,77 @@ def addr_from_tag(tag: str) -> int:
         # Parse as hex address (IDA uses qsscanf with "%a" format)
         return int(addr_hex, 16)
     except ValueError:
-        return ida_idaapi.BADADD
+        raise
+
+
+def get_tagged_line_section_byte_offsets(section: ida_kernwin.tagged_line_section_t) -> tuple[int, int]:
+    # tagged_line_section_t.byte_offsets is not exposed by swig
+    # so we parse directly from the string representation (puke)
+    s = str(section)
+    text_start_index = s.index("text_start=")
+    text_end_index = s.index("text_end=")
+
+    # TODO: verify with multi-byte UTF-8, since these are byte offsets, but we're operating on Python strings
+    text_start_s = s[text_start_index + len("text_start="):].partition(",")[0]
+    text_end_s = s[text_end_index + len("text_end="):].partition("}")[0]
+
+    return int(text_start_s), int(text_end_s)
+
+
+@dataclass
+class TaggedLineSection:
+    tag: int
+    string: str
+    # valid when the found tag section starts with an embedded address
+    address: int | None
+
+
+def get_current_tag(line: str, x: int) -> TaggedLineSection:
+    ret = TaggedLineSection(ida_lines.COLOR_DEFAULT, line, None)
+
+    tls = ida_kernwin.tagged_line_sections_t()
+    if not ida_kernwin.parse_tagged_line_sections(tls, line):
+        return ret
+
+    # find any section at the X coordinate
+    current_section = tls.nearest_at(x, 0)  # 0 = any tag
+    if not current_section:
+        # TODO: we only want the section that isn't tagged
+        # while there might be a section totally before or totally after x.
+        return ret
+
+    ret.tag = current_section.tag
+    boring_line = ida_lines.tag_remove(line)
+    ret.string = boring_line[current_section.start:current_section.start + current_section.length]
+
+    # try to find an embedded address at the start of the current segment
+    current_section_start, _ = get_tagged_line_section_byte_offsets(current_section)
+    addr_section = tls.nearest_before(current_section, x, ida_lines.COLOR_ADDR)
+    if addr_section:
+        # expect this layout
+        #         ON SYMBOL ON ADDR 0011223344...EEFF "foo"      OFF SYMBOL
+        # index   00 01     02 03   04 ...         19  20...N-1  N   N+1
+        #                   ^ current_section_start         ^ current_section_end
+        #                                              ^ addr_section_start and end (zero length)
+        #                   ^ addr_tag_start
+        #
+        # COLOR_ADDR sections are zero-length and contain embedded addresses
+
+        addr_section_start, _ = get_tagged_line_section_byte_offsets(addr_section)
+        # addr_section_start initially points just after the address data (ON ADDR 001122...FF)
+        # so rewind to the start of the tag (16 bytes of hex integer, 2 bytes of tags "ON ADDR")
+        addr_tag_start = addr_section_start - (ida_lines.COLOR_ADDR_SIZE + 2)
+        assert addr_tag_start >= 0
+
+        # and this should match current_section_start, since that points just after the tag "ON SYMBOL"
+        # if it doesn't, we're dealing with an edge case we didn't prepare for
+        # maybe like multiple ADDR tags or something.
+        # skip those and stick to things we know.
+        if current_section_start == addr_tag_start:
+            addr = addr_from_tag(line[addr_tag_start:])
+            ret.address = addr
+
+    return ret
 
 
 class oplog_viewer_t(ida_kernwin.simplecustviewer_t):
@@ -106,7 +178,6 @@ class oplog_viewer_t(ida_kernwin.simplecustviewer_t):
         return f"{pretty_date(ev.timestamp)}: local variable renamed: {ev.oldname} → {ev.udm.name} in {func_name}@{self.render_address(ev.func_ea)}"
 
     def render(self):
-        self.AddLine(COLSTR(ida_lines.tag_addr(0x401000) + "foo", ida_lines.SCOLOR_PREFIX))
         for event in reversed(self.idb_events.events):
             if event.event_name == "renamed":
                 self.AddLine(self.render_renamed(event))
@@ -114,49 +185,27 @@ class oplog_viewer_t(ida_kernwin.simplecustviewer_t):
                 self.AddLine(self.render_frame_udm_renamed(event))
             else:
                 self.AddLine(f"{event.timestamp.isoformat('T')}: {event.event_name}")
+        #self.AddLine(COLSTR(ida_lines.tag_addr(0x10001000) + "...", ida_lines.SCOLOR_PREFIX))
 
     def OnDblClick(self, shift):
-        """
-        User dbl-clicked in the view
-        @param shift: Shift flag
-        @return: Boolean. True if you handled the event
-        """
         line = self.GetCurrentLine()
         if not line:
             return False
 
-        line_sections = ida_kernwin.tagged_line_sections_t()
-        ida_kernwin.parse_tagged_line_sections(line_sections, line)
+        _linen, x, _y = self.GetPos()
 
-        linen, x, y = self.GetPos()
+        section = get_current_tag(line, x)
+        if section.address is not None:
+            print(f"jumping to address {section.address:x}")
+            ida_kernwin.jumpto(section.address)
 
-        import binascii
-        print(binascii.hexlify(line.encode("ascii")))
+        item_address = ida_name.get_name_ea(0, section.string)
+        if item_address != ida_idaapi.BADADDR:
+            logger.debug(f"found address for '{section.string}': {item_address:x}")
+            print(f"jumping to address {item_address:x}")
+            ida_kernwin.jumpto(item_address)
 
-        tls = ida_kernwin.tagged_line_sections_t()
-        if ida_kernwin.parse_tagged_line_sections(tls, line):
-            # Method 2: Find within a containing section (like from tilist.cpp:2481-2482)
-            # First find any section at the X coordinate
-            tag_sec = tls.nearest_at(x, 0)  # 0 = any tag
-            if tag_sec:
-                # Find nearest COLOR_ADDR before this position within the section
-                addr_sec = tls.nearest_before(tag_sec, x, ida_lines.COLOR_ADDR)
-                if addr_sec:
-                    # Extract address from the COLOR_ADDR section
-                    # COLOR_ADDR sections are zero-length and contain embedded addresses
-                    print(f"Found COLOR_ADDR at position {addr_sec.start}")
-
-        section = line_sections.nearest_at(x)
-        print(section)
-        print("xxx", ida_lines.tag_remove(line)[section.start:section.start + section.length])
-
-        #addr_sections = ida_kernwin.tagged_line_sections_t()
-        print(line_sections.nearest_before(section, x, tag=ida_lines.COLOR_ADDR))
-        #print("yyy", addr_sections, len(addr_sections))
-        #for i in range(len(addr_sections)):
-        #    print(addr_sections[i])
-
-        return True
+        return True  # handled
 
 class create_oplog_widget_action_handler_t(ida_kernwin.action_handler_t):
     def __init__(self, plugmod: "oplog_plugmod_t", *args, **kwargs) -> None:
