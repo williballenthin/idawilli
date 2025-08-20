@@ -5,30 +5,86 @@ import ida_lines
 from ida_lines import COLSTR, tag_addr
 
 from oplog_events import (
-    idb_event, renamed_event, frame_udm_renamed_event,
-    adding_segm_event, segm_added_event, deleting_segm_event, segm_deleted_event,
-    changing_segm_start_event, segm_start_changed_event, changing_segm_end_event, segm_end_changed_event,
-    changing_segm_name_event, segm_name_changed_event, changing_segm_class_event, segm_class_changed_event,
-    segm_attrs_updated_event, segm_moved_event, allsegs_moved_event,
-    func_added_event, func_updated_event, set_func_start_event, set_func_end_event,
-    deleting_func_event, func_deleted_event, thunk_func_created_event,
-    func_tail_appended_event, deleting_func_tail_event, func_tail_deleted_event,
-    tail_owner_changed_event, func_noret_changed_event,
-    updating_tryblks_event, tryblks_updated_event, deleting_tryblks_event,
-    changing_cmt_event, cmt_changed_event, changing_range_cmt_event, range_cmt_changed_event,
-    extra_cmt_changed_event, sgr_changed_event, sgr_deleted_event,
-    make_code_event, make_data_event, destroyed_items_event,
-    byte_patched_event, item_color_changed_event, callee_addr_changed_event,
-    bookmark_changed_event, changing_op_type_event, op_type_changed_event,
-    dirtree_mkdir_event, dirtree_rmdir_event, dirtree_link_event, dirtree_move_event,
-    dirtree_rank_event, dirtree_rminode_event, dirtree_segm_moved_event,
-    changing_ti_event, ti_changed_event, changing_op_ti_event, op_ti_changed_event,
-    local_types_changed_event, lt_udm_created_event, lt_udm_deleted_event, lt_udm_renamed_event,
-    lt_udm_changed_event, lt_udt_expanded_event, lt_edm_created_event, lt_edm_deleted_event,
-    lt_edm_renamed_event, lt_edm_changed_event,
-    stkpnts_changed_event, frame_created_event, frame_expanded_event, frame_deleted_event,
-    frame_udm_created_event, frame_udm_deleted_event, frame_udm_changed_event,
-    determined_main_event, extlang_changed_event, idasgn_matched_ea_event
+    idb_event,
+    renamed_event,
+    make_code_event,
+    make_data_event,
+    func_added_event,
+    segm_added_event,
+    segm_moved_event,
+    ti_changed_event,
+    adding_segm_event,
+    changing_ti_event,
+    cmt_changed_event,
+    sgr_changed_event,
+    sgr_deleted_event,
+    byte_patched_event,
+    changing_cmt_event,
+    dirtree_link_event,
+    dirtree_move_event,
+    dirtree_rank_event,
+    func_deleted_event,
+    func_updated_event,
+    segm_deleted_event,
+    set_func_end_event,
+    allsegs_moved_event,
+    deleting_func_event,
+    deleting_segm_event,
+    dirtree_mkdir_event,
+    dirtree_rmdir_event,
+    frame_created_event,
+    frame_deleted_event,
+    op_ti_changed_event,
+    changing_op_ti_event,
+    frame_expanded_event,
+    lt_edm_changed_event,
+    lt_edm_created_event,
+    lt_edm_deleted_event,
+    lt_edm_renamed_event,
+    lt_udm_changed_event,
+    lt_udm_created_event,
+    lt_udm_deleted_event,
+    lt_udm_renamed_event,
+    set_func_start_event,
+    destroyed_items_event,
+    determined_main_event,
+    dirtree_rminode_event,
+    extlang_changed_event,
+    lt_udt_expanded_event,
+    op_type_changed_event,
+    stkpnts_changed_event,
+    tryblks_updated_event,
+    bookmark_changed_event,
+    changing_op_type_event,
+    deleting_tryblks_event,
+    segm_end_changed_event,
+    updating_tryblks_event,
+    changing_segm_end_event,
+    extra_cmt_changed_event,
+    frame_udm_changed_event,
+    frame_udm_created_event,
+    frame_udm_deleted_event,
+    frame_udm_renamed_event,
+    func_tail_deleted_event,
+    idasgn_matched_ea_event,
+    range_cmt_changed_event,
+    segm_name_changed_event,
+    changing_range_cmt_event,
+    changing_segm_name_event,
+    deleting_func_tail_event,
+    dirtree_segm_moved_event,
+    func_noret_changed_event,
+    func_tail_appended_event,
+    item_color_changed_event,
+    segm_attrs_updated_event,
+    segm_class_changed_event,
+    segm_start_changed_event,
+    tail_owner_changed_event,
+    thunk_func_created_event,
+    callee_addr_changed_event,
+    changing_segm_class_event,
+    changing_segm_start_event,
+    local_types_changed_event,
 )
 
 
@@ -345,7 +401,7 @@ def render_callee_addr_changed(ev: callee_addr_changed_event):
 
 
 def render_bookmark_changed(ev: bookmark_changed_event):
-    return f"{pretty_date(ev.timestamp)}: bookmark changed: {render_address(ev.ea)} \"{ev.desc}\""
+    return f'{pretty_date(ev.timestamp)}: bookmark changed: {render_address(ev.ea)} "{ev.desc}"'
 
 
 def render_changing_op_type(ev: changing_op_type_event):
@@ -406,7 +462,7 @@ def render_op_ti_changed(ev: op_ti_changed_event):
 
 
 def render_local_types_changed(ev: local_types_changed_event):
-    return f"{pretty_date(ev.timestamp)}: local types changed: {codname(ev.name)} (ordinal: {ev.ordinal})"
+    return f"{pretty_date(ev.timestamp)}: local types changed: {codname(ev.name or "")} (ordinal: {ev.ordinal})"
 
 
 def render_lt_udm_created(ev: lt_udm_created_event):
@@ -482,7 +538,9 @@ def render_frame_udm_created(ev: frame_udm_created_event):
     if func_name:
         return f"{pretty_date(ev.timestamp)}: local variable created: {cname(ev.udm.name)} in {cname(func_name, ev.func_ea)}"
     else:
-        return f"{pretty_date(ev.timestamp)}: local variable created: {cname(ev.udm.name)} in {render_address(ev.func_ea)}"
+        return (
+            f"{pretty_date(ev.timestamp)}: local variable created: {cname(ev.udm.name)} in {render_address(ev.func_ea)}"
+        )
 
 
 def render_frame_udm_deleted(ev: frame_udm_deleted_event):

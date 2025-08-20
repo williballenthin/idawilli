@@ -1,3 +1,4 @@
+import zlib
 import logging
 from dataclasses import dataclass
 
@@ -5,9 +6,12 @@ import ida_name
 import ida_lines
 import ida_idaapi
 import ida_kernwin
+import ida_netnode
 from PyQt5 import QtCore
+from pydantic import RootModel
 
 from oplog_hooks import IDBChangedHook
+from oplog_events import idb_event
 from oplog_render import render_event
 
 logger = logging.getLogger(__name__)
@@ -154,7 +158,7 @@ class oplog_viewer_t(ida_kernwin.simplecustviewer_t):
             line = render_event(event)
             if last_line_prefix:
                 if line.startswith(last_line_prefix):
-                    line = (" " * len(last_line_prefix)) + line[len(last_line_prefix):]
+                    line = (" " * len(last_line_prefix)) + line[len(last_line_prefix) :]
                 else:
                     last_line_prefix = line.partition(":")[0] + ":"
             else:
@@ -206,27 +210,18 @@ class create_desktop_widget_hooks_t(ida_kernwin.UI_Hooks):
             return self.plugmod.create_viewer().GetWidget()
 
 
-import zlib
-from pydantic import RootModel
-from oplog_events import idb_event
-
-
 EventList = RootModel[list[idb_event]]
 
 
 def serialize_events(events: list[idb_event]) -> bytes:
-    l = EventList(events)
-    doc = l.model_dump_json()
+    doc = EventList(events).model_dump_json()
     buf = doc.encode("utf-8")
     return zlib.compress(buf)
 
 
-def deserialize_events(buf: bytes) ->list[idb_event]:
+def deserialize_events(buf: bytes) -> list[idb_event]:
     return EventList.model_validate_json(zlib.decompress(buf)).root
 
-
-import ida_idp
-import ida_netnode
 
 OUR_NETNODE = "$ com.williballenthin.idawilli.oplog"
 
