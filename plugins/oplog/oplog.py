@@ -206,12 +206,78 @@ class create_desktop_widget_hooks_t(ida_kernwin.UI_Hooks):
             return self.plugmod.create_viewer().GetWidget()
 
 
+import zlib
+from pydantic import RootModel
+from oplog_events import idb_event
+
+
+EventList = RootModel[list[idb_event]]
+
+
+def serialize_events(events: list[idb_event]) -> bytes:
+    l = EventList(events)
+    doc = l.model_dump_json()
+    buf = doc.encode("utf-8")
+    return zlib.compress(buf)
+
+
+def deserialize_events(buf: bytes) ->list[idb_event]:
+    return EventList.model_validate_json(zlib.decompress(buf)).root
+
+
+import ida_idp
+import ida_netnode
+
+OUR_NETNODE = "$ com.williballenthin.idawilli.oplog"
+
+
+def save_events(events: list[idb_event]):
+    buf = serialize_events(events)
+    node = ida_netnode.netnode(OUR_NETNODE)
+    node.setblob(buf, 0, "I")
+
+    logger.info("saved %d events", len(events))
+
+
+def load_events():
+    node = ida_netnode.netnode(OUR_NETNODE)
+    if not node:
+        logger.info("no existing events (no node)")
+        return Events([])
+
+    buf = node.getblob(0, "I")
+    if not buf:
+        logger.info("no existing events (no data)")
+        return Events([])
+
+    events = deserialize_events(buf)
+    logger.info("loaded %d events", len(events))
+    return events
+
+
+class IDB_Closing_Hooks(ida_idp.IDB_Hooks):
+    def __init__(self, idb_hooks: IDBChangedHook, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.idb_hooks = idb_hooks
+
+    def closebase(self) -> None:
+        """The database will be closed now."""
+        logger.info("closebase")
+        save_events(self.idb_hooks.events)
+
+    def savebase(self) -> None:
+        """The database is being saved."""
+        logger.info("savebase")
+        save_events(self.idb_hooks.events)
+
+
 class oplog_plugmod_t(ida_idaapi.plugmod_t):
     ACTION_NAME = "oplog:create"
     MENU_PATH = "View/Open subviews/Strings"
 
     def __init__(self):
         self.idb_hooks: IDBChangedHook | None = None
+        self.closing_hooks: IDB_Closing_Hooks | None = None
         self.viewer: oplog_viewer_t | None = None
         self.installation_hooks: create_desktop_widget_hooks_t | None = None
 
@@ -249,30 +315,46 @@ class oplog_plugmod_t(ida_idaapi.plugmod_t):
             self.installation_hooks.unhook()
 
     def register_idb_hooks(self):
-        self.idb_hooks = IDBChangedHook()
+        events = load_events()
+        self.idb_hooks = IDBChangedHook(events)
         self.idb_hooks.hook()
 
     def unregister_idb_hooks(self):
         if self.idb_hooks:
             self.idb_hooks.unhook()
 
+    def register_closing_hooks(self):
+        assert self.idb_hooks is not None
+        self.closing_hooks = IDB_Closing_Hooks(self.idb_hooks)
+        self.closing_hooks.hook()
+
+    def unregister_closing_hooks(self):
+        if self.closing_hooks:
+            self.closing_hooks.unhook()
+
     def init(self):
         # do things here that will always run,
         #  and don't require the menu entry (edit > plugins > ...) being selected.
         #
         # note: IDA doesn't call init, we do in __init__
-        self.register_open_action()
-        self.register_autoinst_hooks()
         self.register_idb_hooks()
+        self.register_autoinst_hooks()
+        self.register_open_action()
+        self.register_closing_hooks()
+        # TODO: log also to a netnode
+        # TODO: restore from a netnode
+        # TODO: confirm what happens when a new file is opened/closed. reset the events.
 
     def run(self, arg):
         # do things here that users invoke via the menu entry (edit > plugins > ...)
-        pass
+        assert self.idb_hooks is not None
+        save_events(self.idb_hooks.events)
 
     def term(self):
+        self.unregister_closing_hooks()
         self.unregister_open_action()
-        self.unregister_idb_hooks()
         self.unregister_autoinst_hooks()
+        self.unregister_idb_hooks()
         self.events.clear()
 
 

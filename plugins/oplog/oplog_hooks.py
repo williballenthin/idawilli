@@ -106,9 +106,9 @@ logger = logging.getLogger(__name__)
 
 
 class IDBChangedHook(ida_idp.IDB_Hooks):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, initial_events: list[idb_event], *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.events: list[idb_event] = []
+        self.events: list[idb_event] = initial_events
         self.has_new = threading.Event()
 
     def _add_event(self, event: idb_event):
