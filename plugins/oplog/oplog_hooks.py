@@ -784,8 +784,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
     def changing_ti(
         self,
         ea: ida_idaapi.ea_t,
-        new_type,
-        new_fnames,
+        new_type: bytes,
+        new_fnames: bytes,
     ) -> None:
         """An item typestring (C/C++ prototype) is to be changed."""
         logger.info("changing_ti(ea=%d, new_type=%s, new_fnames=%s)", ea, new_type, new_fnames)
@@ -794,7 +794,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         )
         self._add_event(ev)
 
-    def ti_changed(self, ea: ida_idaapi.ea_t, type, fnames) -> None:
+    def ti_changed(self, ea: ida_idaapi.ea_t, type: bytes, fnames: bytes) -> None:
         """An item typestring (C/C++ prototype) has been changed."""
         logger.info("ti_changed(ea=%d, type=%s, fnames=%s)", ea, type, fnames)
         ev = ti_changed_event(event_name="ti_changed", timestamp=datetime.now(), ea=ea, type=type, fnames=fnames)
@@ -804,8 +804,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         self,
         ea: ida_idaapi.ea_t,
         n: int,
-        new_type,
-        new_fnames,
+        new_type: bytes,
+        new_fnames: bytes,
     ) -> None:
         """An operand typestring (c/c++ prototype) is to be changed."""
         logger.info(
@@ -824,8 +824,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         self,
         ea: ida_idaapi.ea_t,
         n: int,
-        type,
-        fnames,
+        type: bytes,
+        fnames: bytes,
     ) -> None:
         """An operand typestring (c/c++ prototype) has been changed."""
         logger.info("op_ti_changed(ea=%d, n=%d, type=%s, fnames=%s)", ea, n, type, fnames)
