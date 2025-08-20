@@ -147,8 +147,20 @@ class oplog_viewer_t(ida_kernwin.simplecustviewer_t):
         self.timer.stop()
 
     def render(self):
+        self.ClearLines()
+        last_line_prefix = ""
         for event in reversed(self.idb_events.events):
-            self.AddLine(render_event(event))
+            # group the events with the same fuzzy timestamp ("2 minutes ago")
+            line = render_event(event)
+            if last_line_prefix:
+                if line.startswith(last_line_prefix):
+                    line = (" " * len(last_line_prefix)) + line[len(last_line_prefix):]
+                else:
+                    last_line_prefix = line.partition(":")[0] + ":"
+            else:
+                last_line_prefix = line.partition(":")[0] + ":"
+
+            self.AddLine(line)
 
         # self.AddLine(COLSTR(ida_lines.tag_addr(0x10001000) + "...", ida_lines.SCOLOR_PREFIX))
 
@@ -161,13 +173,11 @@ class oplog_viewer_t(ida_kernwin.simplecustviewer_t):
 
         section = get_current_tag(line, x)
         if section.address is not None:
-            print(f"jumping to address {section.address:x}")
             ida_kernwin.jumpto(section.address)
 
         item_address = ida_name.get_name_ea(0, section.string)
         if item_address != ida_idaapi.BADADDR:
             logger.debug(f"found address for '{section.string}': {item_address:x}")
-            print(f"jumping to address {item_address:x}")
             ida_kernwin.jumpto(item_address)
 
         return True  # handled
