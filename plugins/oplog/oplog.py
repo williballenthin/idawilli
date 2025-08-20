@@ -55,6 +55,17 @@ def pretty_date(time: datetime):
     return str(day_diff // 365) + " years ago"
 
 
+def addr_from_tag(tag: str) -> int:
+    assert tag.startswith(ida_lines.SCOLOR_ON + ida_lines.SCOLOR_ADDR)
+    addr_hex = tag[2:2 + ida_lines.COLOR_ADDR_SIZE]
+
+    try:
+        # Parse as hex address (IDA uses qsscanf with "%a" format)
+        return int(addr_hex, 16)
+    except ValueError:
+        return ida_idaapi.BADADD
+
+
 class oplog_viewer_t(ida_kernwin.simplecustviewer_t):
     TITLE = "oplog"
 
@@ -95,6 +106,7 @@ class oplog_viewer_t(ida_kernwin.simplecustviewer_t):
         return f"{pretty_date(ev.timestamp)}: local variable renamed: {ev.oldname} → {ev.udm.name} in {func_name}@{self.render_address(ev.func_ea)}"
 
     def render(self):
+        self.AddLine(COLSTR(ida_lines.tag_addr(0x401000) + "foo", ida_lines.SCOLOR_PREFIX))
         for event in reversed(self.idb_events.events):
             if event.event_name == "renamed":
                 self.AddLine(self.render_renamed(event))
@@ -117,6 +129,22 @@ class oplog_viewer_t(ida_kernwin.simplecustviewer_t):
         ida_kernwin.parse_tagged_line_sections(line_sections, line)
 
         linen, x, y = self.GetPos()
+
+        import binascii
+        print(binascii.hexlify(line.encode("ascii")))
+
+        tls = ida_kernwin.tagged_line_sections_t()
+        if ida_kernwin.parse_tagged_line_sections(tls, line):
+            # Method 2: Find within a containing section (like from tilist.cpp:2481-2482)
+            # First find any section at the X coordinate
+            tag_sec = tls.nearest_at(x, 0)  # 0 = any tag
+            if tag_sec:
+                # Find nearest COLOR_ADDR before this position within the section
+                addr_sec = tls.nearest_before(tag_sec, x, ida_lines.COLOR_ADDR)
+                if addr_sec:
+                    # Extract address from the COLOR_ADDR section
+                    # COLOR_ADDR sections are zero-length and contain embedded addresses
+                    print(f"Found COLOR_ADDR at position {addr_sec.start}")
 
         section = line_sections.nearest_at(x)
         print(section)
