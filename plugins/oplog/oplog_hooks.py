@@ -1,6 +1,5 @@
 import logging
 import threading
-from typing import Any
 from datetime import datetime
 
 import ida_ua
@@ -21,6 +20,7 @@ from oplog_events import (
     InsnModel,
     RangeModel,
     SegmentModel,
+    idb_event,
     renamed_event,
     make_code_event,
     make_data_event,
@@ -100,7 +100,6 @@ from oplog_events import (
     changing_segm_class_event,
     changing_segm_start_event,
     local_types_changed_event,
-    idb_event,
 )
 
 logger = logging.getLogger(__name__)

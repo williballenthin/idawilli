@@ -1,23 +1,22 @@
 import logging
 from dataclasses import dataclass
 
-from PyQt5 import QtCore
-
 import ida_name
 import ida_lines
 import ida_idaapi
 import ida_kernwin
-from ida_lines import COLSTR
+from PyQt5 import QtCore
 
 from oplog_hooks import IDBChangedHook
 from oplog_render import render_event
 
 logger = logging.getLogger(__name__)
 
+
 def addr_from_tag(raw: bytes) -> int:
     assert raw[0] == 0x01  # ida_lines.COLOR_ON
     assert raw[1] == ida_lines.COLOR_ADDR
-    addr_hex = raw[2:2 + ida_lines.COLOR_ADDR_SIZE].decode("ascii")
+    addr_hex = raw[2 : 2 + ida_lines.COLOR_ADDR_SIZE].decode("ascii")
 
     try:
         # Parse as hex address (IDA uses qsscanf with "%a" format)
@@ -33,8 +32,8 @@ def get_tagged_line_section_byte_offsets(section: ida_kernwin.tagged_line_sectio
     text_start_index = s.index("text_start=")
     text_end_index = s.index("text_end=")
 
-    text_start_s = s[text_start_index + len("text_start="):].partition(",")[0]
-    text_end_s = s[text_end_index + len("text_end="):].partition("}")[0]
+    text_start_s = s[text_start_index + len("text_start=") :].partition(",")[0]
+    text_end_s = s[text_end_index + len("text_end=") :].partition("}")[0]
 
     return int(text_start_s), int(text_end_s)
 
@@ -63,7 +62,7 @@ def get_current_tag(line: str, x: int) -> TaggedLineSection:
 
     ret.tag = current_section.tag
     boring_line = ida_lines.tag_remove(line)
-    ret.string = boring_line[current_section.start:current_section.start + current_section.length]
+    ret.string = boring_line[current_section.start : current_section.start + current_section.length]
 
     # try to find an embedded address at the start of the current segment
     current_section_start, _ = get_tagged_line_section_byte_offsets(current_section)
@@ -80,17 +79,17 @@ def get_current_tag(line: str, x: int) -> TaggedLineSection:
 
         addr_section_start, _ = get_tagged_line_section_byte_offsets(addr_section)
 
-        #print(boring_line)
-        #print(line.encode("utf-8").hex())
-        #print(("  " * current_section_start) + "^")
-        #print(("  " * addr_section_start) + "*")
-        #print(current_section_start)
-        #print(addr_section_start)
+        # print(boring_line)
+        # print(line.encode("utf-8").hex())
+        # print(("  " * current_section_start) + "^")
+        # print(("  " * addr_section_start) + "*")
+        # print(current_section_start)
+        # print(addr_section_start)
 
         # addr_section_start initially points just after the address data (ON ADDR 001122...FF)
         # so rewind to the start of the tag (16 bytes of hex integer, 2 bytes of tags "ON ADDR")
         addr_tag_start = addr_section_start - (ida_lines.COLOR_ADDR_SIZE + 2)
-        #print(("  " * addr_tag_start) + "%")
+        # print(("  " * addr_tag_start) + "%")
         assert addr_tag_start >= 0
 
         # and this should match current_section_start, since that points just after the tag "ON SYMBOL"
@@ -112,7 +111,7 @@ def get_current_tag(line: str, x: int) -> TaggedLineSection:
             # The correct fix is probably considering anything with tags in it to be raw bytes,
             # though this is probably inconvenient.
             raw = line.encode("utf-8")
-            addr = addr_from_tag(raw[addr_tag_start:addr_tag_start + ida_lines.COLOR_ADDR_SIZE + 2])
+            addr = addr_from_tag(raw[addr_tag_start : addr_tag_start + ida_lines.COLOR_ADDR_SIZE + 2])
             ret.address = addr
 
     return ret
@@ -151,7 +150,7 @@ class oplog_viewer_t(ida_kernwin.simplecustviewer_t):
         for event in reversed(self.idb_events.events):
             self.AddLine(render_event(event))
 
-        #self.AddLine(COLSTR(ida_lines.tag_addr(0x10001000) + "...", ida_lines.SCOLOR_PREFIX))
+        # self.AddLine(COLSTR(ida_lines.tag_addr(0x10001000) + "...", ida_lines.SCOLOR_PREFIX))
 
     def OnDblClick(self, shift):
         line = self.GetCurrentLine()
@@ -172,6 +171,7 @@ class oplog_viewer_t(ida_kernwin.simplecustviewer_t):
             ida_kernwin.jumpto(item_address)
 
         return True  # handled
+
 
 class create_oplog_widget_action_handler_t(ida_kernwin.action_handler_t):
     def __init__(self, plugmod: "oplog_plugmod_t", *args, **kwargs) -> None:
@@ -209,23 +209,21 @@ class oplog_plugmod_t(ida_idaapi.plugmod_t):
         self.init()
 
     def create_viewer(self) -> oplog_viewer_t:
+        assert self.idb_hooks is not None
         self.viewer = oplog_viewer_t(self.idb_hooks)
-        assert(self.viewer.Create())
-        assert(self.viewer.Show())
+        assert self.viewer.Create()
+        assert self.viewer.Show()
         return self.viewer
 
     def register_open_action(self):
         ida_kernwin.register_action(
             ida_kernwin.action_desc_t(
-                self.ACTION_NAME,
-                oplog_viewer_t.TITLE,
-                create_oplog_widget_action_handler_t(self)))
+                self.ACTION_NAME, oplog_viewer_t.TITLE, create_oplog_widget_action_handler_t(self)
+            )
+        )
 
         # TODO: add icon
-        ida_kernwin.attach_action_to_menu(
-            self.MENU_PATH,
-            self.ACTION_NAME,
-            ida_kernwin.SETMENU_APP)
+        ida_kernwin.attach_action_to_menu(self.MENU_PATH, self.ACTION_NAME, ida_kernwin.SETMENU_APP)
 
     def unregister_open_action(self):
         ida_kernwin.unregister_action(self.ACTION_NAME)

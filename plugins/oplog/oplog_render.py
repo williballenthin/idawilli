@@ -1,10 +1,10 @@
 from datetime import datetime
 
-import ida_lines
 import ida_funcs
+import ida_lines
 from ida_lines import COLSTR, tag_addr
 
-from oplog_events import renamed_event, frame_udm_renamed_event, idb_event
+from oplog_events import idb_event, renamed_event, frame_udm_renamed_event
 
 
 def pretty_date(time: datetime):
@@ -21,7 +21,7 @@ def pretty_date(time: datetime):
     day_diff = diff.days
 
     if day_diff < 0:
-        return ''
+        return ""
 
     if day_diff == 0:
         if second_diff < 10:
@@ -47,22 +47,21 @@ def pretty_date(time: datetime):
     return str(day_diff // 365) + " years ago"
 
 
-
 def codname(name: str):
     """dummy code name"""
-    return ida_lines.COLSTR(name, ida_lines.SCOLOR_CODNAME)
+    return COLSTR(name, ida_lines.SCOLOR_CODNAME)
 
 
 def cname(name: str, address: int | None = None):
     """regular code name"""
     if address is not None:
-        return ida_lines.COLSTR(tag_addr(address) + name, ida_lines.SCOLOR_CNAME)
+        return COLSTR(tag_addr(address) + name, ida_lines.SCOLOR_CNAME)
     else:
-        return ida_lines.COLSTR(name, ida_lines.SCOLOR_CNAME)
+        return COLSTR(name, ida_lines.SCOLOR_CNAME)
 
 
 def render_address(address: int):
-    return ida_lines.COLSTR(tag_addr(address) + hex(address), ida_lines.SCOLOR_CREF)
+    return COLSTR(tag_addr(address) + hex(address), ida_lines.SCOLOR_CREF)
 
 
 def render_renamed(ev: renamed_event):
