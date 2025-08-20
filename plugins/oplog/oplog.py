@@ -1,65 +1,23 @@
 import logging
-from datetime import datetime
 from dataclasses import dataclass
 
 from PyQt5 import QtCore
 
 import ida_name
 import ida_lines
-import ida_funcs
 import ida_idaapi
 import ida_kernwin
 from ida_lines import COLSTR
 
 from oplog_hooks import IDBChangedHook
-from oplog_events import renamed_event, frame_udm_renamed_event
+from oplog_render import render_event
 
 logger = logging.getLogger(__name__)
 
-
-def pretty_date(time: datetime):
-    """
-    Get a datetime object or a int() Epoch timestamp and return a
-    pretty string like 'an hour ago', 'Yesterday', '3 months ago',
-    'just now', etc
-
-    via: https://stackoverflow.com/a/1551394
-    """
-    now = datetime.now()
-    diff = now - time
-    second_diff = diff.seconds
-    day_diff = diff.days
-
-    if day_diff < 0:
-        return ''
-
-    if day_diff == 0:
-        if second_diff < 10:
-            return "just now"
-        if second_diff < 60:
-            return str(second_diff) + " seconds ago"
-        if second_diff < 120:
-            return "a minute ago"
-        if second_diff < 3600:
-            return str(second_diff // 60) + " minutes ago"
-        if second_diff < 7200:
-            return "an hour ago"
-        if second_diff < 86400:
-            return str(second_diff // 3600) + " hours ago"
-    if day_diff == 1:
-        return "Yesterday"
-    if day_diff < 7:
-        return str(day_diff) + " days ago"
-    if day_diff < 31:
-        return str(day_diff // 7) + " weeks ago"
-    if day_diff < 365:
-        return str(day_diff // 30) + " months ago"
-    return str(day_diff // 365) + " years ago"
-
-
-def addr_from_tag(tag: str) -> int:
-    assert tag.startswith(ida_lines.SCOLOR_ON + ida_lines.SCOLOR_ADDR)
-    addr_hex = tag[2:2 + ida_lines.COLOR_ADDR_SIZE]
+def addr_from_tag(raw: bytes) -> int:
+    assert raw[0] == 0x01  # ida_lines.COLOR_ON
+    assert raw[1] == ida_lines.COLOR_ADDR
+    addr_hex = raw[2:2 + ida_lines.COLOR_ADDR_SIZE].decode("ascii")
 
     try:
         # Parse as hex address (IDA uses qsscanf with "%a" format)
@@ -75,7 +33,6 @@ def get_tagged_line_section_byte_offsets(section: ida_kernwin.tagged_line_sectio
     text_start_index = s.index("text_start=")
     text_end_index = s.index("text_end=")
 
-    # TODO: verify with multi-byte UTF-8, since these are byte offsets, but we're operating on Python strings
     text_start_s = s[text_start_index + len("text_start="):].partition(",")[0]
     text_end_s = s[text_end_index + len("text_end="):].partition("}")[0]
 
@@ -122,9 +79,18 @@ def get_current_tag(line: str, x: int) -> TaggedLineSection:
         # COLOR_ADDR sections are zero-length and contain embedded addresses
 
         addr_section_start, _ = get_tagged_line_section_byte_offsets(addr_section)
+
+        #print(boring_line)
+        #print(line.encode("utf-8").hex())
+        #print(("  " * current_section_start) + "^")
+        #print(("  " * addr_section_start) + "*")
+        #print(current_section_start)
+        #print(addr_section_start)
+
         # addr_section_start initially points just after the address data (ON ADDR 001122...FF)
         # so rewind to the start of the tag (16 bytes of hex integer, 2 bytes of tags "ON ADDR")
         addr_tag_start = addr_section_start - (ida_lines.COLOR_ADDR_SIZE + 2)
+        #print(("  " * addr_tag_start) + "%")
         assert addr_tag_start >= 0
 
         # and this should match current_section_start, since that points just after the tag "ON SYMBOL"
@@ -132,7 +98,21 @@ def get_current_tag(line: str, x: int) -> TaggedLineSection:
         # maybe like multiple ADDR tags or something.
         # skip those and stick to things we know.
         if current_section_start == addr_tag_start:
-            addr = addr_from_tag(line[addr_tag_start:])
+            # I'm not sure if the following is correct or not, proceed with caution:
+            #
+            # IDA places raw bytes into the line buffer to represent the tags.
+            # But they're not meant to be interpreted as characters, but raw byte values.
+            # So we can run into trouble when something like COLOR_CREF + "foo" collides with a UTF-8 (or Python internal) string representation,
+            #  because Python might return some weird Unicode character when accessing that index.
+            # So we try to convert the string buffer to raw bytes and operate on that.
+            #
+            # However, I think this is pretty unsafe, since the internal string representation in Python is not constant:
+            # https://stackoverflow.com/a/9079985
+            #
+            # The correct fix is probably considering anything with tags in it to be raw bytes,
+            # though this is probably inconvenient.
+            raw = line.encode("utf-8")
+            addr = addr_from_tag(raw[addr_tag_start:addr_tag_start + ida_lines.COLOR_ADDR_SIZE + 2])
             ret.address = addr
 
     return ret
@@ -167,24 +147,10 @@ class oplog_viewer_t(ida_kernwin.simplecustviewer_t):
     def OnClose(self):
         self.timer.stop()
 
-    def render_address(self, ea: int):
-        return ida_lines.COLSTR(f"{ea:016x}", ida_lines.SCOLOR_ADDR)
-
-    def render_renamed(self, ev: renamed_event):
-        return f"{pretty_date(ev.timestamp)}: address renamed: {COLSTR(ev.old_name, ida_lines.SCOLOR_CNAME)} → {COLSTR(ev.new_name, ida_lines.SCOLOR_CNAME)} at {ida_lines.tag_addr(ev.ea)}foo {COLSTR(self.render_address(ev.ea) + hex(ev.ea), ida_lines.SCOLOR_PREFIX)}"
-
-    def render_frame_udm_renamed(self, ev: frame_udm_renamed_event):
-        func_name = ida_funcs.get_func_name(ev.func_ea)
-        return f"{pretty_date(ev.timestamp)}: local variable renamed: {ev.oldname} → {ev.udm.name} in {func_name}@{self.render_address(ev.func_ea)}"
-
     def render(self):
         for event in reversed(self.idb_events.events):
-            if event.event_name == "renamed":
-                self.AddLine(self.render_renamed(event))
-            elif event.event_name == "frame_udm_renamed":
-                self.AddLine(self.render_frame_udm_renamed(event))
-            else:
-                self.AddLine(f"{event.timestamp.isoformat('T')}: {event.event_name}")
+            self.AddLine(render_event(event))
+
         #self.AddLine(COLSTR(ida_lines.tag_addr(0x10001000) + "...", ida_lines.SCOLOR_PREFIX))
 
     def OnDblClick(self, shift):
