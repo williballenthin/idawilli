@@ -166,10 +166,12 @@ def render_segm_added(ev: segm_added_event):
 
 
 def render_deleting_segm(ev: deleting_segm_event):
+    # TODO: capture and render segment name
     return f"{pretty_date(ev.timestamp)}: segment deleting: at {render_address(ev.start_ea)}"
 
 
 def render_segm_deleted(ev: segm_deleted_event):
+    # TODO: capture and render segment name
     return f"{pretty_date(ev.timestamp)}: segment deleted: {render_address(ev.start_ea)}-{render_address(ev.end_ea)}"
 
 
@@ -329,42 +331,52 @@ def render_func_noret_changed(ev: func_noret_changed_event):
 
 
 def render_updating_tryblks(ev: updating_tryblks_event):
+    # TODO: describe which function
     return f"{pretty_date(ev.timestamp)}: tryblks updating"
 
 
 def render_tryblks_updated(ev: tryblks_updated_event):
+    # TODO: describe which function
     return f"{pretty_date(ev.timestamp)}: tryblks updated"
 
 
 def render_deleting_tryblks(ev: deleting_tryblks_event):
+    # TODO: describe which function
     return f"{pretty_date(ev.timestamp)}: tryblks deleting: {render_address(ev.range.start_ea)}-{render_address(ev.range.end_ea)}"
 
 
 def render_changing_cmt(ev: changing_cmt_event):
+    # TODO: capture and render comment text
     cmt_type = "repeatable comment" if ev.repeatable_cmt else "comment"
     return f"{pretty_date(ev.timestamp)}: {cmt_type} changing: {render_address(ev.ea)}"
 
 
 def render_cmt_changed(ev: cmt_changed_event):
+    # TODO: capture and render comment text
     cmt_type = "repeatable comment" if ev.repeatable_cmt else "comment"
     return f"{pretty_date(ev.timestamp)}: {cmt_type} changed: {render_address(ev.ea)}"
 
 
 def render_changing_range_cmt(ev: changing_range_cmt_event):
+    # TODO: what is a range comment?
+    # TODO: capture and render comment text
     cmt_type = "repeatable range comment" if ev.repeatable else "range comment"
     return f"{pretty_date(ev.timestamp)}: {cmt_type} changing: {render_address(ev.a.start_ea)}-{render_address(ev.a.end_ea)}"
 
 
 def render_range_cmt_changed(ev: range_cmt_changed_event):
+    # TODO: capture and render comment text
     cmt_type = "repeatable range comment" if ev.repeatable else "range comment"
     return f"{pretty_date(ev.timestamp)}: {cmt_type} changed: {render_address(ev.a.start_ea)}-{render_address(ev.a.end_ea)}"
 
 
 def render_extra_cmt_changed(ev: extra_cmt_changed_event):
+    # TODO: capture and render comment text
     return f"{pretty_date(ev.timestamp)}: extra comment changed: {render_address(ev.ea)} line {ev.line_idx}"
 
 
 def render_sgr_changed(ev: sgr_changed_event):
+    # TODO: render segment register name (e.g., CS, DS, ...)
     return f"{pretty_date(ev.timestamp)}: segment register changed: {render_address(ev.start_ea)}-{render_address(ev.end_ea)} reg{ev.regnum}"
 
 
@@ -377,6 +389,8 @@ def render_make_code(ev: make_code_event):
 
 
 def render_make_data(ev: make_data_event):
+    # TODO: describe data type
+    # TODO: capture and show name of location
     return f"{pretty_date(ev.timestamp)}: data created: {render_address(ev.ea)} (size: {ev.len})"
 
 
@@ -385,6 +399,7 @@ def render_destroyed_items(ev: destroyed_items_event):
 
 
 def render_byte_patched(ev: byte_patched_event):
+    # TODO: capture and render new byte
     return f"{pretty_date(ev.timestamp)}: byte patched: {render_address(ev.ea)} {hex(ev.old_value)} → ?"
 
 
@@ -405,10 +420,12 @@ def render_bookmark_changed(ev: bookmark_changed_event):
 
 
 def render_changing_op_type(ev: changing_op_type_event):
+    # TODO: capture and render operand type (e.g., imm -> offset)
     return f"{pretty_date(ev.timestamp)}: operand type changing: {render_address(ev.ea)} op{ev.n}"
 
 
 def render_op_type_changed(ev: op_type_changed_event):
+    # TODO: capture and render operand type (e.g., imm -> offset)
     return f"{pretty_date(ev.timestamp)}: operand type changed: {render_address(ev.ea)} op{ev.n}"
 
 
@@ -454,14 +471,19 @@ def render_ti_changed(ev: ti_changed_event):
 
 
 def render_changing_op_ti(ev: changing_op_ti_event):
+    # TODO: describe the new type
+    # TODO: describe the address (variable/name/function)
     return f"{pretty_date(ev.timestamp)}: operand type information changing: {render_address(ev.ea)} op{ev.n}"
 
 
 def render_op_ti_changed(ev: op_ti_changed_event):
+    # TODO: describe the new type
+    # TODO: describe the address (variable/name/function)
     return f"{pretty_date(ev.timestamp)}: operand type information changed: {render_address(ev.ea)} op{ev.n}"
 
 
 def render_local_types_changed(ev: local_types_changed_event):
+    # TODO: describe the type changes
     return f"{pretty_date(ev.timestamp)}: local types changed: {codname(ev.name or "")} (ordinal: {ev.ordinal})"
 
 
@@ -510,6 +532,7 @@ def render_stkpnts_changed(ev: stkpnts_changed_event):
 
 
 def render_frame_created(ev: frame_created_event):
+    # TODO: capture func name into event
     func_name = ida_funcs.get_func_name(ev.func_ea)
     if func_name:
         return f"{pretty_date(ev.timestamp)}: frame created: {cname(func_name, ev.func_ea)}"
@@ -518,6 +541,7 @@ def render_frame_created(ev: frame_created_event):
 
 
 def render_frame_expanded(ev: frame_expanded_event):
+    # TODO: capture func name into event
     func_name = ida_funcs.get_func_name(ev.func_ea)
     if func_name:
         return f"{pretty_date(ev.timestamp)}: frame expanded: {cname(func_name, ev.func_ea)} (delta: {ev.delta})"
@@ -526,6 +550,7 @@ def render_frame_expanded(ev: frame_expanded_event):
 
 
 def render_frame_deleted(ev: frame_deleted_event):
+    # TODO: capture func name into event
     func_name = ida_funcs.get_func_name(ev.pfn.start_ea)
     if func_name:
         return f"{pretty_date(ev.timestamp)}: frame deleted: {cname(func_name, ev.pfn.start_ea)}"
@@ -534,6 +559,7 @@ def render_frame_deleted(ev: frame_deleted_event):
 
 
 def render_frame_udm_created(ev: frame_udm_created_event):
+    # TODO: capture func name into event
     func_name = ida_funcs.get_func_name(ev.func_ea)
     if func_name:
         return f"{pretty_date(ev.timestamp)}: local variable created: {cname(ev.udm.name)} in {cname(func_name, ev.func_ea)}"
@@ -544,6 +570,7 @@ def render_frame_udm_created(ev: frame_udm_created_event):
 
 
 def render_frame_udm_deleted(ev: frame_udm_deleted_event):
+    # TODO: capture func name into event
     func_name = ida_funcs.get_func_name(ev.func_ea)
     if func_name:
         return f"{pretty_date(ev.timestamp)}: local variable deleted: {cname(ev.udm.name)} from {cname(func_name, ev.func_ea)}"
@@ -552,6 +579,7 @@ def render_frame_udm_deleted(ev: frame_udm_deleted_event):
 
 
 def render_frame_udm_changed(ev: frame_udm_changed_event):
+    # TODO: capture func name into event
     func_name = ida_funcs.get_func_name(ev.func_ea)
     if func_name:
         return f"{pretty_date(ev.timestamp)}: local variable changed: {cname(ev.udmnew.name)} in {cname(func_name, ev.func_ea)}"
@@ -560,6 +588,7 @@ def render_frame_udm_changed(ev: frame_udm_changed_event):
 
 
 def render_determined_main(ev: determined_main_event):
+    # TODO: capture func name into event
     func_name = ida_funcs.get_func_name(ev.main)
     if func_name:
         return f"{pretty_date(ev.timestamp)}: main function determined: {cname(func_name, ev.main)}"
