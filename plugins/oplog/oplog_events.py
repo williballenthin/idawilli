@@ -981,7 +981,7 @@ class current_item_changed_event(BaseModel):
 ui_event = current_item_changed_event
 
 
-EventList = RootModel[list[idb_event]]
+EventList = RootModel[list[idb_event | ui_event]]
 
 
 class Events:
