@@ -1,3 +1,5 @@
+# TODO: add logging of screenea/current item
+
 import zlib
 import logging
 from dataclasses import dataclass
@@ -134,12 +136,19 @@ class oplog_viewer_t(ida_kernwin.simplecustviewer_t):
         self.timer.timeout.connect(self.on_timer_timeout)
 
     def Create(self):
-        if not ida_kernwin.simplecustviewer_t.Create(self, self.TITLE):
+        if not super().Create(self.TITLE):
             return False
 
         self.render()
         self.timer.start(250)
 
+        return True
+
+    def Show(self, *args):
+        if not super().Show(*args):
+            return False
+
+        ida_kernwin.attach_action_to_popup(self.GetWidget(), None, save_events_to_file_handler_t.ACTION_NAME)
         return True
 
     def on_timer_timeout(self):
@@ -165,8 +174,6 @@ class oplog_viewer_t(ida_kernwin.simplecustviewer_t):
                 last_line_prefix = line.partition(":")[0] + ":"
 
             self.AddLine(line)
-
-        # self.AddLine(COLSTR(ida_lines.tag_addr(0x10001000) + "...", ida_lines.SCOLOR_PREFIX))
 
     def OnDblClick(self, shift):
         line = self.GetCurrentLine()
@@ -250,6 +257,28 @@ def load_events():
     return events
 
 
+class save_events_to_file_handler_t(ida_kernwin.action_handler_t):
+    ACTION_NAME = "oplog:save"
+
+    def __init__(self, idb_hooks: IDBChangedHook, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.idb_hooks = idb_hooks
+
+    def activate(self, ctx):
+        filename = ida_kernwin.ask_file(1, "*.json", "Select the file to store events in a JSON format")
+        if filename is None:
+            return
+
+        doc = EventList(self.idb_hooks.events).model_dump_json()
+        buf = doc.encode("utf-8")
+        with open(filename, "wb") as f:
+            f.write(buf)
+        logger.info("saved %d events to %s", len(self.idb_hooks.events), filename)
+
+    def update(self, ctx):
+        return ida_kernwin.AST_ENABLE_ALWAYS
+
+
 class IDB_Closing_Hooks(ida_idp.IDB_Hooks):
     def __init__(self, idb_hooks: IDBChangedHook, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -327,6 +356,17 @@ class oplog_plugmod_t(ida_idaapi.plugmod_t):
         if self.closing_hooks:
             self.closing_hooks.unhook()
 
+    def register_save_file_handler(self):
+        assert self.idb_hooks is not None
+        handler = save_events_to_file_handler_t(self.idb_hooks)
+        desc = ida_kernwin.action_desc_t(save_events_to_file_handler_t.ACTION_NAME, "Save to file...", handler)
+        if not ida_kernwin.register_action(desc):
+            logger.warn("Failed to register action \"%s\"" % save_events_to_file_handler_t.ACTION_NAME)
+
+    def unregister_save_file_handler(self):
+        if not ida_kernwin.unregister_action(save_events_to_file_handler_t.ACTION_NAME):
+            logger.warn("Failed to unregister action \"%s\"" % save_events_to_file_handler_t.ACTION_NAME)
+
     def init(self):
         # do things here that will always run,
         #  and don't require the menu entry (edit > plugins > ...) being selected.
@@ -336,9 +376,7 @@ class oplog_plugmod_t(ida_idaapi.plugmod_t):
         self.register_autoinst_hooks()
         self.register_open_action()
         self.register_closing_hooks()
-        # TODO: log also to a netnode
-        # TODO: restore from a netnode
-        # TODO: confirm what happens when a new file is opened/closed. reset the events.
+        self.register_save_file_handler()
 
     def run(self, arg):
         # do things here that users invoke via the menu entry (edit > plugins > ...)
@@ -346,6 +384,7 @@ class oplog_plugmod_t(ida_idaapi.plugmod_t):
         save_events(self.idb_hooks.events)
 
     def term(self):
+        self.unregister_save_file_handler()
         self.unregister_closing_hooks()
         self.unregister_open_action()
         self.unregister_autoinst_hooks()
