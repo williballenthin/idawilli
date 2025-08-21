@@ -7,6 +7,9 @@ help = "show profile (python)"
 
 [devshell]
 packages = [
+  "ffmpeg",
+  "imagemagick",
+  "gifsicle",
   "just",
   "python312",
   "just",

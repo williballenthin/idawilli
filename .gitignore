@@ -143,3 +143,4 @@ ida_undo.py
 ida_xref.py
 __pycache__/
 .claude/
+**/*.DS_Store
