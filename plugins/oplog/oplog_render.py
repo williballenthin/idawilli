@@ -5,6 +5,7 @@ import ida_lines
 from ida_lines import COLSTR, tag_addr
 
 from oplog_events import (
+    ui_event,
     idb_event,
     renamed_event,
     make_code_event,
@@ -85,6 +86,7 @@ from oplog_events import (
     changing_segm_class_event,
     changing_segm_start_event,
     local_types_changed_event,
+    current_item_changed_event,
 )
 
 
@@ -604,7 +606,11 @@ def render_idasgn_matched_ea(ev: idasgn_matched_ea_event):
     return f"{pretty_date(ev.timestamp)}: signature matched: {cname(ev.name, ev.ea)} from {codname(ev.lib_name)}"
 
 
-def render_event(ev: idb_event) -> str:
+def render_current_item_changed(ev: current_item_changed_event):
+    return f"{pretty_date(ev.timestamp)}: navigate: {cname(ev.prev_item_name, ev.prev_item_ea)} → {cname(ev.current_item_name, ev.current_item_ea)}"
+
+
+def render_event(ev: idb_event | ui_event) -> str:
     if ev.event_name == "renamed":
         return render_renamed(ev)
     elif ev.event_name == "frame_udm_renamed":
@@ -763,5 +769,7 @@ def render_event(ev: idb_event) -> str:
         return render_extlang_changed(ev)
     elif ev.event_name == "idasgn_matched_ea":
         return render_idasgn_matched_ea(ev)
+    elif ev.event_name == "current_item_changed":
+        return render_current_item_changed(ev)
     else:
         return f"{ev.timestamp.isoformat('T')}: {ev.event_name}"

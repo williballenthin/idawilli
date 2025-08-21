@@ -1,4 +1,4 @@
-# TODO: add logging of screenea/current item
+# TODO: what happens during redo
 
 import zlib
 import logging
@@ -10,10 +10,9 @@ import ida_idaapi
 import ida_kernwin
 import ida_netnode
 from PyQt5 import QtCore
-from pydantic import RootModel
 
-from oplog_hooks import IDBChangedHook
-from oplog_events import idb_event
+from oplog_hooks import IDBChangedHook, UILocationHook
+from oplog_events import Events
 from oplog_render import render_event
 
 logger = logging.getLogger(__name__)
@@ -126,10 +125,11 @@ def get_current_tag(line: str, x: int) -> TaggedLineSection:
 class oplog_viewer_t(ida_kernwin.simplecustviewer_t):
     TITLE = "oplog"
 
-    def __init__(self, idb_events: IDBChangedHook):
+    def __init__(self, events: Events):
         super().__init__()
 
-        self.idb_events: IDBChangedHook = idb_events
+        self.events: Events = events
+
         # we'll use a timer to check for new events periodically
         # rather than re-rendering on every event, which might be expensive
         self.timer: QtCore.QTimer = QtCore.QTimer()
@@ -152,8 +152,8 @@ class oplog_viewer_t(ida_kernwin.simplecustviewer_t):
         return True
 
     def on_timer_timeout(self):
-        if self.idb_events.has_new.is_set():
-            self.idb_events.has_new.clear()
+        if self.events.has_new.is_set():
+            self.events.has_new.clear()
             self.render()
 
     def OnClose(self):
@@ -162,7 +162,7 @@ class oplog_viewer_t(ida_kernwin.simplecustviewer_t):
     def render(self):
         self.ClearLines()
         last_line_prefix = ""
-        for event in reversed(self.idb_events.events):
+        for event in reversed(self.events.events):
             # group the events with the same fuzzy timestamp ("2 minutes ago")
             line = render_event(event)
             if last_line_prefix:
@@ -217,31 +217,19 @@ class create_desktop_widget_hooks_t(ida_kernwin.UI_Hooks):
             return self.plugmod.create_viewer().GetWidget()
 
 
-EventList = RootModel[list[idb_event]]
-
-
-def serialize_events(events: list[idb_event]) -> bytes:
-    doc = EventList(events).model_dump_json()
-    buf = doc.encode("utf-8")
-    return zlib.compress(buf)
-
-
-def deserialize_events(buf: bytes) -> list[idb_event]:
-    return EventList.model_validate_json(zlib.decompress(buf)).root
-
-
 OUR_NETNODE = "$ com.williballenthin.idawilli.oplog"
 
 
-def save_events(events: list[idb_event]):
-    buf = serialize_events(events)
+def save_events(events: Events):
+    buf = zlib.compress(events.to_json().encode("utf-8"))
+
     node = ida_netnode.netnode(OUR_NETNODE)
     node.setblob(buf, 0, "I")
 
     logger.info("saved %d events", len(events))
 
 
-def load_events():
+def load_events() -> Events:
     node = ida_netnode.netnode(OUR_NETNODE)
     if not node:
         logger.info("no existing events (no node)")
@@ -252,7 +240,7 @@ def load_events():
         logger.info("no existing events (no data)")
         return Events([])
 
-    events = deserialize_events(buf)
+    events = Events.from_json(zlib.decompress(buf).decode("utf-8"))
     logger.info("loaded %d events", len(events))
     return events
 
@@ -260,39 +248,37 @@ def load_events():
 class save_events_to_file_handler_t(ida_kernwin.action_handler_t):
     ACTION_NAME = "oplog:save"
 
-    def __init__(self, idb_hooks: IDBChangedHook, *args, **kwargs):
+    def __init__(self, events: Events, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.idb_hooks = idb_hooks
+        self.events = events
 
     def activate(self, ctx):
         filename = ida_kernwin.ask_file(1, "*.json", "Select the file to store events in a JSON format")
         if filename is None:
             return
 
-        doc = EventList(self.idb_hooks.events).model_dump_json()
-        buf = doc.encode("utf-8")
         with open(filename, "wb") as f:
-            f.write(buf)
-        logger.info("saved %d events to %s", len(self.idb_hooks.events), filename)
+            f.write(self.events.to_json().encode("utf-8"))
+        logger.info("saved %d events to %s", len(self.events.events), filename)
 
     def update(self, ctx):
         return ida_kernwin.AST_ENABLE_ALWAYS
 
 
 class IDB_Closing_Hooks(ida_idp.IDB_Hooks):
-    def __init__(self, idb_hooks: IDBChangedHook, *args, **kwargs):
+    def __init__(self, events: Events, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.idb_hooks = idb_hooks
+        self.events = events
 
     def closebase(self) -> None:
         """The database will be closed now."""
         logger.info("closebase")
-        save_events(self.idb_hooks.events)
+        save_events(self.events)
 
     def savebase(self) -> None:
         """The database is being saved."""
         logger.info("savebase")
-        save_events(self.idb_hooks.events)
+        save_events(self.events)
 
 
 class oplog_plugmod_t(ida_idaapi.plugmod_t):
@@ -300,7 +286,9 @@ class oplog_plugmod_t(ida_idaapi.plugmod_t):
     MENU_PATH = "View/Open subviews/Strings"
 
     def __init__(self):
+        self.events: Events | None = None
         self.idb_hooks: IDBChangedHook | None = None
+        self.location_hooks: UILocationHook | None = None
         self.closing_hooks: IDB_Closing_Hooks | None = None
         self.viewer: oplog_viewer_t | None = None
         self.installation_hooks: create_desktop_widget_hooks_t | None = None
@@ -309,8 +297,8 @@ class oplog_plugmod_t(ida_idaapi.plugmod_t):
         self.init()
 
     def create_viewer(self) -> oplog_viewer_t:
-        assert self.idb_hooks is not None
-        self.viewer = oplog_viewer_t(self.idb_hooks)
+        assert self.events is not None
+        self.viewer = oplog_viewer_t(self.events)
         assert self.viewer.Create()
         assert self.viewer.Show()
         return self.viewer
@@ -339,17 +327,26 @@ class oplog_plugmod_t(ida_idaapi.plugmod_t):
             self.installation_hooks.unhook()
 
     def register_idb_hooks(self):
-        events = load_events()
-        self.idb_hooks = IDBChangedHook(events)
+        assert self.events is not None
+        self.idb_hooks = IDBChangedHook(self.events)
         self.idb_hooks.hook()
 
     def unregister_idb_hooks(self):
         if self.idb_hooks:
             self.idb_hooks.unhook()
 
+    def register_location_hooks(self):
+        assert self.events is not None
+        self.location_hooks = UILocationHook(self.events)
+        self.location_hooks.hook()
+
+    def unregister_location_hooks(self):
+        if self.location_hooks:
+            self.location_hooks.unhook()
+
     def register_closing_hooks(self):
-        assert self.idb_hooks is not None
-        self.closing_hooks = IDB_Closing_Hooks(self.idb_hooks)
+        assert self.events is not None
+        self.closing_hooks = IDB_Closing_Hooks(self.events)
         self.closing_hooks.hook()
 
     def unregister_closing_hooks(self):
@@ -357,22 +354,24 @@ class oplog_plugmod_t(ida_idaapi.plugmod_t):
             self.closing_hooks.unhook()
 
     def register_save_file_handler(self):
-        assert self.idb_hooks is not None
-        handler = save_events_to_file_handler_t(self.idb_hooks)
+        assert self.events is not None
+        handler = save_events_to_file_handler_t(self.events)
         desc = ida_kernwin.action_desc_t(save_events_to_file_handler_t.ACTION_NAME, "Save to file...", handler)
         if not ida_kernwin.register_action(desc):
-            logger.warn("Failed to register action \"%s\"" % save_events_to_file_handler_t.ACTION_NAME)
+            logger.warning('Failed to register action "%s"' % save_events_to_file_handler_t.ACTION_NAME)
 
     def unregister_save_file_handler(self):
         if not ida_kernwin.unregister_action(save_events_to_file_handler_t.ACTION_NAME):
-            logger.warn("Failed to unregister action \"%s\"" % save_events_to_file_handler_t.ACTION_NAME)
+            logger.warning('Failed to unregister action "%s"' % save_events_to_file_handler_t.ACTION_NAME)
 
     def init(self):
         # do things here that will always run,
         #  and don't require the menu entry (edit > plugins > ...) being selected.
         #
         # note: IDA doesn't call init, we do in __init__
+        self.events = load_events()
         self.register_idb_hooks()
+        self.register_location_hooks()
         self.register_autoinst_hooks()
         self.register_open_action()
         self.register_closing_hooks()
@@ -388,7 +387,9 @@ class oplog_plugmod_t(ida_idaapi.plugmod_t):
         self.unregister_closing_hooks()
         self.unregister_open_action()
         self.unregister_autoinst_hooks()
+        self.unregister_location_hooks()
         self.unregister_idb_hooks()
+        assert self.events is not None
         self.events.clear()
 
 

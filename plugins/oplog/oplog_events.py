@@ -1,4 +1,5 @@
 import logging
+import threading
 from typing import Any, Literal
 from datetime import datetime
 
@@ -7,7 +8,7 @@ import ida_funcs
 import ida_range
 import ida_segment
 import ida_typeinf
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, RootModel, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -966,3 +967,46 @@ idb_event = (
     | changing_segm_start_event
     | local_types_changed_event
 )
+
+
+class current_item_changed_event(BaseModel):
+    event_name: Literal["current_item_changed"]
+    timestamp: datetime
+    current_item_ea: int
+    current_item_name: str
+    prev_item_ea: int
+    prev_item_name: str
+
+
+ui_event = current_item_changed_event
+
+
+EventList = RootModel[list[idb_event]]
+
+
+class Events:
+    def __init__(self, initial_events: list[idb_event | ui_event]):
+        self.events: list[idb_event | ui_event] = initial_events
+        self.has_new = threading.Event()
+
+    def add_event(self, event: idb_event | ui_event):
+        self.events.append(event)
+        self.has_new.set()
+
+    def clear(self):
+        self.events.clear()
+        # re-render since this changed
+        self.has_new.set()
+
+    def __iter__(self):
+        return iter(self.events)
+
+    def __len__(self):
+        return len(self.events)
+
+    def to_json(self):
+        return EventList(self.events).model_dump_json()
+
+    @classmethod
+    def from_json(cls, json_str: str):
+        return cls(EventList.model_validate_json(json_str).root)
