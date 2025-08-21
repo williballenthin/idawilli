@@ -15,7 +15,7 @@ from oplog_hooks import IDBChangedHook, UILocationHook
 from oplog_events import Events
 from oplog_render import render_event
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("oplog")
 
 
 def addr_from_tag(raw: bytes) -> int:
@@ -265,26 +265,6 @@ class save_events_to_file_handler_t(ida_kernwin.action_handler_t):
         return ida_kernwin.AST_ENABLE_ALWAYS
 
 
-class IDB_Saving_Hooks(ida_idp.IDB_Hooks):
-    def __init__(self, events: Events, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.events = events
-
-    def closebase(self) -> None:
-        """The database will be closed now."""
-        # not actually sure when this is called.
-        # using UI notification CloseBase or QuitIDA is more reliable.
-        logger.info("closebase")
-        save_events(self.events)
-
-    def savebase(self) -> None:
-        """The database is being saved."""
-        # notified during File -> Save
-        # *not* notified during File -> Close
-        logger.info("savebase")
-        save_events(self.events)
-
-
 class UI_Closing_Hooks(ida_kernwin.UI_Hooks):
     """Respond to UI events and save the events into the database."""
 
@@ -300,17 +280,17 @@ class UI_Closing_Hooks(ida_kernwin.UI_Hooks):
     def preprocess_action(self, action: str):
         if action == "CloseBase":
             # File -> Close
-            logger.info("action: CloseBase")
+            logger.debug("action: CloseBase")
             save_events(self.events)
             return 0
         elif action == "QuitIDA":
             # File -> Quit
-            logger.info("action: QuitIDA")
+            logger.debug("action: QuitIDA")
             save_events(self.events)
             return 0
         elif action == "SaveBase":
             # File -> Save
-            logger.info("action: SaveBase")
+            logger.debug("action: SaveBase")
             save_events(self.events)
             return 0
         else:
@@ -325,7 +305,6 @@ class oplog_plugmod_t(ida_idaapi.plugmod_t):
         self.events: Events | None = None
         self.idb_hooks: IDBChangedHook | None = None
         self.location_hooks: UILocationHook | None = None
-        self.idb_saving_hooks: IDB_Saving_Hooks | None = None
         self.ui_closing_hooks: UI_Closing_Hooks | None = None
         self.viewer: oplog_viewer_t | None = None
         self.installation_hooks: create_desktop_widget_hooks_t | None = None
@@ -381,15 +360,6 @@ class oplog_plugmod_t(ida_idaapi.plugmod_t):
         if self.location_hooks:
             self.location_hooks.unhook()
 
-    def register_idb_saving_hooks(self):
-        assert self.events is not None
-        self.idb_saving_hooks = IDB_Saving_Hooks(self.events)
-        self.idb_saving_hooks.hook()
-
-    def unregister_idb_saving_hooks(self):
-        if self.idb_saving_hooks:
-            self.idb_saving_hooks.unhook()
-
     def register_ui_closing_hooks(self):
         assert self.events is not None
         self.ui_closing_hooks = UI_Closing_Hooks(self.events)
@@ -420,7 +390,6 @@ class oplog_plugmod_t(ida_idaapi.plugmod_t):
         self.register_location_hooks()
         self.register_autoinst_hooks()
         self.register_open_action()
-        self.register_idb_saving_hooks()
         self.register_ui_closing_hooks()
         self.register_save_file_handler()
 
@@ -432,7 +401,6 @@ class oplog_plugmod_t(ida_idaapi.plugmod_t):
     def term(self):
         self.unregister_save_file_handler()
         self.unregister_ui_closing_hooks()
-        self.unregister_idb_saving_hooks()
         self.unregister_open_action()
         self.unregister_autoinst_hooks()
         self.unregister_location_hooks()
