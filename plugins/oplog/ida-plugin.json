@@ -4,6 +4,11 @@
     "name": "oplog",
     "entryPoint": "oplog_entry.py",
     "version": "v0.1.0",
+    "idaVersions": ">=9.1",
+    "description": "oplog is an IDA Pro plugin that records operations during analysis.",
+    "categories": [
+      "ui-ux-and-visualization"
+    ],
     "pythonDependencies": ["pydantic>=2"]
   }
 }
