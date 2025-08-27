@@ -2,7 +2,7 @@
   "IDAMetadataDescriptorVersion": 1,
   "plugin": {
     "name": "oplog",
-    "entryPoint": "oplog.py",
+    "entryPoint": "oplog_entry.py",
     "version": "v0.1.0",
     "pythonDependencies": ["pydantic>=2"]
   }

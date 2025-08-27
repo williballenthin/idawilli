@@ -9,7 +9,12 @@ import ida_lines
 import ida_idaapi
 import ida_kernwin
 import ida_netnode
-from PyQt5 import QtCore
+HAS_PYQT = False
+try:
+    from PyQt5 import QtCore
+    HAS_PYQT = True
+except ImportError:
+    pass
 
 from oplog_hooks import IDBChangedHook, UILocationHook
 from oplog_events import Events
@@ -418,8 +423,8 @@ class oplog_plugin_t(ida_idaapi.plugin_t):
     wanted_hotkey = ""
 
     def init(self):
-        return oplog_plugmod_t()
+        if HAS_PYQT:
+            return oplog_plugmod_t()
+        else:
+            logger.warning("PyQt5 not found, skipping.")
 
-
-def PLUGIN_ENTRY():
-    return oplog_plugin_t()
