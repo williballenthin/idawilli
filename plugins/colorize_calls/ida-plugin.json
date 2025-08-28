@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/HexRaysSA/ida-hcli/refs/heads/v0.9.0/docs/reference/ida-plugin.schema.json",
+  "IDAMetadataDescriptorVersion": 1,
+  "plugin": {
+    "name": "colorize-calls",
+    "entryPoint": "colorize_calls.py",
+    "version": "v0.1.0",
+    "idaVersions": ">=9.0",
+    "description": "Colors call instructions and adds a prefix in the disassembly listing.",
+    "categories": [
+      "ui-ux-and-visualization"
+    ],
+    "pythonDependencies": []
+  }
+}

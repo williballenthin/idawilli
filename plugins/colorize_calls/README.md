@@ -10,10 +10,4 @@ This doesn't touch the database, it dynamically updates the view as you browse, 
 
 ## Installation
 
-Assuming you have the [IDA Pro Plugin Manager](https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager/), install via pip:
-
-```bash
-pip install williballenthin-colorize-calls-ida-plugin
-```
-
-Make sure to use the pip from your IDAPython installation.
+Download or symlink this directory into `%IDAUSR%/plugins/colorize_calls`.
