@@ -10,17 +10,4 @@ IDA Pro plugin that tracks and records all disassembly addresses you visit durin
 
 ## Installation
 
-Assuming you have the [IDA Pro Plugin Manager](https://github.com/williballenthin/idawilli/tree/master/plugins/plugin-manager) (or a compatible setup that recognizes `idapro.plugins` entry points), install via pip:
-
-```bash
-pip install williballenthin-navband-visited-ida-plugin
-```
-
-Make sure to use the `pip` associated with your IDAPython environment.
-
-## Publishing
-
-This plugin is available on PyPI:
-[https://pypi.org/project/williballenthin-navband-visited-ida-plugin/](https://pypi.org/project/williballenthin-navband-visited-ida-plugin/)
-
-The GitHub Actions workflow for publishing is defined in [`.github/workflows/publish-navband-visited-ida-plugin.yml`](../../.github/workflows/publish-navband-visited-ida-plugin.yml).
+Download or symlink this directory into `%IDAUSR%/plugins/navband_visited`.
