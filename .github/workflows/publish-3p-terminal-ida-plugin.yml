@@ -29,7 +29,7 @@ jobs:
           just import-ida-terminal-plugin
           just build-ida-terminal-plugin
       - name: publish package
-        uses: pypa/gh-action-pypi-publish@v1.12.4
+        uses: pypa/gh-action-pypi-publish@v1.13.0
         with:
           skip-existing: false
           packages-dir: plugins/plugin-manager/3p-plugins/third_party/ida-terminal-plugin/dist
