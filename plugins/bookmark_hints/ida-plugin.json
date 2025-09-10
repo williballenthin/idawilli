@@ -1,15 +1,23 @@
 {
   "$schema": "https://raw.githubusercontent.com/HexRaysSA/ida-hcli/refs/heads/v0.9.0/docs/reference/ida-plugin.schema.json",
-  "IDAMetadataDescriptorVersion": 1,
+  "IDAMetadataDescriptorVersion": 2,
   "plugin": {
     "name": "bookmark-hints",
     "entryPoint": "bookmark_hints.py",
-    "version": "v0.1.0",
+    "version": "v0.1.1",
     "idaVersions": ">=9.0",
     "description": "Show a hoverable icon on lines with a bookmark.",
+    "license": "Apache 2.0",
     "categories": [
       "ui-ux-and-visualization"
     ],
-    "pythonDependencies": []
+    "pythonDependencies": [],
+    "urls": {
+      "repository": "https://github.com/williballenthin/idawilli"
+    },
+    "authors": [{
+      "name": "Willi Ballenthin",
+      "email": "wballenthin@hex-rays.com"
+    }]
   }
 }
