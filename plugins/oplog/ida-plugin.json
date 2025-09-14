@@ -1,10 +1,10 @@
 {
   "$schema": "https://raw.githubusercontent.com/HexRaysSA/ida-hcli/refs/heads/v0.9.0/docs/reference/ida-plugin.schema.json",
-  "IDAMetadataDescriptorVersion": 2,
+  "IDAMetadataDescriptorVersion": 1,
   "plugin": {
     "name": "oplog",
     "entryPoint": "oplog_entry.py",
-    "version": "v0.1.1",
+    "version": "v0.1.2",
     "idaVersions": ">=9.1",
     "description": "oplog is an IDA Pro plugin that records operations during analysis.",
     "license": "Apache 2.0",
@@ -18,6 +18,7 @@
     "authors": [{
       "name": "Willi Ballenthin",
       "email": "wballenthin@hex-rays.com"
-    }]
+    }],
+    "keywords": ["activity-tracking", "workflow-analysis", "reverse-engineering-methodology", "ai-training-data", "analysis-visualization"]
   }
 }

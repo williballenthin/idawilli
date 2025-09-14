@@ -1,9 +1,9 @@
 {
-  "IDAMetadataDescriptorVersion": 2,
+  "IDAMetadataDescriptorVersion": 1,
   "plugin": {
     "name": "extensible-hints",
     "entryPoint": "extensible_hints.py",
-    "version": "v0.1.1",
+    "version": "v0.1.2",
     "idaVersions": ">=9.0",
     "description": "Demonstrate how to display dynamic hints.",
     "license": "Apache 2.0",
@@ -17,6 +17,7 @@
     "authors": [{
       "name": "Willi Ballenthin",
       "email": "wballenthin@hex-rays.com"
-    }]
+    }],
+    "keywords": ["ui-customization", "tooltips", "dynamic-hints", "disassembly-enhancement", "developer-example"]
   }
 }
