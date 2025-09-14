@@ -4,7 +4,7 @@
   "plugin": {
     "name": "colorize-calls",
     "entryPoint": "colorize_calls.py",
-    "version": "v0.1.2",
+    "version": "0.1.2",
     "idaVersions": ">=9.0",
     "description": "Colors call instructions and adds a prefix in the disassembly listing.",
     "license": "Apache 2.0",
@@ -19,6 +19,12 @@
       "name": "Willi Ballenthin",
       "email": "wballenthin@hex-rays.com"
     }],
-    "keywords": ["visual-enhancement", "code-analysis", "disassembly-highlighting", "reverse-engineering", "ui-improvement"]
+    "keywords": [
+      "visual-enhancement",
+      "code-analysis",
+      "disassembly-highlighting",
+      "reverse-engineering",
+      "ui-improvement"
+    ]
   }
 }

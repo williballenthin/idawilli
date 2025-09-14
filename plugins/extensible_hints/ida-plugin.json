@@ -3,7 +3,7 @@
   "plugin": {
     "name": "extensible-hints",
     "entryPoint": "extensible_hints.py",
-    "version": "v0.1.2",
+    "version": "0.1.2",
     "idaVersions": ">=9.0",
     "description": "Demonstrate how to display dynamic hints.",
     "license": "Apache 2.0",
@@ -18,6 +18,12 @@
       "name": "Willi Ballenthin",
       "email": "wballenthin@hex-rays.com"
     }],
-    "keywords": ["ui-customization", "tooltips", "dynamic-hints", "disassembly-enhancement", "developer-example"]
+    "keywords": [
+      "ui-customization",
+      "tooltips",
+      "dynamic-hints",
+      "disassembly-enhancement",
+      "developer-example"
+    ]
   }
 }

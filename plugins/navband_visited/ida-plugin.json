@@ -4,7 +4,7 @@
   "plugin": {
     "name": "navband-visited",
     "entryPoint": "navband_visited.py",
-    "version": "v0.1.2",
+    "version": "0.1.2",
     "idaVersions": ">=9.0",
     "description": "Tracks and records all disassembly addresses you visit during your analysis, highlighting these visited addresses in IDA's navigation band.",
     "license": "Apache 2.0",
@@ -19,6 +19,12 @@
       "name": "Willi Ballenthin",
       "email": "wballenthin@hex-rays.com"
     }],
-    "keywords": ["navigation-tracking", "analysis-visualization", "reverse-engineering", "ui-enhancement", "code-exploration"]
+    "keywords": [
+      "navigation-tracking",
+      "analysis-visualization",
+      "reverse-engineering",
+      "ui-enhancement",
+      "code-exploration",
+    ]
   }
 }

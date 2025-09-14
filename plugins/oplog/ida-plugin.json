@@ -4,7 +4,7 @@
   "plugin": {
     "name": "oplog",
     "entryPoint": "oplog_entry.py",
-    "version": "v0.1.2",
+    "version": "0.1.2",
     "idaVersions": ">=9.1",
     "description": "oplog is an IDA Pro plugin that records operations during analysis.",
     "license": "Apache 2.0",
@@ -19,6 +19,12 @@
       "name": "Willi Ballenthin",
       "email": "wballenthin@hex-rays.com"
     }],
-    "keywords": ["activity-tracking", "workflow-analysis", "reverse-engineering-methodology", "ai-training-data", "analysis-visualization"]
+    "keywords": [
+      "activity-tracking",
+      "workflow-analysis",
+      "reverse-engineering-methodology",
+      "ai-training-data",
+      "analysis-visualization"
+    ]
   }
 }

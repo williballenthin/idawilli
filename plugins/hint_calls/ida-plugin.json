@@ -4,7 +4,7 @@
   "plugin": {
     "name": "hint-calls",
     "entryPoint": "hint_calls.py",
-    "version": "v0.1.2",
+    "version": "0.1.2",
     "idaVersions": ">=9.0",
     "description": "Displays popup function hints for the referenced calls and strings.",
     "license": "Apache 2.0",
@@ -19,6 +19,12 @@
       "name": "Willi Ballenthin",
       "email": "wballenthin@hex-rays.com"
     }],
-    "keywords": ["reverse-engineering", "function-analysis", "ui-enhancement", "code-navigation", "popup-hints"]
+    "keywords": [
+      "reverse-engineering",
+      "function-analysis",
+      "ui-enhancement",
+      "code-navigation",
+      "popup-hints"
+    ]
   }
 }

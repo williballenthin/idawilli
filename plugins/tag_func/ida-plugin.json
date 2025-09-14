@@ -4,7 +4,7 @@
   "plugin": {
     "name": "tag-func",
     "entryPoint": "tag_func.py",
-    "version": "v0.1.2",
+    "version": "0.1.2",
     "idaVersions": ">=9.0",
     "description": "Quickly organize functions into tags via hotkey (Z).",
     "license": "Apache 2.0",
@@ -19,6 +19,12 @@
       "name": "Willi Ballenthin",
       "email": "wballenthin@hex-rays.com"
     }],
-    "keywords": ["function-organization", "reverse-engineering", "code-navigation", "function-tagging", "workflow-optimization"]
+    "keywords": [
+      "function-organization",
+      "reverse-engineering",
+      "code-navigation",
+      "function-tagging",
+      "workflow-optimization"
+    ]
   }
 }

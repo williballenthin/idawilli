@@ -4,7 +4,7 @@
   "plugin": {
     "name": "bookmark-hints",
     "entryPoint": "bookmark_hints.py",
-    "version": "v0.1.2",
+    "version": "0.1.2",
     "idaVersions": ">=9.0",
     "description": "Show a hoverable icon on lines with a bookmark.",
     "license": "Apache 2.0",
@@ -19,6 +19,12 @@
       "name": "Willi Ballenthin",
       "email": "wballenthin@hex-rays.com"
     }],
-    "keywords": ["bookmarks", "navigation", "ui-enhancement", "tooltips", "disassembly-view"]
+    "keywords": [
+      "bookmarks",
+      "navigation",
+      "ui-enhancement",
+      "tooltips",
+      "disassembly-view"
+    ]
   }
 }
