@@ -4,8 +4,8 @@
   "plugin": {
     "name": "hint-calls",
     "entryPoint": "hint_calls.py",
-    "version": "0.1.2",
-    "idaVersions": ">=9.0",
+    "version": "0.1.3",
+    "idaVersions": ["9.0", "9.1", "9.2"],
     "description": "Displays popup function hints for the referenced calls and strings.",
     "license": "Apache 2.0",
     "categories": [

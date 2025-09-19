@@ -4,8 +4,8 @@
   "plugin": {
     "name": "colorize-calls",
     "entryPoint": "colorize_calls.py",
-    "version": "0.1.2",
-    "idaVersions": ">=9.0",
+    "version": "0.1.3",
+    "idaVersions": ["9.0", "9.1", "9.2"],
     "description": "Colors call instructions and adds a prefix in the disassembly listing.",
     "license": "Apache 2.0",
     "categories": [
