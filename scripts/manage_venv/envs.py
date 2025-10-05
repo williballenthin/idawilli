@@ -3,12 +3,38 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
+import logging
 import os
 import sys
 from pathlib import Path
 from typing import Optional
 
-import idaapi
+try:  # pragma: no cover - module availability depends on IDA runtime
+    import idaapi  # type: ignore
+except ImportError:  # pragma: no cover - allows use from idalib or tests
+    idaapi = None  # type: ignore
+
+
+logger = logging.getLogger(__name__)
+
+
+ENV_LOG_LEVEL = logging.WARNING
+ENV_LOG_FORMAT = "%(message)s"
+
+
+def configure_logging(level: Optional[int] = None) -> None:
+    effective_level = level if level is not None else ENV_LOG_LEVEL
+    logger.setLevel(effective_level)
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter(ENV_LOG_FORMAT))
+        logger.addHandler(handler)
+    for handler in logger.handlers:
+        handler.setLevel(effective_level)
+    logger.propagate = False
+
+
+configure_logging()
 
 
 def detect_env(env: Optional[str] = None) -> bool:
@@ -23,7 +49,7 @@ def detect_env(env: Optional[str] = None) -> bool:
     Returns:
         True if an environment is (or becomes) active, False otherwise.
     '''
-    print("Detecting Python virtual environment...")
+    logger.info("Detecting Python virtual environment...")
 
     # Normalize input: treat empty strings as None
     if env is not None and not str(env).strip():
@@ -32,53 +58,56 @@ def detect_env(env: Optional[str] = None) -> bool:
     # Fast path: already inside an environment
     already_active = os.environ.get("VIRTUAL_ENV") or os.environ.get("CONDA_PREFIX")
     if already_active:
-        print(" - Environment already active: %s" % already_active)
+        logger.info("Environment already active: %s", already_active)
         return True
 
     # Helper to try an activation once, then retry exactly once with defaults
-    def _try_env(label, func, args_primary, kwargs_primary, args_fallback, kwargs_fallback) -> bool:
+    def _try_env(label, func, primary_kwargs, fallback_kwargs) -> bool:
         try:
-            path = func(*args_primary, **kwargs_primary)
-            print(" - %s activated: %s" % (label, path))
+            path = func(**primary_kwargs)
+            logger.info("%s activated: %s", label, path)
             return True
         except ValueError as e:
-            print(" - %s: %s (retrying with defaults)" % (label, e))
+            logger.info("%s: %s (retrying with defaults)", label, e)
             try:
-                path = func(*args_fallback, **kwargs_fallback)
-                print(" - %s activated on retry: %s" % (label, path))
+                path = func(**fallback_kwargs)
+                logger.info("%s activated on retry: %s", label, path)
                 return True
             except ValueError as e2:
-                print(" - %s retry failed: %s" % (label, e2))
+                logger.warning("%s retry failed: %s", label, e2)
                 return False
         except Exception as e:
             # Defensive guard: unexpected errors shouldn't bring down detection
-            print(" - %s unexpected error: %s" % (label, e))
+            logger.exception("%s unexpected error: %s", label, e)
             return False
 
     # 1) virtualenv: primary with provided env, fallback with defaults (no args)
     if _try_env(
-        "Virtualenv",
-        activate_virtualenv_env,
-        (env,), {"interactive": False},
-        tuple(), {},
+        label="Virtualenv",
+        func=activate_virtualenv_env,
+        primary_kwargs={"virtualenv": env, "interactive": False},
+        fallback_kwargs={},
     ):
         return True
 
     # 2) conda: primary with provided env, fallback with defaults (no args)
     if _try_env(
-        "Conda",
-        activate_conda_env,
-        (None, env), {"interactive": False},
-        tuple(), {},
+        label="Conda",
+        func=activate_conda_env,
+        primary_kwargs={"env": env, "interactive": False},
+        fallback_kwargs={},
     ):
         return True
 
-    print(" - No Python environment activated.")
+    logger.info("No Python environment activated.")
     return False
 
 
 def _prompt_for_path(prompt: str, default: Path) -> Optional[str]:
     '''Ask the user for a filesystem path through the IDA UI.'''
+
+    if idaapi is None:
+        return None
 
     ask_new = getattr(idaapi, "ask_str", None)
     if callable(ask_new):
@@ -105,10 +134,11 @@ def activate_virtualenv_env(
 ) -> str:
     '''Activate a virtualenv-based environment and return its absolute path.'''
 
-    base_path = Path(base_dir or idaapi.get_user_idadir())
+    base_path = _resolve_base_path(base_dir)
     folder = Path("Scripts" if os.name == "nt" else "bin")
 
     env_path: Optional[Path] = None
+    prompt_used = False
 
     if virtualenv:
         env_path = _normalize_env_path(Path(virtualenv), base_path)
@@ -116,11 +146,12 @@ def activate_virtualenv_env(
         env_var = os.environ.get("VIRTUAL_ENV")
         if env_var:
             env_path = Path(env_var).expanduser()
-        elif interactive:
+        elif interactive and idaapi is not None:
             default_virtualenv = base_path / "virtualenv"
             user_input = _prompt_for_path("Provide path to virtualenv", default_virtualenv)
             if user_input and user_input.strip():
                 env_path = _normalize_env_path(Path(user_input.strip()), base_path)
+                prompt_used = True
 
     if env_path is None:
         raise ValueError("No active virtualenv")
@@ -137,7 +168,18 @@ def activate_virtualenv_env(
     except OSError as exc:
         raise ValueError("Unable to read activation script %s: %s" % (script_path, exc)) from exc
 
-    return str(env_path)
+    env_path_str = str(env_path)
+    if prompt_used:
+        suggested_env = env_path
+        try:
+            suggested_env = env_path.relative_to(base_path)
+        except ValueError:
+            pass
+        message_template = "To avoid prompts on future launches, configure envs.activate_virtualenv_env(virtualenv=%r, base_dir=%r)"
+        logger.warning(message_template, str(suggested_env), str(base_path))
+        if idaapi is not None:
+            idaapi.warning(message_template % (str(suggested_env), str(base_path)))
+    return env_path_str
 
 
 def activate_conda_env(
@@ -148,9 +190,10 @@ def activate_conda_env(
     '''Activate a Conda/Mamba environment and return its absolute path.'''
 
     folder = Path("Scripts" if os.name == "nt" else "bin")
-    base_path = Path(base or idaapi.get_user_idadir())
+    base_path = _resolve_base_path(base)
 
     env_path: Optional[Path] = None
+    prompt_used = False
 
     if env:
         env_path = _normalize_env_path(Path(env), base_path)
@@ -158,10 +201,12 @@ def activate_conda_env(
         env_var = os.environ.get("CONDA_PREFIX")
         if env_var:
             env_path = Path(env_var).expanduser()
-        elif interactive:
-            user_input = _prompt_for_path("Conda/Mamba - Provide path to env", base_path)
+        elif interactive and idaapi is not None:
+            default_conda_env = base_path / ".venv_directory"
+            user_input = _prompt_for_path("Conda/Mamba - Provide path to env", default_conda_env)
             if user_input and user_input.strip():
                 env_path = _normalize_env_path(Path(user_input.strip()), base_path)
+                prompt_used = True
 
     if env_path is None:
         raise ValueError("No active Conda/Mamba env")
@@ -203,9 +248,26 @@ def activate_conda_env(
             sys.path.remove(item)
     sys.path[:0] = new_sys_path
 
-    print("Successfully activated venv for IDAPython: %s" % env_path)
-    return str(env_path)
+    env_path_str = str(env_path)
+    logger.info("Successfully activated venv for IDAPython: %s", env_path_str)
+    if prompt_used:
+        suggested_env = env_path
+        try:
+            suggested_env = env_path.relative_to(base_path)
+        except ValueError:
+            pass
+        message_template = "To avoid prompts on future launches, configure envs.activate_conda_env(env=%r, base=%r)"
+        logger.warning(message_template, str(suggested_env), str(base_path))
+        if idaapi is not None:
+            idaapi.warning(message_template % (str(suggested_env), str(base_path)))
+    return env_path_str
 
+def _resolve_base_path(base_dir: Optional[str]) -> Path:
+    if base_dir is not None:
+        return Path(base_dir)
+    if idaapi is not None:
+        return Path(idaapi.get_user_idadir())
+    raise ValueError("base_dir must be provided when running outside of IDA")
 
 # make the env activation functions accessible to the IDA console (7.0+)
 sys.modules["__main__"].activate_virtualenv_env = activate_virtualenv_env
