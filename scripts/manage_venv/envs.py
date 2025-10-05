@@ -263,7 +263,7 @@ def activate_conda_env(
     return env_path_str
 
 def _resolve_base_path(base_dir: Optional[str]) -> Path:
-    if base_dir is not None:
+    if base_dir is not None and base_dir.strip():
         return Path(base_dir)
     if idaapi is not None:
         return Path(idaapi.get_user_idadir())
