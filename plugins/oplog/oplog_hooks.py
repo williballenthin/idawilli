@@ -714,12 +714,13 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         self.events.add_event(ev)
 
     # TODO: what is opinfo? type?
+    # https://python.docs.hex-rays.com/ida_nalt/index.html#ida_nalt.opinfo_t
     # this has more info than op_type_changed
     def changing_op_type(self, ea: ida_idaapi.ea_t, n: int, opinfo) -> None:
         """An operand type (offset, hex, etc...) is to be changed."""
         logger.debug("changing_op_type(ea=%d, n=%d, opinfo=%s)", ea, n, opinfo)
         # TODO: opinfo cannot be serialized
-        ev = changing_op_type_event(event_name="changing_op_type", timestamp=datetime.now(), ea=ea, n=n, opinfo=opinfo)
+        ev = changing_op_type_event(event_name="changing_op_type", timestamp=datetime.now(), ea=ea, n=n)
         self.events.add_event(ev)
 
     def op_type_changed(self, ea: ida_idaapi.ea_t, n: int) -> None:

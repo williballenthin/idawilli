@@ -106,8 +106,6 @@ class InsnModel(BaseModel):
     itype: int
     size: int
     auxpref: int
-    auxpref_u16: list[int]
-    auxpref_u8: list[int]
     segpref: int
     insnpref: int
     flags: int
@@ -123,8 +121,6 @@ class InsnModel(BaseModel):
             itype=insn.itype,
             size=insn.size,
             auxpref=insn.auxpref,
-            auxpref_u16=list(insn.auxpref_u16),
-            auxpref_u8=list(insn.auxpref_u8),
             segpref=insn.segpref,
             insnpref=insn.insnpref,
             flags=insn.flags,
@@ -637,7 +633,8 @@ class changing_op_type_event(BaseModel):
     timestamp: datetime
     ea: int
     n: int
-    opinfo: Any
+    # TODO: this is pretty complex and not directly serializable
+    # opinfo: Any
 
 
 class op_type_changed_event(BaseModel):
