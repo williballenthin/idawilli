@@ -5,6 +5,7 @@ import logging
 from dataclasses import dataclass
 
 import ida_name
+import ida_auto
 import ida_lines
 import ida_idaapi
 import ida_kernwin
@@ -390,6 +391,20 @@ class oplog_plugmod_t(ida_idaapi.plugmod_t):
         #  and don't require the menu entry (edit > plugins > ...) being selected.
         #
         # note: IDA doesn't call init, we do in __init__
+
+        if not ida_auto.auto_is_ok():
+            # don't capture events before auto-analysis is done, or we get all the system events.
+            #
+            # note:
+            # - when we first load a program, this plugin will be run before auto-analysis is complete
+            #   (actually, before auto-analysis even starts).
+            #   so auto_is_ok() returns False
+            # - when we load an existing IDB, auto_is_ok() return True.
+            # so we can safely use this to wait until auto-analysis is complete for the first time.
+            logger.debug("waiting for auto-analysis to complete before subscribing to events")
+            ida_auto.auto_wait()
+            logger.debug("auto-analysis complete, now subscribing to events")
+
         self.events = load_events()
         self.register_idb_hooks()
         self.register_location_hooks()
