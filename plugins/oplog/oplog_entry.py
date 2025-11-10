@@ -1,3 +1,4 @@
+import os
 import logging
 
 import ida_kernwin
@@ -7,15 +8,21 @@ logger = logging.getLogger(__name__)
 
 oplog_ok = True
 
-try:
-    from PyQt5 import QtCore
-except ImportError:
-    logger.warning("no PyQt5, skipping")
-    oplog_ok = False
+if oplog_ok:
+    if not ida_kernwin.is_idaq():
+        # https://community.hex-rays.com/t/how-to-check-if-idapythonrc-py-is-running-in-ida-pro-or-idalib/297/4
+        oplog_ok = False
 
-if ida_kernwin.get_kernel_version().split(".") < "9.1".split(","):
-    logger.warning("IDA too old (must be 9.1+): %s", ida_kernwin.get_kernel_version())
-    oplog_ok = False
+if oplog_ok:
+    if not os.environ.get("IDA_IS_INTERACTIVE") == "1":
+        # https://community.hex-rays.com/t/how-to-check-if-idapythonrc-py-is-running-in-ida-pro-or-idalib/297/2
+        oplog_ok = False
+
+if oplog_ok:
+    kernel_version: tuple[int, ...] = tuple(int(part) for part in ida_kernwin.get_kernel_version().split(".") if part.isdigit()) or (0, )
+    if kernel_version < (9, 2):  # type: ignore
+        logger.warning("IDA too old (must be 9.2+): %s", ida_kernwin.get_kernel_version())
+        oplog_ok = False
 
 
 if oplog_ok:
