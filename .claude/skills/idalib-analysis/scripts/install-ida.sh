@@ -121,10 +121,10 @@ else
     log "CLAUDE_ENV_FILE not set, skipping credential clearing"
 fi
 
-# Install idapro Python package
-log "About to install idapro via uv pip"
-echo "Installing idapro Python package..."
-run_logged uv pip install --system idapro
+# Install idapro and ida-domain Python packages
+log "About to install idapro and ida-domain via uv pip"
+echo "Installing Python packages (idapro, ida-domain)..."
+run_logged uv pip install --system idapro ida-domain
 
 # Accept EULA and disable auto-update features for batch mode
 log "About to configure IDA registry settings (EULA, AutoUseLumina, AutoCheckUpdates)"
@@ -160,19 +160,19 @@ if [ -f "${CLAUDE_PROJECT_DIR:-}/setup.py" ]; then
     log "idawilli package installed"
 fi
 
-# Verify final idapro import
-log "About to verify final idapro import"
+# Verify final imports
+log "About to verify final imports (idapro, ida_domain)"
 set +e
-python3 -c "import idapro; print('idapro import successful')" >> "$LOG_FILE" 2>&1
+python3 -c "import idapro; from ida_domain import Database; print('imports successful')" >> "$LOG_FILE" 2>&1
 FINAL_IMPORT_EXIT=$?
 set -e
-log "Final idapro import verification exit code: $FINAL_IMPORT_EXIT"
+log "Final import verification exit code: $FINAL_IMPORT_EXIT"
 
 if [ $FINAL_IMPORT_EXIT -ne 0 ]; then
-    log "ERROR: Final idapro import failed"
-    echo "Error: idapro import failed after installation. Check /tmp/claude-idalib.log for details."
+    log "ERROR: Final import verification failed"
+    echo "Error: Import verification failed after installation. Check /tmp/claude-idalib.log for details."
     exit 1
 fi
 
 log "install-ida.sh completed successfully"
-echo "IDA Pro and idalib are ready for use."
+echo "IDA Pro, idalib, and ida-domain are ready for use."
