@@ -32,16 +32,13 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
 fi
 
 # Check if IDA is already installed (idempotent)
-if [ -d "$IDA_INSTALL_DIR" ] && [ -f "$IDA_INSTALL_DIR/idat64" ]; then
+if [ -d "$IDA_INSTALL_DIR" ] && [ -f "$IDA_INSTALL_DIR/idat" ]; then
     echo "IDA Pro already installed at ${IDA_INSTALL_DIR}"
 else
     echo "Installing HCLI..."
 
-    # Install HCLI binary
-    curl -LsSf https://hcli.docs.hex-rays.com/install | sh
-
-    # Add HCLI to PATH for this script
-    export PATH="${HOME}/.local/bin:${PATH}"
+    # Install HCLI via pip
+    uv pip install --system ida-hcli
 
     echo "Installing IDA Pro..."
 
@@ -58,12 +55,18 @@ else
     echo "IDA Pro installed successfully."
 fi
 
+# Clear sensitive credentials after hcli is done
+if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+    echo "export HCLI_API_KEY=" >> "$CLAUDE_ENV_FILE"
+    echo "export IDA_LICENSE_ID=" >> "$CLAUDE_ENV_FILE"
+fi
+
 # Install idapro Python package if not already installed
 if ! python3 -c "import idapro" 2>/dev/null; then
     echo "Installing idapro Python package..."
 
-    # Install from PyPI
-    pip install idapro
+    # Install from PyPI (also installed as dependency of ida-hcli)
+    uv pip install --system idapro
 
     # Activate idalib with the IDA installation
     if [ -f "${IDA_INSTALL_DIR}/py-activate-idalib.py" ]; then
@@ -71,6 +74,15 @@ if ! python3 -c "import idapro" 2>/dev/null; then
     elif [ -f "${IDA_INSTALL_DIR}/idalib/python/py-activate-idalib.py" ]; then
         python3 "${IDA_INSTALL_DIR}/idalib/python/py-activate-idalib.py" -d "${IDA_INSTALL_DIR}"
     fi
+
+    # Accept EULA and disable auto-update features for batch mode
+    python3 -c "
+import idapro
+import ida_registry
+ida_registry.reg_write_int('EULA 90', 1)
+ida_registry.reg_write_int('AutoUseLumina', 0)
+ida_registry.reg_write_int('AutoCheckUpdates', 0)
+"
 
     echo "idapro Python package installed and activated."
 else
@@ -80,7 +92,7 @@ fi
 # Install this repository's package
 if [ -f "${CLAUDE_PROJECT_DIR:-}/setup.py" ]; then
     echo "Installing idawilli package..."
-    pip install -e "${CLAUDE_PROJECT_DIR}"
+    uv pip install --system -e "${CLAUDE_PROJECT_DIR}"
 fi
 
 echo "IDA Pro development environment setup complete!"
