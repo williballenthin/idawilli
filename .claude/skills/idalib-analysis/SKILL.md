@@ -21,7 +21,21 @@ Wait for the script to complete before proceeding. This may take a few minutes o
 
 **Always prefer the IDA Domain API** over the legacy low-level IDA Python SDK. The Domain API provides a clean, Pythonic interface that is easier to use and understand.
 
-Full documentation: https://ida-domain.docs.hex-rays.com/llms.txt
+### Documentation Resources
+
+| Resource | URL |
+|----------|-----|
+| **LLM-optimized overview** | https://ida-domain.docs.hex-rays.com/llms.txt |
+| **Getting Started** | https://ida-domain.docs.hex-rays.com/getting_started/index.md |
+| **Examples** | https://ida-domain.docs.hex-rays.com/examples/index.md |
+| **API Reference** | https://ida-domain.docs.hex-rays.com/ref/{module}/index.md |
+
+Available API modules: `bytes`, `comments`, `database`, `entries`, `flowchart`, `functions`, `heads`, `hooks`, `instructions`, `names`, `operands`, `segments`, `signature_files`, `strings`, `types`, `xrefs`
+
+**To fetch specific API documentation**, use URLs like:
+- `https://ida-domain.docs.hex-rays.com/ref/functions/index.md` - Function analysis API
+- `https://ida-domain.docs.hex-rays.com/ref/xrefs/index.md` - Cross-reference API
+- `https://ida-domain.docs.hex-rays.com/ref/strings/index.md` - String analysis API
 
 ### Opening a Database
 
@@ -206,6 +220,29 @@ def is_decompiler_available():
 - `MERR_ONLY64 (-25)`: 64-bit decompiler not available (need hexx64 plugin)
 
 **Workaround when decompilation is unavailable:** Use disassembly analysis instead - the `get_disassembly()` method always works and provides assembly-level insight.
+
+## Exploring the API at Runtime
+
+When the documentation doesn't answer your question, explore the API directly:
+
+```python
+import inspect
+from ida_domain import Database
+from ida_domain.functions import Functions
+
+# List all public methods on a class
+for name, method in inspect.getmembers(Functions, predicate=inspect.isfunction):
+    if not name.startswith('_'):
+        print(f"{name}: {inspect.signature(method)}")
+
+# Get docstring for a specific method
+print(Functions.get_pseudocode.__doc__)
+
+# Within a database context, explore available attributes
+with Database.open(path, ida_options) as db:
+    # List all database properties
+    print([attr for attr in dir(db) if not attr.startswith('_')])
+```
 
 ## Legacy API (Avoid)
 
