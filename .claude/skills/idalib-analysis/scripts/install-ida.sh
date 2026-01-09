@@ -110,17 +110,6 @@ fi
 log "hcli ida install completed successfully"
 echo "IDA Pro installed successfully."
 
-# Clear sensitive credentials after hcli is done
-log "About to clear sensitive credentials from CLAUDE_ENV_FILE"
-if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-    log "Clearing HCLI_API_KEY and IDA_LICENSE_ID in $CLAUDE_ENV_FILE"
-    echo "export HCLI_API_KEY=" >> "$CLAUDE_ENV_FILE"
-    echo "export IDA_LICENSE_ID=" >> "$CLAUDE_ENV_FILE"
-    log "Credentials cleared"
-else
-    log "CLAUDE_ENV_FILE not set, skipping credential clearing"
-fi
-
 # Install idapro and ida-domain Python packages
 log "About to install idapro and ida-domain via uv pip"
 echo "Installing Python packages (idapro, ida-domain)..."
