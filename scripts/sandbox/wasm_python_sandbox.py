@@ -12,9 +12,29 @@ and VMware Labs' CPython WASM build.
 Features demonstrated:
 1. Loading and running CPython WASM interpreter
 2. Capturing stdout/stderr from the sandbox
-3. Passing complex data (dict with list) into the sandbox via files
-4. Getting complex results back via stdout
-5. Host function simulation via file-based IPC
+3. Passing complex data (dict with list) via stdin/stdout JSON protocol
+4. Defining host functions using Func, FuncType, ValType, and Linker
+5. Bidirectional communication with exposed host functions
+6. Fuel-based execution limiting
+
+Technical Background on Host Functions:
+---------------------------------------
+WebAssembly modules can import functions from the host environment. In wasmtime-py,
+you define these using:
+- FuncType: Defines the function signature (parameter and return types)
+- ValType: Represents WASM value types (i32, i64, f32, f64, externref, funcref)
+- Func: Wraps a Python callable as a WASM-callable function
+- Linker: Registers imports and instantiates modules
+
+IMPORTANT LIMITATION: The pre-built VMware Labs CPython WASM only imports standard
+WASI functions. For a guest Python script to call custom host functions, you would
+need to either:
+1. Build a custom CPython WASM with additional imports (using __import_module__ in C)
+2. Use the WASI Component Model (more complex, emerging standard)
+
+This demo shows BOTH:
+- How to properly define host functions (for educational purposes and custom builds)
+- Practical workarounds using stdin/stdout JSON protocol for the pre-built CPython
 
 Usage:
     uv run wasm_python_sandbox.py
@@ -27,14 +47,24 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 import tempfile
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from wasmtime import Config, Engine, Linker, Module, Store, WasiConfig
+from wasmtime import (
+    Config,
+    Engine,
+    Func,
+    FuncType,
+    Linker,
+    Module,
+    Store,
+    ValType,
+    WasiConfig,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -54,7 +84,7 @@ class ExecutionResult:
     success: bool = True
 
 
-def create_engine(*, use_fuel: bool = False, fuel_limit: int = 400_000_000) -> Engine:
+def create_engine(*, use_fuel: bool = False) -> Engine:
     """Create a wasmtime Engine with optional fuel limiting."""
     config = Config()
     if use_fuel:
@@ -66,7 +96,7 @@ def create_engine(*, use_fuel: bool = False, fuel_limit: int = 400_000_000) -> E
 def run_python_code(
     code: str,
     *,
-    input_data: dict[str, Any] | None = None,
+    stdin_data: str | None = None,
     use_fuel: bool = False,
     fuel_limit: int = 400_000_000,
 ) -> ExecutionResult:
@@ -75,7 +105,7 @@ def run_python_code(
 
     Args:
         code: Python source code to execute
-        input_data: Optional dict to pass to the sandbox (available as /input.json)
+        stdin_data: Optional string to provide as stdin to the sandbox
         use_fuel: Whether to limit execution by fuel consumption
         fuel_limit: Maximum fuel units if use_fuel is True
 
@@ -87,7 +117,7 @@ def run_python_code(
     if not PYTHON_LIB.exists():
         raise FileNotFoundError(f"Python lib not found: {PYTHON_LIB}")
 
-    engine = create_engine(use_fuel=use_fuel, fuel_limit=fuel_limit)
+    engine = create_engine(use_fuel=use_fuel)
 
     linker = Linker(engine)
     linker.define_wasi()
@@ -100,20 +130,23 @@ def run_python_code(
 
         stdout_file = workdir_path / "stdout.log"
         stderr_file = workdir_path / "stderr.log"
+        stdin_file = workdir_path / "stdin.txt"
         stdout_file.touch()
         stderr_file.touch()
 
+        if stdin_data is not None:
+            stdin_file.write_text(stdin_data)
+        else:
+            stdin_file.touch()
+
         script_file = workdir_path / "script.py"
         script_file.write_text(code)
-
-        if input_data is not None:
-            input_file = workdir_path / "input.json"
-            input_file.write_text(json.dumps(input_data))
 
         wasi_config = WasiConfig()
         wasi_config.argv = ("python", "/sandbox/script.py")
         wasi_config.stdout_file = str(stdout_file)
         wasi_config.stderr_file = str(stderr_file)
+        wasi_config.stdin_file = str(stdin_file)
 
         wasi_config.preopen_dir(str(workdir_path), "/sandbox")
         wasi_config.preopen_dir(str(PYTHON_LIB), "/usr/local/lib")
@@ -152,9 +185,9 @@ def run_python_code(
 
 def demo_basic_execution():
     """Demonstrate basic code execution with stdout/stderr capture."""
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 70)
     print("Demo 1: Basic Execution with stdout/stderr capture")
-    print("=" * 60)
+    print("=" * 70)
 
     code = '''
 import sys
@@ -171,88 +204,200 @@ print("This goes to stderr", file=sys.stderr)
     print(f"stderr:\n{result.stderr}")
 
 
-def demo_complex_data_passing():
-    """Demonstrate passing complex data structures into the sandbox."""
-    print("\n" + "=" * 60)
-    print("Demo 2: Passing Complex Data (dict with list) into Sandbox")
-    print("=" * 60)
+def demo_stdin_stdout_communication():
+    """
+    Demonstrate passing complex data via stdin/stdout JSON protocol.
+
+    This is the cleanest way to communicate with the pre-built CPython WASM:
+    - Host writes JSON to stdin
+    - Guest reads from stdin, processes, writes JSON to stdout
+    - Host reads and parses the result
+    """
+    print("\n" + "=" * 70)
+    print("Demo 2: Complex Data via stdin/stdout JSON Protocol")
+    print("=" * 70)
 
     input_data = {
         "name": "test_experiment",
-        "parameters": {
-            "learning_rate": 0.001,
-            "batch_size": 32,
-        },
+        "parameters": {"learning_rate": 0.001, "batch_size": 32},
         "data_points": [1.5, 2.7, 3.14, 4.2, 5.0],
         "tags": ["ml", "training", "v1"],
     }
 
     code = '''
+import sys
 import json
 
-with open("/sandbox/input.json") as f:
-    data = json.load(f)
+# Read input from stdin
+input_json = sys.stdin.read()
+data = json.loads(input_json)
 
-print("Received complex data structure:")
-print(f"  Name: {data['name']}")
-print(f"  Parameters: {data['parameters']}")
-print(f"  Data points: {data['data_points']}")
-print(f"  Tags: {data['tags']}")
+print("Received complex data structure:", file=sys.stderr)
+print(f"  Name: {data['name']}", file=sys.stderr)
+print(f"  Parameters: {data['parameters']}", file=sys.stderr)
+print(f"  Data points: {data['data_points']}", file=sys.stderr)
+print(f"  Tags: {data['tags']}", file=sys.stderr)
 
 # Process the data
 total = sum(data["data_points"])
 avg = total / len(data["data_points"])
 
-# Return result as JSON on stdout
+# Return result as JSON on stdout (clean protocol)
 result = {
     "input_name": data["name"],
     "sum": total,
     "average": avg,
     "point_count": len(data["data_points"]),
 }
-print("---RESULT_JSON---")
 print(json.dumps(result))
 '''
 
-    result = run_python_code(code, input_data=input_data)
-    print(f"\nstdout:\n{result.stdout}")
+    print(f"Sending to sandbox via stdin: {json.dumps(input_data, indent=2)}")
+    result = run_python_code(code, stdin_data=json.dumps(input_data))
 
-    if "---RESULT_JSON---" in result.stdout:
-        json_str = result.stdout.split("---RESULT_JSON---")[1].strip()
-        parsed_result = json.loads(json_str)
-        print(f"\nParsed result from sandbox: {parsed_result}")
+    print(f"\nSandbox stderr (status messages):\n{result.stderr}")
+    print(f"Sandbox stdout (result):\n{result.stdout}")
+
+    if result.stdout.strip():
+        parsed_result = json.loads(result.stdout.strip())
+        print(f"Parsed result from sandbox: {parsed_result}")
 
 
-def demo_host_function_simulation():
+def demo_host_function_definitions():
     """
-    Demonstrate simulating a host function call from the sandbox.
+    Demonstrate how to define host functions using Func, FuncType, ValType, Linker.
 
-    This shows a pattern where the sandbox can "call" host functions by:
-    1. Writing a request to a file
-    2. The host reads and processes the request
-    3. The host writes the response back
-    4. The sandbox reads the response
-
-    Since WASM execution is synchronous, we simulate this with a multi-step approach:
-    - Guest writes all requests to a file
-    - Guest executes with limited capability
-    - Host processes requests post-execution (or uses a more complex IPC setup)
-
-    For a true synchronous host function call, you would need to either:
-    - Build a custom CPython with WASM imports for your functions
-    - Use a more sophisticated IPC mechanism with threads/async
-
-    This demo shows the practical file-based pattern commonly used for sandboxed execution.
+    This shows the proper wasmtime-py API for defining host functions that WASM
+    modules can import. While the pre-built CPython WASM won't call these
+    (it only imports WASI functions), this demonstrates the pattern for:
+    - Custom WASM builds
+    - Educational purposes
+    - Other WASM modules you might use
     """
-    print("\n" + "=" * 60)
-    print("Demo 3: Host Function Simulation via File-Based IPC")
-    print("=" * 60)
+    print("\n" + "=" * 70)
+    print("Demo 3: Host Function Definitions (Func, FuncType, ValType, Linker)")
+    print("=" * 70)
+
+    print("\nThis demo shows HOW to define host functions in wasmtime-py.")
+    print("Note: Pre-built CPython WASM only imports WASI functions, so it")
+    print("cannot call these directly. For that, you'd need a custom build.\n")
+
+    engine = Engine()
+    store = Store(engine)
+    linker = Linker(engine)
+    linker.define_wasi()
+
+    # Track calls for demonstration
+    call_log: list[str] = []
+
+    # Example 1: Simple function with no parameters, no return
+    def host_log_message():
+        call_log.append("host_log_message called")
+        print("  [HOST] Log message from host function!")
+
+    log_func_type = FuncType([], [])  # () -> ()
+    log_func = Func(store, log_func_type, host_log_message)
+    linker.define(store, "env", "log_message", log_func)
+    print("Defined: env.log_message() -> void")
+    print(f"  FuncType: {log_func_type}")
+
+    # Example 2: Function with i32 parameters and i32 return
+    def host_add_numbers(a: int, b: int) -> int:
+        call_log.append(f"host_add_numbers({a}, {b})")
+        result = a + b
+        print(f"  [HOST] Adding {a} + {b} = {result}")
+        return result
+
+    add_func_type = FuncType([ValType.i32(), ValType.i32()], [ValType.i32()])
+    add_func = Func(store, add_func_type, host_add_numbers)
+    linker.define(store, "env", "add_numbers", add_func)
+    print("\nDefined: env.add_numbers(i32, i32) -> i32")
+    print(f"  FuncType: {add_func_type}")
+
+    # Example 3: Function with i64 and f64 types
+    def host_compute(x: int, y: float) -> float:
+        call_log.append(f"host_compute({x}, {y})")
+        result = float(x) * y
+        print(f"  [HOST] Computing {x} * {y} = {result}")
+        return result
+
+    compute_func_type = FuncType([ValType.i64(), ValType.f64()], [ValType.f64()])
+    compute_func = Func(store, compute_func_type, host_compute)
+    linker.define(store, "math", "compute", compute_func)
+    print("\nDefined: math.compute(i64, f64) -> f64")
+    print(f"  FuncType: {compute_func_type}")
+
+    # Example 4: Function with access_caller=True for memory access
+    def host_process_buffer(caller, ptr: int, length: int) -> int:
+        """
+        Host function that can access the caller's memory.
+        The 'caller' parameter (when access_caller=True) provides access to
+        the calling module's exports, including its memory.
+        """
+        call_log.append(f"host_process_buffer(ptr={ptr}, len={length})")
+        print(f"  [HOST] Processing buffer at ptr={ptr}, length={length}")
+
+        # Access the module's exported memory
+        memory = caller.get("memory")
+        if memory is not None:
+            # Read bytes from the guest's memory
+            # data = memory.data_ptr(caller)[ptr:ptr+length]
+            print(f"  [HOST] Would read {length} bytes from memory at offset {ptr}")
+        else:
+            print("  [HOST] No memory export found")
+
+        return length  # Return bytes processed
+
+    buffer_func_type = FuncType([ValType.i32(), ValType.i32()], [ValType.i32()])
+    buffer_func = Func(store, buffer_func_type, host_process_buffer, access_caller=True)
+    linker.define(store, "env", "process_buffer", buffer_func)
+    print("\nDefined: env.process_buffer(i32 ptr, i32 len) -> i32")
+    print(f"  FuncType: {buffer_func_type}")
+    print("  Note: Uses access_caller=True for memory access via Caller object")
+
+    # Show available ValTypes
+    print("\n" + "-" * 50)
+    print("Available ValType constructors:")
+    print("  ValType.i32()     - 32-bit integer")
+    print("  ValType.i64()     - 64-bit integer")
+    print("  ValType.f32()     - 32-bit float")
+    print("  ValType.f64()     - 64-bit float")
+    print("  ValType.externref() - External reference")
+    print("  ValType.funcref()   - Function reference")
+
+    print("\n" + "-" * 50)
+    print("Host functions registered on linker:")
+    print("  env.log_message")
+    print("  env.add_numbers")
+    print("  math.compute")
+    print("  env.process_buffer")
+    print("\nThese would be available to any WASM module that imports them.")
+
+
+def demo_host_function_with_complex_data():
+    """
+    Demonstrate a practical host function pattern with complex data.
+
+    Since WASM only supports primitive types (i32, i64, f32, f64), passing
+    complex data like dicts requires serialization. This demo shows the pattern:
+
+    1. Guest serializes data to JSON
+    2. Guest writes JSON to a buffer and passes pointer/length to host
+    3. Host reads from guest memory, deserializes, processes
+    4. Host serializes result, writes to guest memory
+    5. Host returns pointer/length of result
+    6. Guest reads and deserializes result
+
+    For the pre-built CPython WASM, we simulate this via stdin/stdout.
+    """
+    print("\n" + "=" * 70)
+    print("Demo 4: Host Function with Complex Data (dict with list)")
+    print("=" * 70)
 
     def host_transform_data(data: dict[str, Any]) -> dict[str, Any]:
         """
-        Host-side function that transforms data.
-        This demonstrates a function that takes a complex object (dict with list)
-        and returns a complex result.
+        Host-side function that transforms complex data.
+        Takes a dict with a list, returns a dict with transformed data.
         """
         items = data.get("items", [])
         multiplier = data.get("multiplier", 1)
@@ -268,79 +413,82 @@ def demo_host_function_simulation():
         }
         return transformed
 
-    input_for_sandbox = {
-        "host_function_input": {
-            "items": [10, 20, 30, 40, 50],
-            "multiplier": 3,
-        }
+    # Simulate calling the host function via stdin/stdout protocol
+    request_data = {
+        "function": "transform_data",
+        "args": {"items": [10, 20, 30, 40, 50], "multiplier": 3},
     }
 
     sandbox_code = '''
+import sys
 import json
 
-with open("/sandbox/input.json") as f:
-    data = json.load(f)
+# Read the function call request from stdin
+request = json.loads(sys.stdin.read())
+print(f"Sandbox received request: {request}", file=sys.stderr)
 
-# Prepare a "request" to the host function
-request = data["host_function_input"]
-print(f"Sandbox: Preparing request for host function: {request}")
+# Extract function name and args
+func_name = request["function"]
+args = request["args"]
 
-# In a real scenario, the sandbox would write this request and somehow
-# signal the host. For this demo, we output it in a structured way.
-print("---HOST_FUNCTION_REQUEST---")
-print(json.dumps(request))
-print("---END_REQUEST---")
-
-# Note: In a synchronous host function scenario, you would need additional
-# mechanisms to actually pause execution and resume after the host responds.
-# This demo shows the data passing pattern.
+# Simulate "calling" the host function by outputting the request
+# In a real scenario with custom WASM imports, this would be a direct call
+result_request = {
+    "type": "host_function_call",
+    "function": func_name,
+    "args": args,
+}
+print(json.dumps(result_request))
 '''
 
-    print("\nStep 1: Running sandbox code that prepares a host function request...")
-    result = run_python_code(sandbox_code, input_data=input_for_sandbox)
-    print(f"Sandbox stdout:\n{result.stdout}")
+    print("Step 1: Sandbox prepares host function call request...")
+    result = run_python_code(sandbox_code, stdin_data=json.dumps(request_data))
+    print(f"Sandbox stderr:\n{result.stderr}")
 
-    if "---HOST_FUNCTION_REQUEST---" in result.stdout:
-        request_part = result.stdout.split("---HOST_FUNCTION_REQUEST---")[1]
-        request_json = request_part.split("---END_REQUEST---")[0].strip()
-        request_data = json.loads(request_json)
+    if result.stdout.strip():
+        call_request = json.loads(result.stdout.strip())
+        print(f"\nStep 2: Host receives call request: {call_request}")
 
-        print(f"\nStep 2: Host received request: {request_data}")
-        response = host_transform_data(request_data)
-        print(f"Step 3: Host function returned: {response}")
+        # Process with the host function
+        response = host_transform_data(call_request["args"])
+        print(f"\nStep 3: Host function transforms data:")
+        print(f"  Input: {call_request['args']}")
+        print(f"  Output: {response}")
 
+        # Send response back to sandbox
         response_code = f'''
+import sys
 import json
 
-# In a real IPC scenario, this response would come from a file written by the host
-response = {json.dumps(response)}
+# Read host function response from stdin
+response = json.loads(sys.stdin.read())
+print(f"Sandbox received host response: {{response}}", file=sys.stderr)
 
-print("Sandbox received host function response:")
-print(f"  Original count: {{response['original_count']}}")
-print(f"  Transformed items: {{response['transformed_items']}}")
-print(f"  Sum: {{response['sum']}}")
-print(f"  Metadata: {{response['metadata']}}")
-
-# Process the response further
+# Process the response further in the sandbox
 final_result = {{
     "status": "success",
     "host_response_sum": response["sum"],
     "doubled_items": [x * 2 for x in response["transformed_items"]],
 }}
-print("---FINAL_RESULT---")
 print(json.dumps(final_result))
 '''
 
-        print("\nStep 4: Running sandbox code with host response...")
-        final_result = run_python_code(response_code)
-        print(f"Final sandbox stdout:\n{final_result.stdout}")
+        print("\nStep 4: Sandbox processes host response...")
+        final_result = run_python_code(
+            response_code, stdin_data=json.dumps(response)
+        )
+        print(f"Sandbox stderr:\n{final_result.stderr}")
+
+        if final_result.stdout.strip():
+            parsed_final = json.loads(final_result.stdout.strip())
+            print(f"\nFinal result from sandbox: {parsed_final}")
 
 
 def demo_fuel_limiting():
     """Demonstrate fuel-based execution limiting for resource control."""
-    print("\n" + "=" * 60)
-    print("Demo 4: Fuel-Based Execution Limiting")
-    print("=" * 60)
+    print("\n" + "=" * 70)
+    print("Demo 5: Fuel-Based Execution Limiting")
+    print("=" * 70)
 
     code = '''
 # Simple computation that uses some fuel
@@ -374,13 +522,21 @@ def main():
         sys.exit(1)
 
     demo_basic_execution()
-    demo_complex_data_passing()
-    demo_host_function_simulation()
+    demo_stdin_stdout_communication()
+    demo_host_function_definitions()
+    demo_host_function_with_complex_data()
     demo_fuel_limiting()
 
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 70)
     print("All demos completed!")
-    print("=" * 60)
+    print("=" * 70)
+    print("\nSummary:")
+    print("- Demo 1-2: Shows practical communication with pre-built CPython WASM")
+    print("- Demo 3: Shows how to define host functions (Func, FuncType, ValType)")
+    print("- Demo 4: Shows complex data passing pattern (dict with list)")
+    print("- Demo 5: Shows resource limiting via fuel consumption")
+    print("\nFor true synchronous host function calls from Python in WASM,")
+    print("you would need to build a custom CPython WASM with additional imports.")
 
 
 if __name__ == "__main__":
