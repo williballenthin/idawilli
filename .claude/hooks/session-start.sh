@@ -131,14 +131,6 @@ fi
 log "hcli ida install completed successfully"
 echo "IDA Pro installed successfully."
 
-# Get the installation directory from hcli
-log "Querying hcli for installation directory"
-IDA_INSTALL_DIR=$(hcli ida set-default 2>/dev/null || echo "${HOME}/.local/ida")
-log "IDA installation directory: $IDA_INSTALL_DIR"
-
-log "Listing IDA directory contents after installation:"
-ls -la "$IDA_INSTALL_DIR" >> "$LOG_FILE" 2>&1 || log "Could not list IDA directory"
-
 # Clear sensitive credentials after hcli is done
 log "About to clear sensitive credentials from CLAUDE_ENV_FILE"
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
@@ -154,27 +146,6 @@ fi
 log "About to install idapro via uv pip"
 echo "Installing idapro Python package..."
 run_logged uv pip install --system idapro
-
-# Activate idalib with the IDA installation
-log "About to activate idalib"
-log "Looking for py-activate-idalib.py script..."
-
-if [ -f "${IDA_INSTALL_DIR}/py-activate-idalib.py" ]; then
-    log "Found activation script at ${IDA_INSTALL_DIR}/py-activate-idalib.py"
-    log "Running: python3 ${IDA_INSTALL_DIR}/py-activate-idalib.py -d ${IDA_INSTALL_DIR}"
-    run_logged python3 "${IDA_INSTALL_DIR}/py-activate-idalib.py" -d "${IDA_INSTALL_DIR}"
-elif [ -f "${IDA_INSTALL_DIR}/idalib/python/py-activate-idalib.py" ]; then
-    log "Found activation script at ${IDA_INSTALL_DIR}/idalib/python/py-activate-idalib.py"
-    log "Running: python3 ${IDA_INSTALL_DIR}/idalib/python/py-activate-idalib.py -d ${IDA_INSTALL_DIR}"
-    run_logged python3 "${IDA_INSTALL_DIR}/idalib/python/py-activate-idalib.py" -d "${IDA_INSTALL_DIR}"
-else
-    log "WARNING: Could not find py-activate-idalib.py script"
-    log "Searched locations:"
-    log "  - ${IDA_INSTALL_DIR}/py-activate-idalib.py"
-    log "  - ${IDA_INSTALL_DIR}/idalib/python/py-activate-idalib.py"
-    log "Listing IDA directory to help debug:"
-    find "$IDA_INSTALL_DIR" -name "*.py" -type f >> "$LOG_FILE" 2>&1 || log "Could not search IDA directory"
-fi
 
 # Accept EULA and disable auto-update features for batch mode
 log "About to configure IDA registry settings (EULA, AutoUseLumina, AutoCheckUpdates)"
