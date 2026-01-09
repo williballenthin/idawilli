@@ -1,52 +1,45 @@
-# idalib Analysis
+---
+name: idalib-analysis
+description: Analyze binaries using IDA Pro's Python API (idalib) in headless mode. Use when examining program structure, functions, disassembly, cross-references, or strings without the GUI.
+---
 
-Use this skill when analyzing programs with IDA Pro headlessly using idalib.
+# IDA Pro Headless Analysis with idalib
+
+Use this skill to analyze binary files with IDA Pro's Python API (idalib) in headless mode.
 
 ## Setup
 
-First, ensure IDA Pro is installed by running the installation script:
+First, ensure IDA Pro is installed by running:
 
 ```bash
-$CLAUDE_PROJECT_DIR/.claude/scripts/install-ida.sh
+$CLAUDE_PROJECT_DIR/.claude/skills/idalib-analysis/scripts/install-ida.sh
 ```
 
 Wait for the script to complete before proceeding. This may take a few minutes on first run.
 
 ## Usage
 
-Once IDA Pro is installed, you can use idalib to analyze binaries:
-
 ```python
 import idapro
-
-# Open a database (creates .idb if needed)
 idapro.open_database("path/to/binary", auto_analysis=True)
 
-# Now you can use IDA APIs
+# Use IDA APIs
 import idautils
 import idc
 import ida_funcs
-import ida_bytes
-import ida_name
 
-# Example: List all functions
-for func_ea in idautils.Functions():
-    func_name = ida_funcs.get_func_name(func_ea)
-    print(f"{func_ea:#x}: {func_name}")
-
-# Close when done
+# Always close when done
 idapro.close_database()
 ```
 
 ## Common Tasks
 
-### Analyze a binary and list functions
+### List all functions
 ```python
 import idapro
 idapro.open_database("binary", auto_analysis=True)
 
-import idautils
-import ida_funcs
+import idautils, ida_funcs
 for ea in idautils.Functions():
     print(f"{ea:#x}: {ida_funcs.get_func_name(ea)}")
 
@@ -58,8 +51,7 @@ idapro.close_database()
 import idapro
 idapro.open_database("binary", auto_analysis=True)
 
-import idautils
-import idc
+import idautils, idc
 func_ea = idc.get_name_ea_simple("main")
 for head in idautils.Heads(func_ea, idc.find_func_end(func_ea)):
     print(f"{head:#x}: {idc.GetDisasm(head)}")

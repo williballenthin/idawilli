@@ -145,7 +145,6 @@ __pycache__/
 # Claude Code - ignore user-specific files but track shared config
 .claude/*
 !.claude/hooks/
-!.claude/commands/
-!.claude/scripts/
+!.claude/skills/
 !.claude/settings.json
 **/*.DS_Store
