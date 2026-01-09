@@ -142,5 +142,8 @@ ida_ua.py
 ida_undo.py
 ida_xref.py
 __pycache__/
-.claude/
+# Claude Code - ignore user-specific files but track shared hooks
+.claude/*
+!.claude/hooks/
+!.claude/settings.json
 **/*.DS_Store
