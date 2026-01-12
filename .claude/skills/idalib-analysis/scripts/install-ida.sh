@@ -49,7 +49,7 @@ echo "Installing IDA Pro (this may take a few minutes)..."
 # Install IDA Pro using HCLI via uv run
 set +e
 uv run --with ida-hcli hcli ida install \
-    --download-id "release/9.2/ida-pro/ida-pro_92_x64linux.run" \
+    --download-id "ida-pro:latest" \
     --license-id "${IDA_LICENSE_ID}" \
     --set-default \
     --accept-eula \
