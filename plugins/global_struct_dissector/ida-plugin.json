@@ -1,0 +1,25 @@
+{
+  "IDAMetadataDescriptorVersion": 1,
+  "plugin": {
+    "name": "global-struct-dissector",
+    "entryPoint": "global_struct_dissector_entry.py",
+    "version": "0.1.0",
+    "idaVersions": ">=9.2",
+    "platforms": [
+      "windows-x86_64",
+      "linux-x86_64",
+      "macos-x86_64",
+      "macos-aarch64"
+    ],
+    "description": "Renders structure instances in global data with explicit field names, offsets, and values.",
+    "license": "MIT",
+    "categories": ["ui-ux-and-visualization"],
+    "keywords": ["structure", "formatting", "data", "disassembly"],
+    "urls": {
+      "repository": "https://github.com/williballenthin/idawilli"
+    },
+    "authors": [{
+      "name": "Willi Ballenthin"
+    }]
+  }
+}
