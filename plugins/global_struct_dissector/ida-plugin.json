@@ -19,7 +19,8 @@
       "repository": "https://github.com/williballenthin/idawilli"
     },
     "authors": [{
-      "name": "Willi Ballenthin"
+      "name": "Willi Ballenthin",
+      "email": "wballenthin@hex-rays.com"
     }]
   }
 }
