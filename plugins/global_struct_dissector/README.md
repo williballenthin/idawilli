@@ -6,8 +6,8 @@ global data segments and formats them using indentation, color syntax highlighti
 
 Install via `hcli plugin install global-struct-dissector`
 
-![Screenshot 1](docs/SCR-20260115-mxxn.png)
+![Screenshot 1](docs/SCR-20260115-olky.png)
 
-![Screenshot 2](docs/SCR-20260115-myaj.png)
+![Screenshot 2](docs/SCR-20260115-olmq.png)
 
-![Screenshot 3](docs/SCR-20260115-mydz.png)
+![Screenshot 3](docs/SCR-20260115-olom.png)
