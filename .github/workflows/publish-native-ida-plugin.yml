@@ -69,7 +69,7 @@ jobs:
           cd plugins/plugin-manager/examples/native-ida-plugin
           just build
       - name: publish package
-        uses: pypa/gh-action-pypi-publish@v1.12.4
+        uses: pypa/gh-action-pypi-publish@v1.13.0
         with:
           skip-existing: false
           packages-dir: plugins/plugin-manager/examples/native-ida-plugin/dist
