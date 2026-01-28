@@ -10,7 +10,7 @@ import pytest
 
 PLUGIN_DIR = Path(__file__).parent.parent
 REPO_ROOT = PLUGIN_DIR.parent.parent
-TEST_BINARY = REPO_ROOT / "tests" / "data" / "PMA_Lab_01-01.exe"
+TEST_BINARY = REPO_ROOT / "tests" / "data" / "Practical Malware Analysis Lab 01-01.exe_"
 DEFAULT_IDAUSR = Path.home() / ".idapro"
 
 
