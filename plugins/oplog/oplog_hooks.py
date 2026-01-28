@@ -102,7 +102,6 @@ from oplog_events import (
     changing_segm_class_event,
     changing_segm_start_event,
     local_types_changed_event,
-    current_item_changed_event,
 )
 
 logger = logging.getLogger(__name__)
@@ -1061,46 +1060,5 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             udm_tid=udm_tid,
             udmold=udmold_model,
             udmnew=udmnew_model,
-        )
-        self.events.add_event(ev)
-
-
-class UILocationHook(ida_kernwin.UI_Hooks):
-    def __init__(self, events: Events, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.events = events
-        self._prev_item_ea = None
-
-    @staticmethod
-    def _get_item_head(ea: ida_idaapi.ea_t) -> ida_idaapi.ea_t:
-        head_ea = ida_bytes.get_item_head(ea)
-        func = ida_funcs.get_func(head_ea)
-        if func is not None:
-            head_ea = func.start_ea
-        return head_ea
-
-    def screen_ea_changed(self, ea: ida_idaapi.ea_t, prev_ea: ida_idaapi.ea_t) -> None:
-        current_head_ea = self._get_item_head(ea)
-
-        if current_head_ea == self._prev_item_ea:
-            return
-
-        current_name = ida_name.get_name(current_head_ea)
-        prev_name = ida_name.get_name(self._prev_item_ea or 0) if self._prev_item_ea is not None else ""
-
-        self._prev_item_ea = current_head_ea
-
-        logger.debug(
-            "current_item_changed(current_item_name=%s, prev_item_name=%s)",
-            current_name,
-            prev_name,
-        )
-        ev = current_item_changed_event(
-            event_name="current_item_changed",
-            timestamp=datetime.now(),
-            current_item_ea=current_head_ea,
-            current_item_name=current_name,
-            prev_item_ea=self._prev_item_ea,
-            prev_item_name=prev_name,
         )
         self.events.add_event(ev)
