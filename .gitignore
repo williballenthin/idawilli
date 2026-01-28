@@ -148,3 +148,5 @@ __pycache__/
 !.claude/skills/
 !.claude/settings.json
 **/*.DS_Store
+tests/data/Practical Malware Analysis Lab 01-01.exe_.i64
+.sprites/.sprite
