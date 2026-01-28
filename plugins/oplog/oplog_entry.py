@@ -1,4 +1,3 @@
-import os
 import logging
 
 import ida_kernwin
@@ -7,16 +6,6 @@ import ida_kernwin
 logger = logging.getLogger(__name__)
 
 oplog_ok = True
-
-if oplog_ok:
-    if not ida_kernwin.is_idaq():
-        # https://community.hex-rays.com/t/how-to-check-if-idapythonrc-py-is-running-in-ida-pro-or-idalib/297/4
-        oplog_ok = False
-
-if oplog_ok:
-    if not os.environ.get("IDA_IS_INTERACTIVE") == "1":
-        # https://community.hex-rays.com/t/how-to-check-if-idapythonrc-py-is-running-in-ida-pro-or-idalib/297/2
-        oplog_ok = False
 
 if oplog_ok:
     kernel_version: tuple[int, ...] = tuple(int(part) for part in ida_kernwin.get_kernel_version().split(".") if part.isdigit()) or (0, )
