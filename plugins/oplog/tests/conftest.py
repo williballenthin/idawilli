@@ -55,18 +55,21 @@ def temp_idauser(tmp_path: Path) -> Path:
     if result.returncode != 0:
         pytest.fail(f"hcli ida set-default failed:\nstdout: {result.stdout}\nstderr: {result.stderr}")
 
+    accept_eula_script = '''
+import idapro
+import ida_registry
+ida_registry.reg_write_int("EULA 90", 1)
+ida_registry.reg_write_int("AutoUseLumina", 0)
+ida_registry.reg_write_int("AutoCheckUpdates", 0)
+'''
     result = subprocess.run(
-        ["uv", "run", "--with", "ida-hcli>=0.15", "hcli", "ida", "accept-eula"],
-        env=env,
+        ["python", "-c", accept_eula_script],
+        env={"IDAUSR": str(idauser), **os.environ},
         capture_output=True,
         text=True,
     )
     if result.returncode != 0:
-        ida_reg = DEFAULT_IDAUSR / "ida.reg"
-        if ida_reg.exists():
-            shutil.copy(ida_reg, idauser / "ida.reg")
-        else:
-            pytest.fail(f"hcli ida accept-eula failed and no ida.reg to copy:\nstdout: {result.stdout}\nstderr: {result.stderr}")
+        pytest.fail(f"EULA acceptance failed:\nstdout: {result.stdout}\nstderr: {result.stderr}")
 
     plugin_zip = tmp_path / "oplog.zip"
     shutil.make_archive(
