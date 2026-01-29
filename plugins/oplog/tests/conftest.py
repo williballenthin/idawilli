@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import shutil
 import tempfile
@@ -7,22 +8,34 @@ from pathlib import Path
 
 import pytest
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 
 PLUGIN_DIR = Path(__file__).parent.parent
 REPO_ROOT = PLUGIN_DIR.parent.parent
 TEST_BINARY = REPO_ROOT / "tests" / "data" / "Practical Malware Analysis Lab 01-01.exe_"
 DEFAULT_IDAUSR = Path.home() / ".idapro"
 
+IDB_EXTENSIONS = [".i64", ".id0", ".id1", ".id2", ".nam", ".til"]
+
 
 @pytest.fixture(scope="session")
 def test_binary() -> Path:
-    assert TEST_BINARY.exists(), f"Test binary not found: {TEST_BINARY}"
     return TEST_BINARY
 
 
 @pytest.fixture
 def work_dir(tmp_path: Path) -> Path:
     return tmp_path
+
+
+@pytest.fixture(autouse=True)
+def cleanup_idb(test_binary: Path):
+    yield
+    for ext in IDB_EXTENSIONS:
+        idb_file = test_binary.parent / (test_binary.name + ext)
+        if idb_file.exists():
+            idb_file.unlink()
 
 
 def get_ida_install_dir() -> str:
@@ -33,9 +46,8 @@ def get_ida_install_dir() -> str:
     raise RuntimeError("Could not find IDA install directory in ~/.idapro/ida-config.json")
 
 
-@pytest.fixture
-def temp_idauser(tmp_path: Path) -> Path:
-    idauser = tmp_path / "idauser"
+def _create_idauser(base_path: Path) -> Path:
+    idauser = base_path / "idauser"
     idauser.mkdir()
     (idauser / "plugins").mkdir()
 
@@ -71,7 +83,7 @@ ida_registry.reg_write_int("AutoCheckUpdates", 0)
     if result.returncode != 0:
         pytest.fail(f"EULA acceptance failed:\nstdout: {result.stdout}\nstderr: {result.stderr}")
 
-    plugin_zip = tmp_path / "oplog.zip"
+    plugin_zip = base_path / "oplog.zip"
     shutil.make_archive(
         str(plugin_zip.with_suffix("")),
         "zip",
@@ -92,11 +104,22 @@ ida_registry.reg_write_int("AutoCheckUpdates", 0)
     return idauser
 
 
+@pytest.fixture(scope="session")
+def session_idauser(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    base_path = tmp_path_factory.mktemp("session_ida")
+    return _create_idauser(base_path)
+
+
+@pytest.fixture
+def temp_idauser(tmp_path: Path) -> Path:
+    return _create_idauser(tmp_path)
+
+
 def run_ida_script(
     binary_path: Path,
-    script: str,
     idauser: Path,
     work_dir: Path,
+    script: str,
     timeout: int = 120,
 ) -> subprocess.CompletedProcess:
     import textwrap
@@ -135,5 +158,10 @@ except Exception as e:
         timeout=timeout,
         cwd=str(work_dir),
     )
+
+    if result.returncode != 0:
+        print("STDOUT:", result.stdout)
+        print("STDERR:", result.stderr)
+        assert False, f"IDA script failed with return code {result.returncode}"
 
     return result

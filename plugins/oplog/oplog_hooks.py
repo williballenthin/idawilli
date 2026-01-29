@@ -23,6 +23,7 @@ from oplog_events import (
     InsnModel,
     RangeModel,
     SegmentModel,
+    SegmMoveInfoModel,
     renamed_event,
     make_code_event,
     make_data_event,
@@ -368,17 +369,17 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         )
         self.events.add_event(ev)
 
-    # TODO: type of info
-    def allsegs_moved(self, info) -> None:
+    def allsegs_moved(self, info: ida_moves.segm_move_infos_t) -> None:
         """Program rebasing is complete.
 
         This event is generated after series of segm_moved events.
 
         Args:
-            info: Segment move information.
+            info: Segment move information (segm_move_infos_t).
         """
         logger.debug("allsegs_moved(info=%s)", info)
-        ev = allsegs_moved_event(event_name="allsegs_moved", timestamp=datetime.now(), info=info)
+        moves = [SegmMoveInfoModel.from_segm_move_info_t(info[i]) for i in range(len(info))]
+        ev = allsegs_moved_event(event_name="allsegs_moved", timestamp=datetime.now(), moves=moves)
         self.events.add_event(ev)
 
     ### function operations

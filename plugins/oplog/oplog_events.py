@@ -1,14 +1,16 @@
 import logging
 import threading
-from typing import Any, Literal
+from typing import Any, Literal, TYPE_CHECKING
 from datetime import datetime
 
-import ida_ua
-import ida_funcs
-import ida_range
-import ida_segment
-import ida_typeinf
-from pydantic import BaseModel, RootModel, field_validator
+from pydantic import BaseModel, Field, RootModel, field_validator
+
+if TYPE_CHECKING:
+    import ida_ua
+    import ida_funcs
+    import ida_range
+    import ida_segment
+    import ida_typeinf
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +36,7 @@ class FuncModel(BaseModel):
     name: str | None = None
 
     @classmethod
-    def from_func_t(cls, func: ida_funcs.func_t) -> "FuncModel":
+    def from_func_t(cls, func: "ida_funcs.func_t") -> "FuncModel":
         """Create FuncModel from ida_funcs.func_t instance."""
         return cls(
             start_ea=func.start_ea,
@@ -76,7 +78,7 @@ class OpModel(BaseModel):
     specflag4: int
 
     @classmethod
-    def from_op_t(cls, op: ida_ua.op_t) -> "OpModel":
+    def from_op_t(cls, op: "ida_ua.op_t") -> "OpModel":
         """Create OpModel from ida_ua.op_t instance."""
         return cls(
             n=op.n,
@@ -112,7 +114,7 @@ class InsnModel(BaseModel):
     ops: list[OpModel]
 
     @classmethod
-    def from_insn_t(cls, insn: ida_ua.insn_t) -> "InsnModel":
+    def from_insn_t(cls, insn: "ida_ua.insn_t") -> "InsnModel":
         """Create InsnModel from ida_ua.insn_t instance."""
         return cls(
             cs=insn.cs,
@@ -205,9 +207,10 @@ class SegmentModel(BaseModel):
         return v
 
     @classmethod
-    def from_segment_t(cls, segment: ida_segment.segment_t) -> "SegmentModel":
+    def from_segment_t(cls, segment: "ida_segment.segment_t") -> "SegmentModel":
         """Create SegmentModel from ida_segment.segment_t instance."""
-        # Convert defsr array to list
+        import ida_segment
+
         defsr_list = [segment.defsr[i] for i in range(16)]
 
         return cls(
@@ -237,7 +240,7 @@ class RangeModel(BaseModel):
     end_ea: int
 
     @classmethod
-    def from_range_t(cls, range_obj: ida_range.range_t) -> "RangeModel":
+    def from_range_t(cls, range_obj: "ida_range.range_t") -> "RangeModel":
         """Create RangeModel from ida_range.range_t instance.
 
         Args:
@@ -266,7 +269,7 @@ class UdmModel(BaseModel):
     fda: int
 
     @classmethod
-    def from_udm_t(cls, udm: ida_typeinf.udm_t) -> "UdmModel":
+    def from_udm_t(cls, udm: "ida_typeinf.udm_t") -> "UdmModel":
         return cls(
             offset=udm.offset,
             size=udm.size,
@@ -289,7 +292,7 @@ class EdmModel(BaseModel):
     tid: int
 
     @classmethod
-    def from_edm_t(cls, edm: ida_typeinf.edm_t) -> "EdmModel":
+    def from_edm_t(cls, edm: "ida_typeinf.edm_t") -> "EdmModel":
         name = edm.name
         comment = edm.cmt
         value = edm.value
@@ -393,18 +396,35 @@ class segm_attrs_updated_event(BaseModel):
 
 
 class segm_moved_event(BaseModel):
+    model_config = {"populate_by_name": True}
+
     event_name: Literal["segm_moved"]
     timestamp: datetime
-    _from: int
+    from_ea: int = Field(alias="_from")
     to: int
     size: int
     changed_netmap: bool
 
 
+class SegmMoveInfoModel(BaseModel):
+    """Pydantic model for ida_moves.segm_move_info_t structure."""
+    from_ea: int
+    to_ea: int
+    size: int
+
+    @classmethod
+    def from_segm_move_info_t(cls, info) -> "SegmMoveInfoModel":
+        return cls(
+            from_ea=info._from,
+            to_ea=info.to,
+            size=info.size,
+        )
+
+
 class allsegs_moved_event(BaseModel):
     event_name: Literal["allsegs_moved"]
     timestamp: datetime
-    info: Any
+    moves: list[SegmMoveInfoModel]
 
 
 class func_added_event(BaseModel):
@@ -664,9 +684,11 @@ class dirtree_link_event(BaseModel):
 
 
 class dirtree_move_event(BaseModel):
+    model_config = {"populate_by_name": True}
+
     event_name: Literal["dirtree_move"]
     timestamp: datetime
-    _from: str
+    from_path: str = Field(alias="_from")
     to: str
 
 
