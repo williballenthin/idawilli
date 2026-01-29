@@ -79,6 +79,11 @@ Tests should use **hardcoded snapshot literals** for expected values. This makes
 
 Everything else should be static snapshots
 
+## **NEVER COPY DATA FROM ACTUAL TO EXPECTED**
+
+Besides `timestamp`, **NEVER COPY DATA FROM ACTUAL TO EXPECTED**.
+That doesn't test anything. If you need to understand data better, investigate it or ask for help.
+
 ## Running Tests
 
 ```bash
