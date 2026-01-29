@@ -123,4 +123,6 @@ If you see "Unable to serialize unknown type", add a Pydantic model for the IDA 
 
 2. **`adding_segm` timing**: Fires before segment name is set. Match by address, not name.
 
+3. Several function-related hooks do NOT fire when calling IDA Python APIs directly. Perhaps these hooks only fire during IDA's internal auto-analysis phase:
+   Tests for non-working hooks are marked with `@pytest.mark.xfail` to document the limitation while keeping the test infrastructure in place.
 
