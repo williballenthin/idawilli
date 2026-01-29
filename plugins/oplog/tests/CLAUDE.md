@@ -131,3 +131,9 @@ If you see "Unable to serialize unknown type", add a Pydantic model for the IDA 
 3. Several function-related hooks do NOT fire when calling IDA Python APIs directly. Perhaps these hooks only fire during IDA's internal auto-analysis phase:
    Tests for non-working hooks are marked with `@pytest.mark.xfail` to document the limitation while keeping the test infrastructure in place.
 
+## IDA Python documentation
+
+You can learn about the IDAPython APIs here: https://python.docs.hex-rays.com/
+and here: https://ida-domain.docs.hex-rays.com/
+
+Don't hesitate to download pages and search their content for the info you need.

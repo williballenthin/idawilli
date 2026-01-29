@@ -776,7 +776,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
     def dirtree_segm_moved(self, dt: ida_dirtree.dirtree_t) -> None:
         """Dirtree: inodes were changed due to a segment movement or a program rebasing."""
         logger.debug("dirtree_segm_moved()")
-        ev = dirtree_segm_moved_event(event_name="dirtree_segm_moved")
+        ev = dirtree_segm_moved_event(event_name="dirtree_segm_moved", timestamp=datetime.now())
         self.events.add_event(ev)
 
     ### types
