@@ -9,7 +9,7 @@ import ida_funcs
 import ida_lines
 import ida_idaapi
 import ida_kernwin
-from PyQt5 import QtCore
+from qtpy import QtCore
 
 from oplog_events import Events, current_item_changed_event
 from oplog_render import render_event

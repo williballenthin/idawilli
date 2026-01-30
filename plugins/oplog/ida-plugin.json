@@ -11,7 +11,7 @@
     "categories": [
       "ui-ux-and-visualization"
     ],
-    "pythonDependencies": ["pydantic>=2"],
+    "pythonDependencies": ["pydantic>=2", "qtpy"],
     "urls": {
       "repository": "https://github.com/williballenthin/idawilli"
     },
