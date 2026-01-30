@@ -460,6 +460,7 @@ class func_deleted_event(BaseModel):
     event_name: Literal["func_deleted"]
     timestamp: datetime
     func_ea: int
+    func_name: str | None = None
 
 
 class thunk_func_created_event(BaseModel):
@@ -828,12 +829,14 @@ class frame_created_event(BaseModel):
     event_name: Literal["frame_created"]
     timestamp: datetime
     func_ea: int
+    func_name: str | None = None
 
 
 class frame_expanded_event(BaseModel):
     event_name: Literal["frame_expanded"]
     timestamp: datetime
     func_ea: int
+    func_name: str | None = None
     udm_name: str
     delta: int
 
@@ -848,6 +851,7 @@ class frame_udm_created_event(BaseModel):
     event_name: Literal["frame_udm_created"]
     timestamp: datetime
     func_ea: int
+    func_name: str | None = None
     udm: UdmModel
 
 
@@ -855,6 +859,7 @@ class frame_udm_deleted_event(BaseModel):
     event_name: Literal["frame_udm_deleted"]
     timestamp: datetime
     func_ea: int
+    func_name: str | None = None
     udm: UdmModel
 
 
@@ -862,6 +867,7 @@ class frame_udm_renamed_event(BaseModel):
     event_name: Literal["frame_udm_renamed"]
     timestamp: datetime
     func_ea: int
+    func_name: str | None = None
     udm: UdmModel
     oldname: str
 
@@ -870,6 +876,7 @@ class frame_udm_changed_event(BaseModel):
     event_name: Literal["frame_udm_changed"]
     timestamp: datetime
     func_ea: int
+    func_name: str | None = None
     udmold: UdmModel
     udmnew: UdmModel
 

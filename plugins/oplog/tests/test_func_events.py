@@ -324,6 +324,7 @@ def test_func_deleted(test_binary: Path, session_idauser: Path, work_dir: Path):
         event_name="func_deleted",
         timestamp=deleted_actual.timestamp,
         func_ea=0x401000,
+        func_name="sub_401000",
     )
     assert deleted_actual == deleted_expected
 
@@ -815,6 +816,7 @@ def test_frame_created(test_binary: Path, session_idauser: Path, work_dir: Path)
         event_name="frame_created",
         timestamp=actual.timestamp,
         func_ea=0x90000000,
+        func_name="sub_90000000",
     )
     assert actual == expected
 

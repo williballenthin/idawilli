@@ -152,8 +152,8 @@ def render_renamed(ev: renamed_event):
 
 
 def render_frame_udm_renamed(ev: frame_udm_renamed_event):
-    func_name = ida_funcs.get_func_name(ev.func_ea)
-    return f"{pretty_date(ev.timestamp)}: local variable renamed: {cname(ev.oldname)} → {cname(ev.udm.name)} in {cname(func_name, ev.func_ea)}"
+    func_desc = cname(ev.func_name, ev.func_ea) if ev.func_name else render_address(ev.func_ea)
+    return f"{pretty_date(ev.timestamp)}: local variable renamed: {cname(ev.oldname)} → {cname(ev.udm.name)} in {func_desc}"
 
 
 def render_adding_segm(ev: adding_segm_event):
@@ -230,93 +230,84 @@ def render_allsegs_moved(ev: allsegs_moved_event):
 
 
 def render_func_added(ev: func_added_event):
-    func_name = ida_funcs.get_func_name(ev.pfn.start_ea)
-    if func_name:
-        return f"{pretty_date(ev.timestamp)}: function added: {cname(func_name, ev.pfn.start_ea)} ({render_address(ev.pfn.start_ea)}-{render_address(ev.pfn.end_ea)})"
+    if ev.pfn.name:
+        return f"{pretty_date(ev.timestamp)}: function added: {cname(ev.pfn.name, ev.pfn.start_ea)} ({render_address(ev.pfn.start_ea)}-{render_address(ev.pfn.end_ea)})"
     else:
         return f"{pretty_date(ev.timestamp)}: function added: {render_address(ev.pfn.start_ea)}-{render_address(ev.pfn.end_ea)}"
 
 
 def render_func_updated(ev: func_updated_event):
-    # TODO: use function name at point in time
-    func_name = ida_funcs.get_func_name(ev.pfn.start_ea)
-    if func_name:
-        return f"{pretty_date(ev.timestamp)}: function updated: {cname(func_name, ev.pfn.start_ea)}"
+    if ev.pfn.name:
+        return f"{pretty_date(ev.timestamp)}: function updated: {cname(ev.pfn.name, ev.pfn.start_ea)}"
     else:
         return f"{pretty_date(ev.timestamp)}: function updated: {render_address(ev.pfn.start_ea)}"
 
 
 def render_set_func_start(ev: set_func_start_event):
-    func_name = ida_funcs.get_func_name(ev.pfn.start_ea)
-    if func_name:
-        return f"{pretty_date(ev.timestamp)}: function start set: {cname(func_name, ev.pfn.start_ea)} {render_address(ev.pfn.start_ea)} → {render_address(ev.new_start)}"
+    if ev.pfn.name:
+        return f"{pretty_date(ev.timestamp)}: function start set: {cname(ev.pfn.name, ev.pfn.start_ea)} {render_address(ev.pfn.start_ea)} → {render_address(ev.new_start)}"
     else:
         return f"{pretty_date(ev.timestamp)}: function start set: {render_address(ev.pfn.start_ea)} → {render_address(ev.new_start)}"
 
 
 def render_set_func_end(ev: set_func_end_event):
-    func_name = ida_funcs.get_func_name(ev.pfn.start_ea)
-    if func_name:
-        return f"{pretty_date(ev.timestamp)}: function end set: {cname(func_name, ev.pfn.start_ea)} {render_address(ev.pfn.end_ea)} → {render_address(ev.new_end)}"
+    if ev.pfn.name:
+        return f"{pretty_date(ev.timestamp)}: function end set: {cname(ev.pfn.name, ev.pfn.start_ea)} {render_address(ev.pfn.end_ea)} → {render_address(ev.new_end)}"
     else:
         return f"{pretty_date(ev.timestamp)}: function end set: {render_address(ev.pfn.end_ea)} → {render_address(ev.new_end)}"
 
 
 def render_deleting_func(ev: deleting_func_event):
-    func_name = ida_funcs.get_func_name(ev.pfn.start_ea)
-    if func_name:
-        return f"{pretty_date(ev.timestamp)}: function deleting: {cname(func_name, ev.pfn.start_ea)}"
+    if ev.pfn.name:
+        return f"{pretty_date(ev.timestamp)}: function deleting: {cname(ev.pfn.name, ev.pfn.start_ea)}"
     else:
         return f"{pretty_date(ev.timestamp)}: function deleting: {render_address(ev.pfn.start_ea)}"
 
 
 def render_func_deleted(ev: func_deleted_event):
-    return f"{pretty_date(ev.timestamp)}: function deleted: {render_address(ev.func_ea)}"
+    if ev.func_name:
+        return f"{pretty_date(ev.timestamp)}: function deleted: {cname(ev.func_name, ev.func_ea)}"
+    else:
+        return f"{pretty_date(ev.timestamp)}: function deleted: {render_address(ev.func_ea)}"
 
 
 def render_thunk_func_created(ev: thunk_func_created_event):
-    func_name = ida_funcs.get_func_name(ev.pfn.start_ea)
-    if func_name:
-        return f"{pretty_date(ev.timestamp)}: thunk function created: {cname(func_name, ev.pfn.start_ea)}"
+    if ev.pfn.name:
+        return f"{pretty_date(ev.timestamp)}: thunk function created: {cname(ev.pfn.name, ev.pfn.start_ea)}"
     else:
         return f"{pretty_date(ev.timestamp)}: thunk function created: {render_address(ev.pfn.start_ea)}"
 
 
 def render_func_tail_appended(ev: func_tail_appended_event):
-    func_name = ida_funcs.get_func_name(ev.pfn.start_ea)
-    tail_name = ida_funcs.get_func_name(ev.tail.start_ea)
-    if func_name and tail_name:
-        return f"{pretty_date(ev.timestamp)}: function tail appended: {cname(tail_name, ev.tail.start_ea)} → {cname(func_name, ev.pfn.start_ea)}"
-    elif func_name:
-        return f"{pretty_date(ev.timestamp)}: function tail appended: {render_address(ev.tail.start_ea)} → {cname(func_name, ev.pfn.start_ea)}"
-    elif tail_name:
-        return f"{pretty_date(ev.timestamp)}: function tail appended: {cname(tail_name, ev.tail.start_ea)} → {render_address(ev.pfn.start_ea)}"
+    if ev.pfn.name and ev.tail.name:
+        return f"{pretty_date(ev.timestamp)}: function tail appended: {cname(ev.tail.name, ev.tail.start_ea)} → {cname(ev.pfn.name, ev.pfn.start_ea)}"
+    elif ev.pfn.name:
+        return f"{pretty_date(ev.timestamp)}: function tail appended: {render_address(ev.tail.start_ea)} → {cname(ev.pfn.name, ev.pfn.start_ea)}"
+    elif ev.tail.name:
+        return f"{pretty_date(ev.timestamp)}: function tail appended: {cname(ev.tail.name, ev.tail.start_ea)} → {render_address(ev.pfn.start_ea)}"
     else:
         return f"{pretty_date(ev.timestamp)}: function tail appended: {render_address(ev.tail.start_ea)} → {render_address(ev.pfn.start_ea)}"
 
 
 def render_deleting_func_tail(ev: deleting_func_tail_event):
-    func_name = ida_funcs.get_func_name(ev.pfn.start_ea)
-    if func_name:
-        return f"{pretty_date(ev.timestamp)}: function tail deleting: {render_address(ev.tail.start_ea)} from {cname(func_name, ev.pfn.start_ea)}"
+    if ev.pfn.name:
+        return f"{pretty_date(ev.timestamp)}: function tail deleting: {render_address(ev.tail.start_ea)} from {cname(ev.pfn.name, ev.pfn.start_ea)}"
     else:
         return f"{pretty_date(ev.timestamp)}: function tail deleting: {render_address(ev.tail.start_ea)} from {render_address(ev.pfn.start_ea)}"
 
 
 def render_func_tail_deleted(ev: func_tail_deleted_event):
-    func_name = ida_funcs.get_func_name(ev.pfn.start_ea)
-    if func_name:
-        return f"{pretty_date(ev.timestamp)}: function tail deleted: {render_address(ev.tail_ea)} from {cname(func_name, ev.pfn.start_ea)}"
+    if ev.pfn.name:
+        return f"{pretty_date(ev.timestamp)}: function tail deleted: {render_address(ev.tail_ea)} from {cname(ev.pfn.name, ev.pfn.start_ea)}"
     else:
         return f"{pretty_date(ev.timestamp)}: function tail deleted: {render_address(ev.tail_ea)} from {render_address(ev.pfn.start_ea)}"
 
 
 def render_tail_owner_changed(ev: tail_owner_changed_event):
-    tail_name = ida_funcs.get_func_name(ev.tail.start_ea)
     old_owner_name = ida_funcs.get_func_name(ev.old_owner)
     new_owner_name = ida_funcs.get_func_name(ev.owner_func)
 
-    tail_desc = cname(tail_name, ev.tail.start_ea) if tail_name else render_address(ev.tail.start_ea)
+    tail_desc = cname(ev.tail.name, ev.tail.start_ea) if ev.tail.name else render_address(ev.tail.start_ea)
     old_desc = cname(old_owner_name, ev.old_owner) if old_owner_name else render_address(ev.old_owner)
     new_desc = cname(new_owner_name, ev.owner_func) if new_owner_name else render_address(ev.owner_func)
 
@@ -324,9 +315,8 @@ def render_tail_owner_changed(ev: tail_owner_changed_event):
 
 
 def render_func_noret_changed(ev: func_noret_changed_event):
-    func_name = ida_funcs.get_func_name(ev.pfn.start_ea)
-    if func_name:
-        return f"{pretty_date(ev.timestamp)}: function noret changed: {cname(func_name, ev.pfn.start_ea)}"
+    if ev.pfn.name:
+        return f"{pretty_date(ev.timestamp)}: function noret changed: {cname(ev.pfn.name, ev.pfn.start_ea)}"
     else:
         return f"{pretty_date(ev.timestamp)}: function noret changed: {render_address(ev.pfn.start_ea)}"
 
@@ -535,55 +525,46 @@ def render_lt_edm_changed(ev: lt_edm_changed_event):
 
 
 def render_stkpnts_changed(ev: stkpnts_changed_event):
-    func_name = ida_funcs.get_func_name(ev.pfn.start_ea)
-    if func_name:
-        return f"{pretty_date(ev.timestamp)}: stack points changed: {cname(func_name, ev.pfn.start_ea)}"
+    if ev.pfn.name:
+        return f"{pretty_date(ev.timestamp)}: stack points changed: {cname(ev.pfn.name, ev.pfn.start_ea)}"
     else:
         return f"{pretty_date(ev.timestamp)}: stack points changed: {render_address(ev.pfn.start_ea)}"
 
 
 def render_frame_created(ev: frame_created_event):
-    # TODO: capture func name into event
-    func_name = ida_funcs.get_func_name(ev.func_ea)
-    if func_name:
-        return f"{pretty_date(ev.timestamp)}: frame created: {cname(func_name, ev.func_ea)}"
+    if ev.func_name:
+        return f"{pretty_date(ev.timestamp)}: frame created: {cname(ev.func_name, ev.func_ea)}"
     else:
         return f"{pretty_date(ev.timestamp)}: frame created: {render_address(ev.func_ea)}"
 
 
 def render_frame_expanded(ev: frame_expanded_event):
-    func_name = ida_funcs.get_func_name(ev.func_ea)
-    func_desc = cname(func_name, ev.func_ea) if func_name else render_address(ev.func_ea)
+    func_desc = cname(ev.func_name, ev.func_ea) if ev.func_name else render_address(ev.func_ea)
     member_desc = f" before {cname(ev.udm_name)}" if ev.udm_name != "(unnamed)" else ""
     return f"{pretty_date(ev.timestamp)}: frame expanded: {func_desc}{member_desc} (delta: {ev.delta})"
 
 
 def render_frame_deleted(ev: frame_deleted_event):
-    # TODO: capture func name into event
-    func_name = ida_funcs.get_func_name(ev.pfn.start_ea)
-    if func_name:
-        return f"{pretty_date(ev.timestamp)}: frame deleted: {cname(func_name, ev.pfn.start_ea)}"
+    if ev.pfn.name:
+        return f"{pretty_date(ev.timestamp)}: frame deleted: {cname(ev.pfn.name, ev.pfn.start_ea)}"
     else:
         return f"{pretty_date(ev.timestamp)}: frame deleted: {render_address(ev.pfn.start_ea)}"
 
 
 def render_frame_udm_created(ev: frame_udm_created_event):
-    func_name = ida_funcs.get_func_name(ev.func_ea)
-    func_desc = cname(func_name, ev.func_ea) if func_name else render_address(ev.func_ea)
+    func_desc = cname(ev.func_name, ev.func_ea) if ev.func_name else render_address(ev.func_ea)
     type_desc = f": {codname(ev.udm.type_name)}" if ev.udm.type_name != "(unnamed)" else ""
     return f"{pretty_date(ev.timestamp)}: local variable created: {cname(ev.udm.name)}{type_desc} in {func_desc}"
 
 
 def render_frame_udm_deleted(ev: frame_udm_deleted_event):
-    func_name = ida_funcs.get_func_name(ev.func_ea)
-    func_desc = cname(func_name, ev.func_ea) if func_name else render_address(ev.func_ea)
+    func_desc = cname(ev.func_name, ev.func_ea) if ev.func_name else render_address(ev.func_ea)
     type_desc = f": {codname(ev.udm.type_name)}" if ev.udm.type_name != "(unnamed)" else ""
     return f"{pretty_date(ev.timestamp)}: local variable deleted: {cname(ev.udm.name)}{type_desc} from {func_desc}"
 
 
 def render_frame_udm_changed(ev: frame_udm_changed_event):
-    func_name = ida_funcs.get_func_name(ev.func_ea)
-    func_desc = cname(func_name, ev.func_ea) if func_name else render_address(ev.func_ea)
+    func_desc = cname(ev.func_name, ev.func_ea) if ev.func_name else render_address(ev.func_ea)
     changes = []
     if ev.udmold.type_name != ev.udmnew.type_name:
         changes.append(f"type: {codname(ev.udmold.type_name)} → {codname(ev.udmnew.type_name)}")

@@ -4,8 +4,8 @@ from datetime import datetime
 import ida_ua
 import ida_gdl
 import ida_idp
-import ida_funcs
 import ida_frame
+import ida_funcs
 import ida_moves
 import ida_range
 import ida_dirtree
@@ -108,6 +108,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
     def __init__(self, events: Events, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.events = events
+        self._pending_delete_func_names: dict[int, str] = {}
 
     ### loading events
 
@@ -414,13 +415,18 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """The kernel is about to delete a function."""
         pfn_model = FuncModel.from_func_t(pfn)
         logger.debug("deleting_func(pfn=%s)", pfn_model.model_dump_json())
+        if pfn_model.name:
+            self._pending_delete_func_names[pfn.start_ea] = pfn_model.name
         ev = deleting_func_event(event_name="deleting_func", timestamp=datetime.now(), pfn=pfn_model)
         self.events.add_event(ev)
 
     def func_deleted(self, func_ea: int) -> None:
         """A function has been deleted."""
         logger.debug("func_deleted(func_ea=%d)", func_ea)
-        ev = func_deleted_event(event_name="func_deleted", timestamp=datetime.now(), func_ea=func_ea)
+        func_name = self._pending_delete_func_names.pop(func_ea, None)
+        ev = func_deleted_event(
+            event_name="func_deleted", timestamp=datetime.now(), func_ea=func_ea, func_name=func_name
+        )
         self.events.add_event(ev)
 
     def thunk_func_created(self, pfn: ida_funcs.func_t) -> None:
@@ -635,7 +641,9 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             type_name = tif.get_type_name() or "(unnamed)"
         else:
             type_name = "(unnamed)"
-        ev = make_data_event(event_name="make_data", timestamp=datetime.now(), ea=ea, flags=flags, type_name=type_name, len=len)
+        ev = make_data_event(
+            event_name="make_data", timestamp=datetime.now(), ea=ea, flags=flags, type_name=type_name, len=len
+        )
         self.events.add_event(ev)
 
     def destroyed_items(self, ea1: int, ea2: int, will_disable_range: bool) -> None:
@@ -862,9 +870,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """Local type udt member has been deleted."""
         udm_model = UdmModel.from_udm_t(udm)
         logger.debug("lt_udm_deleted(udtname=%s, udm_tid=%d, udm=%s)", udtname, udm_tid, udm_model.model_dump_json())
-        ev = lt_udm_deleted_event(
-            event_name="lt_udm_deleted", timestamp=datetime.now(), udtname=udtname, udm=udm_model
-        )
+        ev = lt_udm_deleted_event(event_name="lt_udm_deleted", timestamp=datetime.now(), udtname=udtname, udm=udm_model)
         self.events.add_event(ev)
 
     def lt_udm_renamed(self, udtname: str, udm: ida_typeinf.udm_t, oldname: str) -> None:
@@ -988,7 +994,13 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         See also idb_event::frame_deleted.
         """
         logger.debug("frame_created(func_ea=%d)", func_ea)
-        ev = frame_created_event(event_name="frame_created", timestamp=datetime.now(), func_ea=func_ea)
+        func_name = ida_funcs.get_func_name(func_ea)
+        ev = frame_created_event(
+            event_name="frame_created",
+            timestamp=datetime.now(),
+            func_ea=func_ea,
+            func_name=func_name if func_name else None,
+        )
         self.events.add_event(ev)
 
     def frame_expanded(self, func_ea: int, udm_tid: int, delta: int) -> None:
@@ -999,13 +1011,19 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             delta: Number of added/removed bytes.
         """
         logger.debug("frame_expanded(func_ea=%d, udm_tid=%d, delta=%d)", func_ea, udm_tid, delta)
+        func_name = ida_funcs.get_func_name(func_ea)
         frame_tif = ida_typeinf.tinfo_t()
         ida_frame.get_func_frame(frame_tif, ida_funcs.get_func(func_ea))
         udm = ida_typeinf.udm_t()
         idx = frame_tif.get_udm_by_tid(udm, udm_tid)
         udm_name = udm.name if idx >= 0 else "(unnamed)"
         ev = frame_expanded_event(
-            event_name="frame_expanded", timestamp=datetime.now(), func_ea=func_ea, udm_name=udm_name, delta=delta
+            event_name="frame_expanded",
+            timestamp=datetime.now(),
+            func_ea=func_ea,
+            func_name=func_name if func_name else None,
+            udm_name=udm_name,
+            delta=delta,
         )
         self.events.add_event(ev)
 
@@ -1023,8 +1041,13 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """Frame member has been added."""
         udm_model = UdmModel.from_udm_t(udm)
         logger.debug("frame_udm_created(func_ea=%d, udm=%s)", func_ea, udm_model.model_dump_json())
+        func_name = ida_funcs.get_func_name(func_ea)
         ev = frame_udm_created_event(
-            event_name="frame_udm_created", timestamp=datetime.now(), func_ea=func_ea, udm=udm_model
+            event_name="frame_udm_created",
+            timestamp=datetime.now(),
+            func_ea=func_ea,
+            func_name=func_name if func_name else None,
+            udm=udm_model,
         )
         self.events.add_event(ev)
 
@@ -1032,8 +1055,13 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """Frame member has been deleted."""
         udm_model = UdmModel.from_udm_t(udm)
         logger.debug("frame_udm_deleted(func_ea=%d, udm_tid=%d, udm=%s)", func_ea, udm_tid, udm_model.model_dump_json())
+        func_name = ida_funcs.get_func_name(func_ea)
         ev = frame_udm_deleted_event(
-            event_name="frame_udm_deleted", timestamp=datetime.now(), func_ea=func_ea, udm=udm_model
+            event_name="frame_udm_deleted",
+            timestamp=datetime.now(),
+            func_ea=func_ea,
+            func_name=func_name if func_name else None,
+            udm=udm_model,
         )
         self.events.add_event(ev)
 
@@ -1041,8 +1069,14 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """Frame member has been renamed."""
         udm_model = UdmModel.from_udm_t(udm)
         logger.debug("frame_udm_renamed(func_ea=%d, udm=%s, oldname=%s)", func_ea, udm_model.model_dump_json(), oldname)
+        func_name = ida_funcs.get_func_name(func_ea)
         ev = frame_udm_renamed_event(
-            event_name="frame_udm_renamed", timestamp=datetime.now(), func_ea=func_ea, udm=udm_model, oldname=oldname
+            event_name="frame_udm_renamed",
+            timestamp=datetime.now(),
+            func_ea=func_ea,
+            func_name=func_name if func_name else None,
+            udm=udm_model,
+            oldname=oldname,
         )
         self.events.add_event(ev)
 
@@ -1063,10 +1097,12 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             udmold_model.model_dump_json(),
             udmnew_model.model_dump_json(),
         )
+        func_name = ida_funcs.get_func_name(func_ea)
         ev = frame_udm_changed_event(
             event_name="frame_udm_changed",
             timestamp=datetime.now(),
             func_ea=func_ea,
+            func_name=func_name if func_name else None,
             udmold=udmold_model,
             udmnew=udmnew_model,
         )
