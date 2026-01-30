@@ -35,7 +35,7 @@ else:
     except ImportError:
         import idaapi as ida_idaapi
 
-    class nop_plugin_t(ida_idaapi.plugin_t):
+    class gsd_nop_plugin_t(ida_idaapi.plugin_t):
         flags = ida_idaapi.PLUGIN_HIDE | ida_idaapi.PLUGIN_UNL
         wanted_name = "global-struct-dissector disabled"
         comment = "global-struct-dissector is disabled for this IDA version"
@@ -46,4 +46,4 @@ else:
             return ida_idaapi.PLUGIN_SKIP
 
     def PLUGIN_ENTRY():
-        return nop_plugin_t()
+        return gsd_nop_plugin_t()

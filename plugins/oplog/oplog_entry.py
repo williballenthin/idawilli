@@ -28,7 +28,7 @@ else:
     except ImportError:
         import idaapi as ida_idaapi
 
-    class nop_plugin_t(ida_idaapi.plugin_t):
+    class oplog_nop_plugin_t(ida_idaapi.plugin_t):
         flags = ida_idaapi.PLUGIN_HIDE | ida_idaapi.PLUGIN_UNL
         wanted_name = "oplog disabled"
         comment = "oplog is disabled for this IDA version"
@@ -41,4 +41,4 @@ else:
     # we have to define this symbol, or IDA logs a message
     def PLUGIN_ENTRY():
         # we have to return something here, or IDA logs a message
-        return nop_plugin_t()
+        return oplog_nop_plugin_t()
