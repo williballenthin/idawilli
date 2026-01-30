@@ -712,9 +712,9 @@ class changing_ti_event(BaseModel):
     event_name: Literal["changing_ti"]
     timestamp: datetime
     ea: int
-    # TODO add existing TI
     new_type: bytes
     new_fnames: bytes
+    new_type_str: str | None = None
 
 
 class ti_changed_event(BaseModel):
@@ -723,6 +723,7 @@ class ti_changed_event(BaseModel):
     ea: int
     type: bytes
     fnames: bytes
+    type_str: str | None = None
 
 
 class changing_op_ti_event(BaseModel):
@@ -732,6 +733,7 @@ class changing_op_ti_event(BaseModel):
     n: int
     new_type: bytes
     new_fnames: bytes
+    new_type_str: str | None = None
 
 
 class op_ti_changed_event(BaseModel):
@@ -741,6 +743,7 @@ class op_ti_changed_event(BaseModel):
     n: int
     type: bytes
     fnames: bytes
+    type_str: str | None = None
 
 
 class local_types_changed_event(BaseModel):

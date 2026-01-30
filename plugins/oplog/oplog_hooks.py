@@ -104,6 +104,28 @@ from oplog_events import (
 logger = logging.getLogger(__name__)
 
 
+def deserialize_type_to_str(type_bytes: bytes, fnames_bytes: bytes) -> str | None:
+    """Deserialize IDA type bytes to a human-readable string.
+
+    Args:
+        type_bytes: The serialized type bytes from IDA hooks.
+        fnames_bytes: The serialized field names bytes.
+
+    Returns:
+        Human-readable type string, or None if deserialization fails.
+    """
+    if not type_bytes:
+        return None
+    try:
+        tif = ida_typeinf.tinfo_t()
+        fnames = fnames_bytes if fnames_bytes else None
+        if tif.deserialize(None, type_bytes, fnames):
+            return tif.dstr()
+        return None
+    except Exception:
+        return None
+
+
 class IDBChangedHook(ida_idp.IDB_Hooks):
     def __init__(self, events: Events, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -798,15 +820,24 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
     ) -> None:
         """An item typestring (C/C++ prototype) is to be changed."""
         logger.debug("changing_ti(ea=%d, new_type=%s, new_fnames=%s)", ea, new_type, new_fnames)
+        new_type_str = deserialize_type_to_str(new_type, new_fnames)
         ev = changing_ti_event(
-            event_name="changing_ti", timestamp=datetime.now(), ea=ea, new_type=new_type, new_fnames=new_fnames
+            event_name="changing_ti",
+            timestamp=datetime.now(),
+            ea=ea,
+            new_type=new_type,
+            new_fnames=new_fnames,
+            new_type_str=new_type_str,
         )
         self.events.add_event(ev)
 
     def ti_changed(self, ea: int, type: bytes, fnames: bytes) -> None:
         """An item typestring (C/C++ prototype) has been changed."""
         logger.debug("ti_changed(ea=%d, type=%s, fnames=%s)", ea, type, fnames)
-        ev = ti_changed_event(event_name="ti_changed", timestamp=datetime.now(), ea=ea, type=type, fnames=fnames)
+        type_str = deserialize_type_to_str(type, fnames)
+        ev = ti_changed_event(
+            event_name="ti_changed", timestamp=datetime.now(), ea=ea, type=type, fnames=fnames, type_str=type_str
+        )
         self.events.add_event(ev)
 
     def changing_op_ti(
@@ -824,8 +855,15 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             new_type,
             new_fnames,
         )
+        new_type_str = deserialize_type_to_str(new_type, new_fnames)
         ev = changing_op_ti_event(
-            event_name="changing_op_ti", timestamp=datetime.now(), ea=ea, n=n, new_type=new_type, new_fnames=new_fnames
+            event_name="changing_op_ti",
+            timestamp=datetime.now(),
+            ea=ea,
+            n=n,
+            new_type=new_type,
+            new_fnames=new_fnames,
+            new_type_str=new_type_str,
         )
         self.events.add_event(ev)
 
@@ -838,8 +876,15 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
     ) -> None:
         """An operand typestring (c/c++ prototype) has been changed."""
         logger.debug("op_ti_changed(ea=%d, n=%d, type=%s, fnames=%s)", ea, n, type, fnames)
+        type_str = deserialize_type_to_str(type, fnames)
         ev = op_ti_changed_event(
-            event_name="op_ti_changed", timestamp=datetime.now(), ea=ea, n=n, type=type, fnames=fnames
+            event_name="op_ti_changed",
+            timestamp=datetime.now(),
+            ea=ea,
+            n=n,
+            type=type,
+            fnames=fnames,
+            type_str=type_str,
         )
         self.events.add_event(ev)
 

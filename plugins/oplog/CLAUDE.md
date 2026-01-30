@@ -1,2 +1,2 @@
 - use `just lint` and `just test`
-- use `gh` to see github issues
+- use `gh` to see github issues, but do not write to GH, read only

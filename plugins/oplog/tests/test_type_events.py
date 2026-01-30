@@ -75,6 +75,7 @@ def test_ti_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
         ea=0x90000000,
         new_type=b"=\x04int",
         new_fnames=b"",
+        new_type_str="int",
     )
     assert changing_actual == changing_expected
 
@@ -84,6 +85,7 @@ def test_ti_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
         ea=0x90000000,
         type=b"=\x04int",
         fnames=b"",
+        type_str="int",
     )
     assert changed_actual == changed_expected
 
@@ -132,6 +134,7 @@ def test_op_ti_changed(test_binary: Path, session_idauser: Path, work_dir: Path)
         n=0,
         new_type=b"=\x04int",
         new_fnames=b"",
+        new_type_str="int",
     )
     assert changing_actual == changing_expected
 
@@ -142,6 +145,7 @@ def test_op_ti_changed(test_binary: Path, session_idauser: Path, work_dir: Path)
         n=0,
         type=b"=\x04int",
         fnames=b"",
+        type_str="int",
     )
     assert changed_actual == changed_expected
 

@@ -449,27 +449,25 @@ def render_dirtree_segm_moved(ev: dirtree_segm_moved_event):
 
 
 def render_changing_ti(ev: changing_ti_event):
-    # TODO: describe the old and new type
-    # TODO: describe the address (variable/name/function)
-    return f"{pretty_date(ev.timestamp)}: type information changing: {render_address(ev.ea)}"
+    type_desc = f" → {codname(ev.new_type_str)}" if ev.new_type_str else ""
+    return f"{pretty_date(ev.timestamp)}: type information changing: {render_address(ev.ea)}{type_desc}"
 
 
 def render_ti_changed(ev: ti_changed_event):
-    # TODO: describe the new type
-    # TODO: describe the address (variable/name/function)
-    return f"{pretty_date(ev.timestamp)}: type information changed: {render_address(ev.ea)}"
+    type_desc = f": {codname(ev.type_str)}" if ev.type_str else ""
+    return f"{pretty_date(ev.timestamp)}: type information changed: {render_address(ev.ea)}{type_desc}"
 
 
 def render_changing_op_ti(ev: changing_op_ti_event):
-    # TODO: describe the new type
-    # TODO: describe the address (variable/name/function)
-    return f"{pretty_date(ev.timestamp)}: operand type information changing: {render_address(ev.ea)} op{ev.n}"
+    type_desc = f" → {codname(ev.new_type_str)}" if ev.new_type_str else ""
+    return (
+        f"{pretty_date(ev.timestamp)}: operand type information changing: {render_address(ev.ea)} op{ev.n}{type_desc}"
+    )
 
 
 def render_op_ti_changed(ev: op_ti_changed_event):
-    # TODO: describe the new type
-    # TODO: describe the address (variable/name/function)
-    return f"{pretty_date(ev.timestamp)}: operand type information changed: {render_address(ev.ea)} op{ev.n}"
+    type_desc = f": {codname(ev.type_str)}" if ev.type_str else ""
+    return f"{pretty_date(ev.timestamp)}: operand type information changed: {render_address(ev.ea)} op{ev.n}{type_desc}"
 
 
 def render_local_types_changed(ev: local_types_changed_event):
