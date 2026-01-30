@@ -146,9 +146,14 @@ try:
     idapro.close_database()
     print("Done.", file=sys.stderr)
 except Exception as e:
+    print("EXCEPTION in IDA script:", file=sys.stderr)
     traceback.print_exc()
     sys.exit(1)
 ''')
+
+    print(f"DEBUG: Running script in {work_dir}")
+    print(f"DEBUG: Script file: {script_file}")
+    print(f"DEBUG: IDAUSR: {idauser}")
 
     result = subprocess.run(
         ["python", str(script_file)],
@@ -159,9 +164,14 @@ except Exception as e:
         cwd=str(work_dir),
     )
 
+    print(f"DEBUG: Return code: {result.returncode}")
+    print(f"DEBUG: STDOUT:\n{result.stdout}")
+    print(f"DEBUG: STDERR:\n{result.stderr}")
+
+    work_dir_contents = list(work_dir.iterdir())
+    print(f"DEBUG: work_dir contents after script: {[f.name for f in work_dir_contents]}")
+
     if result.returncode != 0:
-        print("STDOUT:", result.stdout)
-        print("STDERR:", result.stderr)
         assert False, f"IDA script failed with return code {result.returncode}"
 
     return result

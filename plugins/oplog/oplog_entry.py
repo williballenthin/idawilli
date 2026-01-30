@@ -9,8 +9,8 @@ oplog_ok = True
 
 if oplog_ok:
     kernel_version: tuple[int, ...] = tuple(int(part) for part in ida_kernwin.get_kernel_version().split(".") if part.isdigit()) or (0, )
-    if kernel_version < (9, 2):  # type: ignore
-        logger.warning("IDA too old (must be 9.2+): %s", ida_kernwin.get_kernel_version())
+    if kernel_version < (9, 0):  # type: ignore
+        logger.warning("IDA too old (must be 9.0+): %s", ida_kernwin.get_kernel_version())
         oplog_ok = False
 
 
