@@ -15,3 +15,6 @@ lint:
     -just black
     -just ruff
     -just mypy
+
+test:
+    pytest -x tests/
