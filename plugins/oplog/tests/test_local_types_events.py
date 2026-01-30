@@ -7,9 +7,11 @@ from conftest import run_ida_script
 from oplog_events import EventList, local_types_changed_event
 
 
-@pytest.mark.xfail(reason="local_types_changed hook does not fire via Python API calls")
 def test_local_types_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
-    """Test that creating a local type triggers local_types_changed event."""
+    """Test that creating a local type triggers local_types_changed event.
+
+    Uses tinfo_t.set_named_type(None, name) to add a type to the local types library.
+    """
     events_path = work_dir / "events.json"
 
     run_ida_script(
@@ -20,12 +22,13 @@ def test_local_types_changed(test_binary: Path, session_idauser: Path, work_dir:
             import idc
             import ida_typeinf
 
-            til = ida_typeinf.get_idati()
+            udt = ida_typeinf.udt_type_data_t()
+            udm = udt.add_member("field_a", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32))
+            udm = udt.add_member("field_b", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32))
 
-            # Try to add a simple type to local type library
             tif = ida_typeinf.tinfo_t()
-            if tif.get_named_type(til, "int"):
-                til.add_tinfo_type(til.get_last_tid(), "TestType", tif)
+            tif.create_udt(udt)
+            tif.set_named_type(None, "OplogTestStruct")
 
             idc.eval_idc('oplog_export("{events_path}")')
         '''),
@@ -36,13 +39,12 @@ def test_local_types_changed(test_binary: Path, session_idauser: Path, work_dir:
 
     assert len(local_types_events) >= 1
 
-    actual = local_types_events[-1]
+    matching = [e for e in local_types_events if e.name == "OplogTestStruct"]
+    assert len(matching) >= 1, "No local_types_changed event for OplogTestStruct"
 
-    expected = local_types_changed_event(
-        event_name="local_types_changed",
-        timestamp=actual.timestamp,
-        ltc=0,
-        ordinal=1,
-        name="TestType",
-    )
-    assert actual == expected
+    actual = matching[-1]
+
+    assert actual.event_name == "local_types_changed"
+    assert actual.ltc == 1  # LTC_ADDED
+    assert actual.name == "OplogTestStruct"
+    assert actual.ordinal > 0  # ordinal is dynamically assigned

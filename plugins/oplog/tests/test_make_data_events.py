@@ -85,9 +85,11 @@ def test_make_data_byte(test_binary: Path, session_idauser: Path, work_dir: Path
     assert actual == expected
 
 
-@pytest.mark.xfail(reason="make_data does not fire as expected")
 def test_make_data_word(test_binary: Path, session_idauser: Path, work_dir: Path):
     """Test that creating a word triggers make_data event.
+
+    Uses DELIT_EXPAND to properly clear byte tails that may exist
+    at the target address before creating word data.
     """
     events_path = work_dir / "events.json"
 
@@ -98,9 +100,12 @@ def test_make_data_word(test_binary: Path, session_idauser: Path, work_dir: Path
         script=textwrap.dedent(f'''
             import idc
             import ida_bytes
+            import ida_segment
 
-            test_ea = 0x401020
-            ida_bytes.del_items(test_ea, ida_bytes.DELIT_SIMPLE)
+            seg = ida_segment.get_first_seg()
+            test_ea = seg.start_ea + 0x60
+
+            ida_bytes.del_items(test_ea, ida_bytes.DELIT_EXPAND, 2)
             idc.create_word(test_ea)
 
             idc.eval_idc('oplog_export("{events_path}")')
@@ -110,16 +115,17 @@ def test_make_data_word(test_binary: Path, session_idauser: Path, work_dir: Path
     event_list = EventList.model_validate_json(events_path.read_text())
     make_data_events = [e for e in event_list.root if isinstance(e, make_data_event)]
 
-    matching = [e for e in make_data_events if e.ea == 0x401020]
-    assert len(matching) >= 1, "No make_data event found for address 0x401020"
+    test_ea = 0x401060
+    matching = [e for e in make_data_events if e.ea == test_ea]
+    assert len(matching) >= 1, f"No make_data event found for address {hex(test_ea)}"
 
     actual = matching[-1]
 
     expected = make_data_event(
         event_name="make_data",
         timestamp=actual.timestamp,
-        ea=0x401020,
-        flags=2048,
+        ea=test_ea,
+        flags=268436480,
         tid=18446744073709551615,
         len=2,
     )

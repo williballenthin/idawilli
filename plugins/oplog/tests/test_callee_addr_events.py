@@ -10,9 +10,16 @@ from oplog_events import (
 )
 
 
-@pytest.mark.xfail(reason="callee_addr_changed doesn't fire as expected")
+@pytest.mark.xfail(
+    reason="callee_addr_changed only fires from UI plugin (Alt+F11), no public Python API exists"
+)
 def test_callee_addr_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
     """Test that changing callee address triggers callee_addr_changed event.
+
+    Note: The callee_addr_changed hook is ONLY triggered by the "Change Callee
+    Address" UI plugin (Alt+F11) which directly calls gen_idb_event().
+    Manipulating xrefs via ida_xref does NOT trigger this hook.
+    This test remains xfail because there's no programmatic way to trigger it.
     """
     events_path = work_dir / "events.json"
 
@@ -56,10 +63,6 @@ def test_callee_addr_changed(test_binary: Path, session_idauser: Path, work_dir:
 
     actual = callee_events[-1]
 
-    expected = callee_addr_changed_event(
-        event_name="callee_addr_changed",
-        timestamp=actual.timestamp,
-        ea=actual.ea,
-        callee=actual.callee,
-    )
-    assert actual == expected
+    assert actual.event_name == "callee_addr_changed"
+    assert actual.callee == 0x401200  # new_callee set in the script
+    assert 0x401000 <= actual.ea < 0x401100  # ea found in the search range
