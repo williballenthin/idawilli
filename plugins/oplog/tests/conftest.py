@@ -2,7 +2,6 @@ import os
 import sys
 import json
 import shutil
-import tempfile
 import subprocess
 from pathlib import Path
 
@@ -56,13 +55,13 @@ def _create_idauser(base_path: Path) -> Path:
     if result.returncode != 0:
         pytest.fail(f"hcli ida set-default failed:\nstdout: {result.stdout}\nstderr: {result.stderr}")
 
-    accept_eula_script = '''
+    accept_eula_script = """
 import idapro
 import ida_registry
 ida_registry.reg_write_int("EULA 90", 1)
 ida_registry.reg_write_int("AutoUseLumina", 0)
 ida_registry.reg_write_int("AutoCheckUpdates", 0)
-'''
+"""
     result = subprocess.run(
         ["python", "-c", accept_eula_script],
         env={"IDAUSR": str(idauser), **os.environ},
@@ -122,7 +121,7 @@ def run_ida_script(
     indented_script = textwrap.indent(textwrap.dedent(script), "    ")
 
     script_file = work_dir / "ida_script.py"
-    script_file.write_text(f'''
+    script_file.write_text(f"""
 import sys
 import traceback
 
@@ -151,7 +150,7 @@ except Exception as e:
     print("EXCEPTION in IDA script:", file=sys.stderr)
     traceback.print_exc()
     sys.exit(1)
-''')
+""")
 
     result = subprocess.run(
         ["python", str(script_file)],

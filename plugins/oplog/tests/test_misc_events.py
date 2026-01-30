@@ -2,8 +2,8 @@ import textwrap
 from pathlib import Path
 
 import pytest
-
 from conftest import run_ida_script
+
 from oplog_events import (
     EventList,
     determined_main_event,
@@ -21,14 +21,14 @@ def test_determined_main(test_binary: Path, session_idauser: Path, work_dir: Pat
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_ida
 
             ida_ida.inf_set_main(0x401000)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -54,7 +54,7 @@ def test_idasgn_matched_ea(test_binary: Path, session_idauser: Path, work_dir: P
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_funcs
 
@@ -62,7 +62,7 @@ def test_idasgn_matched_ea(test_binary: Path, session_idauser: Path, work_dir: P
             ida_funcs.apply_idasgn_to("vc32rtf", func_ea, False)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -79,9 +79,7 @@ def test_idasgn_matched_ea(test_binary: Path, session_idauser: Path, work_dir: P
     assert actual == expected
 
 
-@pytest.mark.xfail(
-    reason="callee_addr_changed only fires from UI plugin (Alt+F11), no public Python API exists"
-)
+@pytest.mark.xfail(reason="callee_addr_changed only fires from UI plugin (Alt+F11), no public Python API exists")
 def test_callee_addr_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
     """Test that changing callee address triggers callee_addr_changed event.
 
@@ -96,7 +94,7 @@ def test_callee_addr_changed(test_binary: Path, session_idauser: Path, work_dir:
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_xref
             import ida_idaapi
@@ -122,7 +120,7 @@ def test_callee_addr_changed(test_binary: Path, session_idauser: Path, work_dir:
                 ida_xref.add_cref(test_ea, new_callee, ida_xref.fl_CN)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())

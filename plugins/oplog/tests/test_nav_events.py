@@ -2,20 +2,20 @@ import textwrap
 from pathlib import Path
 
 import pytest
-
 from conftest import run_ida_script
+
 from oplog_events import (
     EventList,
-    bookmark_changed_event,
-    item_color_changed_event,
-    dirtree_mkdir_event,
-    dirtree_rmdir_event,
+    renamed_event,
     dirtree_link_event,
     dirtree_move_event,
     dirtree_rank_event,
+    dirtree_mkdir_event,
+    dirtree_rmdir_event,
     dirtree_rminode_event,
+    bookmark_changed_event,
     dirtree_segm_moved_event,
-    renamed_event,
+    item_color_changed_event,
 )
 
 
@@ -27,7 +27,7 @@ def test_bookmark_changed(test_binary: Path, session_idauser: Path, work_dir: Pa
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_moves
             import ida_kernwin
@@ -47,7 +47,7 @@ def test_bookmark_changed(test_binary: Path, session_idauser: Path, work_dir: Pa
             ida_moves.bookmarks_t_mark(entry, 1, None, "Test bookmark", None)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -81,7 +81,7 @@ def test_bookmark_changed_delete(test_binary: Path, session_idauser: Path, work_
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_moves
             import ida_kernwin
@@ -103,7 +103,7 @@ def test_bookmark_changed_delete(test_binary: Path, session_idauser: Path, work_
             ida_moves.bookmarks_t_mark(entry, 0, None, "", None)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -131,14 +131,14 @@ def test_item_color_changed(test_binary: Path, session_idauser: Path, work_dir: 
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
 
             test_ea = 0x401000
             idc.set_color(test_ea, idc.CIC_ITEM, 0x0000FF)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -153,7 +153,7 @@ def test_item_color_changed(test_binary: Path, session_idauser: Path, work_dir: 
         event_name="item_color_changed",
         timestamp=actual.timestamp,
         ea=0x401000,
-        color=0xff,
+        color=0xFF,
     )
     assert actual == expected
 
@@ -166,7 +166,7 @@ def test_item_color_reset(test_binary: Path, session_idauser: Path, work_dir: Pa
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
 
             test_ea = 0x401000
@@ -174,7 +174,7 @@ def test_item_color_reset(test_binary: Path, session_idauser: Path, work_dir: Pa
             idc.set_color(test_ea, idc.CIC_ITEM, idc.DEFCOLOR)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -189,7 +189,7 @@ def test_item_color_reset(test_binary: Path, session_idauser: Path, work_dir: Pa
         event_name="item_color_changed",
         timestamp=actual.timestamp,
         ea=0x401000,
-        color=0xffffffff,
+        color=0xFFFFFFFF,
     )
     assert actual == expected
 
@@ -202,7 +202,7 @@ def test_dirtree_mkdir(test_binary: Path, session_idauser: Path, work_dir: Path)
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_dirtree
 
@@ -212,7 +212,7 @@ def test_dirtree_mkdir(test_binary: Path, session_idauser: Path, work_dir: Path)
                 dt.mkdir("TestDir")
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -237,7 +237,7 @@ def test_dirtree_rmdir(test_binary: Path, session_idauser: Path, work_dir: Path)
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_dirtree
 
@@ -246,7 +246,7 @@ def test_dirtree_rmdir(test_binary: Path, session_idauser: Path, work_dir: Path)
                 dt.mkdir("TestDir")
                 dt.rmdir("TestDir")
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -272,7 +272,7 @@ def test_dirtree_link(test_binary: Path, session_idauser: Path, work_dir: Path):
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_dirtree
 
@@ -281,7 +281,7 @@ def test_dirtree_link(test_binary: Path, session_idauser: Path, work_dir: Path):
                 dt.mkdir("TestDir")
                 dt.link("TestDir")
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -307,7 +307,7 @@ def test_dirtree_move(test_binary: Path, session_idauser: Path, work_dir: Path):
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_dirtree
 
@@ -316,7 +316,7 @@ def test_dirtree_move(test_binary: Path, session_idauser: Path, work_dir: Path):
                 dt.mkdir("OldName")
                 dt.rename("OldName", "NewName")
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -342,7 +342,7 @@ def test_dirtree_rank(test_binary: Path, session_idauser: Path, work_dir: Path):
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_dirtree
 
@@ -351,7 +351,7 @@ def test_dirtree_rank(test_binary: Path, session_idauser: Path, work_dir: Path):
                 dt.mkdir("TestDir")
                 dt.change_rank("TestDir", 5)
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -378,7 +378,7 @@ def test_dirtree_rminode(test_binary: Path, session_idauser: Path, work_dir: Pat
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_dirtree
 
@@ -387,7 +387,7 @@ def test_dirtree_rminode(test_binary: Path, session_idauser: Path, work_dir: Pat
                 dt.mkdir("TestDir")
                 dt.rmdir("TestDir")
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -412,14 +412,14 @@ def test_dirtree_segm_moved(test_binary: Path, session_idauser: Path, work_dir: 
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_segment
 
             delta = 0x1000
             ida_segment.rebase_program(delta, ida_segment.MSF_FIXONCE)
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -442,13 +442,13 @@ def test_rename_captures_event(test_binary: Path, temp_idauser: Path, work_dir: 
         binary_path=test_binary,
         idauser=temp_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
 
             entry = idc.get_inf_attr(idc.INF_START_EA)
             idc.set_name(entry, "test_renamed_entry")
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())

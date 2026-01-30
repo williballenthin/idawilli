@@ -2,15 +2,16 @@ import textwrap
 from pathlib import Path
 
 import pytest
-
 from conftest import run_ida_script
+
 from oplog_events import (
     EdmModel,
-    EventList,
     UdmModel,
-    changing_op_ti_event,
+    EventList,
+    ti_changed_event,
     changing_ti_event,
-    local_types_changed_event,
+    op_ti_changed_event,
+    changing_op_ti_event,
     lt_edm_changed_event,
     lt_edm_created_event,
     lt_edm_deleted_event,
@@ -20,8 +21,7 @@ from oplog_events import (
     lt_udm_deleted_event,
     lt_udm_renamed_event,
     lt_udt_expanded_event,
-    op_ti_changed_event,
-    ti_changed_event,
+    local_types_changed_event,
 )
 
 
@@ -33,7 +33,7 @@ def test_ti_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_typeinf
             import ida_segment
@@ -52,7 +52,7 @@ def test_ti_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
             ida_typeinf.apply_tinfo(data_start, tif, ida_typeinf.TINFO_DEFINITE)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -73,8 +73,8 @@ def test_ti_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
         event_name="changing_ti",
         timestamp=changing_actual.timestamp,
         ea=0x90000000,
-        new_type=b'=\x04int',
-        new_fnames=b'',
+        new_type=b"=\x04int",
+        new_fnames=b"",
     )
     assert changing_actual == changing_expected
 
@@ -82,8 +82,8 @@ def test_ti_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
         event_name="ti_changed",
         timestamp=changed_actual.timestamp,
         ea=0x90000000,
-        type=b'=\x04int',
-        fnames=b'',
+        type=b"=\x04int",
+        fnames=b"",
     )
     assert changed_actual == changed_expected
 
@@ -97,7 +97,7 @@ def test_op_ti_changed(test_binary: Path, session_idauser: Path, work_dir: Path)
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_typeinf
 
@@ -108,7 +108,7 @@ def test_op_ti_changed(test_binary: Path, session_idauser: Path, work_dir: Path)
             ida_typeinf.set_op_tinfo(test_ea, 0, tif)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -130,8 +130,8 @@ def test_op_ti_changed(test_binary: Path, session_idauser: Path, work_dir: Path)
         timestamp=changing_actual.timestamp,
         ea=0x401000,
         n=0,
-        new_type=b'=\x04int',
-        new_fnames=b'',
+        new_type=b"=\x04int",
+        new_fnames=b"",
     )
     assert changing_actual == changing_expected
 
@@ -140,8 +140,8 @@ def test_op_ti_changed(test_binary: Path, session_idauser: Path, work_dir: Path)
         timestamp=changed_actual.timestamp,
         ea=0x401000,
         n=0,
-        type=b'=\x04int',
-        fnames=b'',
+        type=b"=\x04int",
+        fnames=b"",
     )
     assert changed_actual == changed_expected
 
@@ -152,14 +152,14 @@ def test_local_types_changed(test_binary: Path, session_idauser: Path, work_dir:
 
     Uses tinfo_t.set_named_type(None, name) to add a type to the local types library.
     """
-    
+
     events_path = work_dir / "events.json"
 
     run_ida_script(
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_typeinf
 
@@ -172,7 +172,7 @@ def test_local_types_changed(test_binary: Path, session_idauser: Path, work_dir:
             tif.set_named_type(None, "OplogTestStruct")
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -204,7 +204,7 @@ def test_lt_edm_created(test_binary: Path, session_idauser: Path, work_dir: Path
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_typeinf
 
@@ -226,7 +226,7 @@ def test_lt_edm_created(test_binary: Path, session_idauser: Path, work_dir: Path
             enum_tif2.add_edm(edm)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -244,7 +244,7 @@ def test_lt_edm_created(test_binary: Path, session_idauser: Path, work_dir: Path
             name="VALUE_ONE",
             value=1,
             comment="",
-            tid=0xff000000000000c0,
+            tid=0xFF000000000000C0,
         ),
     )
     assert actual == expected
@@ -259,7 +259,7 @@ def test_lt_edm_deleted(test_binary: Path, session_idauser: Path, work_dir: Path
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_typeinf
 
@@ -286,7 +286,7 @@ def test_lt_edm_deleted(test_binary: Path, session_idauser: Path, work_dir: Path
             enum_tif3.del_edm(0)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -300,12 +300,12 @@ def test_lt_edm_deleted(test_binary: Path, session_idauser: Path, work_dir: Path
         event_name="lt_edm_deleted",
         timestamp=actual.timestamp,
         enumname="TestEnum2",
-        edm_tid=0xff000000000000c0,
+        edm_tid=0xFF000000000000C0,
         edm=EdmModel(
             name="VALUE_ONE",
             value=1,
             comment="",
-            tid=0xffffffffffffffff,
+            tid=0xFFFFFFFFFFFFFFFF,
         ),
     )
     assert actual == expected
@@ -320,7 +320,7 @@ def test_lt_edm_renamed(test_binary: Path, session_idauser: Path, work_dir: Path
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_typeinf
 
@@ -347,7 +347,7 @@ def test_lt_edm_renamed(test_binary: Path, session_idauser: Path, work_dir: Path
             enum_tif3.rename_edm(0, "NEW_VALUE")
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -366,7 +366,7 @@ def test_lt_edm_renamed(test_binary: Path, session_idauser: Path, work_dir: Path
             name="NEW_VALUE",
             value=1,
             comment="",
-            tid=0xff000000000000c0,
+            tid=0xFF000000000000C0,
         ),
     )
     assert actual == expected
@@ -381,7 +381,7 @@ def test_lt_edm_changed(test_binary: Path, session_idauser: Path, work_dir: Path
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_typeinf
 
@@ -408,7 +408,7 @@ def test_lt_edm_changed(test_binary: Path, session_idauser: Path, work_dir: Path
             enum_tif3.edit_edm(0, 0x3e7)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -422,18 +422,18 @@ def test_lt_edm_changed(test_binary: Path, session_idauser: Path, work_dir: Path
         event_name="lt_edm_changed",
         timestamp=actual.timestamp,
         enumname="TestEnum4",
-        edm_tid=0xff000000000000c0,
+        edm_tid=0xFF000000000000C0,
         edmold=EdmModel(
             name="VALUE_ONE",
             value=1,
             comment="",
-            tid=0xff000000000000c0,
+            tid=0xFF000000000000C0,
         ),
         edmnew=EdmModel(
             name="VALUE_ONE",
             value=999,
             comment="",
-            tid=0xff000000000000c0,
+            tid=0xFF000000000000C0,
         ),
     )
     assert actual == expected
@@ -447,7 +447,7 @@ def test_lt_udm_created(test_binary: Path, session_idauser: Path, work_dir: Path
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_typeinf
 
@@ -475,7 +475,7 @@ def test_lt_udm_created(test_binary: Path, session_idauser: Path, work_dir: Path
             struct_tif2.add_udm(udm)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -494,7 +494,7 @@ def test_lt_udm_created(test_binary: Path, session_idauser: Path, work_dir: Path
             size=32,
             name="field_a",
             cmt="",
-            tid=0xffffffffffffffff,
+            tid=0xFFFFFFFFFFFFFFFF,
             repr="",
             effalign=0,
             tafld_bits=0,
@@ -512,7 +512,7 @@ def test_lt_udm_deleted(test_binary: Path, session_idauser: Path, work_dir: Path
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_typeinf
 
@@ -544,7 +544,7 @@ def test_lt_udm_deleted(test_binary: Path, session_idauser: Path, work_dir: Path
             struct_tif3.del_udm(0)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -564,7 +564,7 @@ def test_lt_udm_deleted(test_binary: Path, session_idauser: Path, work_dir: Path
             size=32,
             name="field_a",
             cmt="",
-            tid=0xffffffffffffffff,
+            tid=0xFFFFFFFFFFFFFFFF,
             repr="",
             effalign=4,
             tafld_bits=0,
@@ -582,7 +582,7 @@ def test_lt_udm_renamed(test_binary: Path, session_idauser: Path, work_dir: Path
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_typeinf
 
@@ -614,7 +614,7 @@ def test_lt_udm_renamed(test_binary: Path, session_idauser: Path, work_dir: Path
             struct_tif3.rename_udm(0, "renamed_field")
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -634,7 +634,7 @@ def test_lt_udm_renamed(test_binary: Path, session_idauser: Path, work_dir: Path
             size=0,
             name="renamed_field",
             cmt="",
-            tid=0xffffffffffffffff,
+            tid=0xFFFFFFFFFFFFFFFF,
             repr="",
             effalign=0,
             tafld_bits=0,
@@ -652,7 +652,7 @@ def test_lt_udm_changed(test_binary: Path, session_idauser: Path, work_dir: Path
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_typeinf
 
@@ -686,7 +686,7 @@ def test_lt_udm_changed(test_binary: Path, session_idauser: Path, work_dir: Path
             struct_tif3.set_udm_type(0, char_tif)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -706,7 +706,7 @@ def test_lt_udm_changed(test_binary: Path, session_idauser: Path, work_dir: Path
             size=32,
             name="field_a",
             cmt="",
-            tid=0xffffffffffffffff,
+            tid=0xFFFFFFFFFFFFFFFF,
             repr="",
             effalign=4,
             tafld_bits=0,
@@ -717,7 +717,7 @@ def test_lt_udm_changed(test_binary: Path, session_idauser: Path, work_dir: Path
             size=8,
             name="field_a",
             cmt="",
-            tid=0xffffffffffffffff,
+            tid=0xFFFFFFFFFFFFFFFF,
             repr="",
             effalign=4,
             tafld_bits=0,
@@ -727,7 +727,9 @@ def test_lt_udm_changed(test_binary: Path, session_idauser: Path, work_dir: Path
     assert actual == expected
 
 
-@pytest.mark.xfail(reason="lt_udt_expanded only fires during IDA's struct expansion UI, not via expand_udt() Python API")
+@pytest.mark.xfail(
+    reason="lt_udt_expanded only fires during IDA's struct expansion UI, not via expand_udt() Python API"
+)
 def test_lt_udt_expanded(test_binary: Path, session_idauser: Path, work_dir: Path):
     """Test that expanding a struct with a gap triggers lt_udt_expanded event."""
     events_path = work_dir / "events.json"
@@ -736,7 +738,7 @@ def test_lt_udt_expanded(test_binary: Path, session_idauser: Path, work_dir: Pat
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_typeinf
 
@@ -776,7 +778,7 @@ def test_lt_udt_expanded(test_binary: Path, session_idauser: Path, work_dir: Pat
             struct_tif3.expand_udt(1, 4)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())

@@ -1,19 +1,18 @@
 import textwrap
 from pathlib import Path
 
-import pytest
-
 from conftest import run_ida_script
+
 from oplog_events import (
+    OpModel,
     EventList,
     InsnModel,
-    OpModel,
-    byte_patched_event,
-    changing_op_type_event,
-    destroyed_items_event,
     make_code_event,
     make_data_event,
+    byte_patched_event,
+    destroyed_items_event,
     op_type_changed_event,
+    changing_op_type_event,
 )
 
 
@@ -25,7 +24,7 @@ def test_make_code(test_binary: Path, session_idauser: Path, work_dir: Path):
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_bytes
             import ida_ua
@@ -37,7 +36,7 @@ def test_make_code(test_binary: Path, session_idauser: Path, work_dir: Path):
             size = ida_ua.create_insn(test_ea)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -55,21 +54,149 @@ def test_make_code(test_binary: Path, session_idauser: Path, work_dir: Path):
             cs=0,
             ip=0x401000,
             ea=0x401000,
-            itype=0x7a,
+            itype=0x7A,
             size=4,
-            auxpref=0x1c48,
+            auxpref=0x1C48,
             segpref=0,
             insnpref=0,
             flags=2,
             ops=[
-                OpModel(n=0, type=1, offb=0, offo=0, flags=8, dtype=2, reg=2, phrase=2, value=0, addr=0, specval=0, specflag1=0, specflag2=0, specflag3=0, specflag4=0),
-                OpModel(n=1, type=4, offb=3, offo=0, flags=8, dtype=2, reg=4, phrase=4, value=0, addr=8, specval=0x1f0000, specflag1=1, specflag2=0x24, specflag3=0, specflag4=0),
-                OpModel(n=2, type=0, offb=0, offo=0, flags=8, dtype=0, reg=0, phrase=0, value=0, addr=0, specval=0, specflag1=0, specflag2=0, specflag3=0, specflag4=0),
-                OpModel(n=3, type=0, offb=0, offo=0, flags=8, dtype=0, reg=0, phrase=0, value=0, addr=0, specval=0, specflag1=0, specflag2=0, specflag3=0, specflag4=0),
-                OpModel(n=4, type=0, offb=0, offo=0, flags=8, dtype=0, reg=0, phrase=0, value=0, addr=0, specval=0, specflag1=0, specflag2=0, specflag3=0, specflag4=0),
-                OpModel(n=5, type=0, offb=0, offo=0, flags=8, dtype=0, reg=0, phrase=0, value=0, addr=0, specval=0, specflag1=0, specflag2=0, specflag3=0, specflag4=0),
-                OpModel(n=6, type=0, offb=0, offo=0, flags=8, dtype=0, reg=0, phrase=0, value=0, addr=0, specval=0, specflag1=0, specflag2=0, specflag3=0, specflag4=0),
-                OpModel(n=7, type=0, offb=0, offo=0, flags=8, dtype=0, reg=0, phrase=0, value=0, addr=0, specval=0, specflag1=0, specflag2=0, specflag3=0, specflag4=0),
+                OpModel(
+                    n=0,
+                    type=1,
+                    offb=0,
+                    offo=0,
+                    flags=8,
+                    dtype=2,
+                    reg=2,
+                    phrase=2,
+                    value=0,
+                    addr=0,
+                    specval=0,
+                    specflag1=0,
+                    specflag2=0,
+                    specflag3=0,
+                    specflag4=0,
+                ),
+                OpModel(
+                    n=1,
+                    type=4,
+                    offb=3,
+                    offo=0,
+                    flags=8,
+                    dtype=2,
+                    reg=4,
+                    phrase=4,
+                    value=0,
+                    addr=8,
+                    specval=0x1F0000,
+                    specflag1=1,
+                    specflag2=0x24,
+                    specflag3=0,
+                    specflag4=0,
+                ),
+                OpModel(
+                    n=2,
+                    type=0,
+                    offb=0,
+                    offo=0,
+                    flags=8,
+                    dtype=0,
+                    reg=0,
+                    phrase=0,
+                    value=0,
+                    addr=0,
+                    specval=0,
+                    specflag1=0,
+                    specflag2=0,
+                    specflag3=0,
+                    specflag4=0,
+                ),
+                OpModel(
+                    n=3,
+                    type=0,
+                    offb=0,
+                    offo=0,
+                    flags=8,
+                    dtype=0,
+                    reg=0,
+                    phrase=0,
+                    value=0,
+                    addr=0,
+                    specval=0,
+                    specflag1=0,
+                    specflag2=0,
+                    specflag3=0,
+                    specflag4=0,
+                ),
+                OpModel(
+                    n=4,
+                    type=0,
+                    offb=0,
+                    offo=0,
+                    flags=8,
+                    dtype=0,
+                    reg=0,
+                    phrase=0,
+                    value=0,
+                    addr=0,
+                    specval=0,
+                    specflag1=0,
+                    specflag2=0,
+                    specflag3=0,
+                    specflag4=0,
+                ),
+                OpModel(
+                    n=5,
+                    type=0,
+                    offb=0,
+                    offo=0,
+                    flags=8,
+                    dtype=0,
+                    reg=0,
+                    phrase=0,
+                    value=0,
+                    addr=0,
+                    specval=0,
+                    specflag1=0,
+                    specflag2=0,
+                    specflag3=0,
+                    specflag4=0,
+                ),
+                OpModel(
+                    n=6,
+                    type=0,
+                    offb=0,
+                    offo=0,
+                    flags=8,
+                    dtype=0,
+                    reg=0,
+                    phrase=0,
+                    value=0,
+                    addr=0,
+                    specval=0,
+                    specflag1=0,
+                    specflag2=0,
+                    specflag3=0,
+                    specflag4=0,
+                ),
+                OpModel(
+                    n=7,
+                    type=0,
+                    offb=0,
+                    offo=0,
+                    flags=8,
+                    dtype=0,
+                    reg=0,
+                    phrase=0,
+                    value=0,
+                    addr=0,
+                    specval=0,
+                    specflag1=0,
+                    specflag2=0,
+                    specflag3=0,
+                    specflag4=0,
+                ),
             ],
         ),
     )
@@ -84,7 +211,7 @@ def test_make_data(test_binary: Path, session_idauser: Path, work_dir: Path):
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_bytes
 
@@ -93,7 +220,7 @@ def test_make_data(test_binary: Path, session_idauser: Path, work_dir: Path):
             idc.create_dword(test_ea)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -109,7 +236,7 @@ def test_make_data(test_binary: Path, session_idauser: Path, work_dir: Path):
         timestamp=actual.timestamp,
         ea=0x401000,
         flags=0x20000400,
-        tid=0xffffffffffffffff,
+        tid=0xFFFFFFFFFFFFFFFF,
         len=4,
     )
     assert actual == expected
@@ -123,7 +250,7 @@ def test_make_data_byte(test_binary: Path, session_idauser: Path, work_dir: Path
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_bytes
 
@@ -132,7 +259,7 @@ def test_make_data_byte(test_binary: Path, session_idauser: Path, work_dir: Path
             idc.create_byte(test_ea)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -148,7 +275,7 @@ def test_make_data_byte(test_binary: Path, session_idauser: Path, work_dir: Path
         timestamp=actual.timestamp,
         ea=0x401010,
         flags=0x400,
-        tid=0xffffffffffffffff,
+        tid=0xFFFFFFFFFFFFFFFF,
         len=1,
     )
     assert actual == expected
@@ -166,7 +293,7 @@ def test_make_data_word(test_binary: Path, session_idauser: Path, work_dir: Path
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_bytes
             import ida_segment
@@ -178,7 +305,7 @@ def test_make_data_word(test_binary: Path, session_idauser: Path, work_dir: Path
             idc.create_word(test_ea)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -195,7 +322,7 @@ def test_make_data_word(test_binary: Path, session_idauser: Path, work_dir: Path
         timestamp=actual.timestamp,
         ea=test_ea,
         flags=0x10000400,
-        tid=0xffffffffffffffff,
+        tid=0xFFFFFFFFFFFFFFFF,
         len=2,
     )
     assert actual == expected
@@ -209,7 +336,7 @@ def test_byte_patched(test_binary: Path, session_idauser: Path, work_dir: Path):
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_bytes
 
@@ -217,7 +344,7 @@ def test_byte_patched(test_binary: Path, session_idauser: Path, work_dir: Path):
             ida_bytes.patch_byte(test_ea, 0x90)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -232,7 +359,7 @@ def test_byte_patched(test_binary: Path, session_idauser: Path, work_dir: Path):
         event_name="byte_patched",
         timestamp=actual.timestamp,
         ea=0x401000,
-        old_value=0x8b,
+        old_value=0x8B,
     )
     assert actual == expected
 
@@ -245,7 +372,7 @@ def test_byte_patched_multiple(test_binary: Path, session_idauser: Path, work_di
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_bytes
 
@@ -255,7 +382,7 @@ def test_byte_patched_multiple(test_binary: Path, session_idauser: Path, work_di
             ida_bytes.patch_byte(test_ea + 2, 0x90)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -273,7 +400,7 @@ def test_byte_patched_multiple(test_binary: Path, session_idauser: Path, work_di
         event_name="byte_patched",
         timestamp=matching_base[-1].timestamp,
         ea=0x401000,
-        old_value=0x8b,
+        old_value=0x8B,
     )
     assert matching_base[-1] == expected_1
 
@@ -302,7 +429,7 @@ def test_byte_patched_word(test_binary: Path, session_idauser: Path, work_dir: P
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_bytes
 
@@ -310,7 +437,7 @@ def test_byte_patched_word(test_binary: Path, session_idauser: Path, work_dir: P
             ida_bytes.patch_word(test_ea, 0x9090)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -332,7 +459,7 @@ def test_destroyed_items(test_binary: Path, session_idauser: Path, work_dir: Pat
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_segment
 
@@ -343,7 +470,7 @@ def test_destroyed_items(test_binary: Path, session_idauser: Path, work_dir: Pat
             ida_segment.set_segm_end(seg.start_ea, new_end, ida_segment.SEGMOD_KILL)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -371,7 +498,7 @@ def test_destroyed_items_via_segm_start(test_binary: Path, session_idauser: Path
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_segment
 
@@ -382,7 +509,7 @@ def test_destroyed_items_via_segm_start(test_binary: Path, session_idauser: Path
             ida_segment.set_segm_start(seg.start_ea, new_start, ida_segment.SEGMOD_KILL)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -410,14 +537,14 @@ def test_op_type_changed_hex(test_binary: Path, session_idauser: Path, work_dir:
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
 
             test_ea = 0x401000
             idc.op_hex(test_ea, 1)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -455,14 +582,14 @@ def test_op_type_changed_decimal(test_binary: Path, session_idauser: Path, work_
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
 
             test_ea = 0x401000
             idc.op_dec(test_ea, 1)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -500,14 +627,14 @@ def test_op_type_changed_binary(test_binary: Path, session_idauser: Path, work_d
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
 
             test_ea = 0x401000
             idc.op_bin(test_ea, 1)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())

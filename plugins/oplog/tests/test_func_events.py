@@ -2,36 +2,36 @@ import textwrap
 from pathlib import Path
 
 import pytest
-
 from conftest import run_ida_script
+
 from oplog_events import (
+    UdmModel,
     EventList,
     FuncModel,
     RangeModel,
-    UdmModel,
     func_added_event,
+    func_deleted_event,
     func_updated_event,
-    set_func_start_event,
     set_func_end_event,
     deleting_func_event,
-    func_deleted_event,
-    thunk_func_created_event,
-    func_tail_appended_event,
-    deleting_func_tail_event,
-    func_tail_deleted_event,
-    tail_owner_changed_event,
-    func_noret_changed_event,
-    updating_tryblks_event,
+    frame_created_event,
+    frame_deleted_event,
+    frame_expanded_event,
+    set_func_start_event,
+    stkpnts_changed_event,
     tryblks_updated_event,
     deleting_tryblks_event,
-    stkpnts_changed_event,
-    frame_created_event,
-    frame_expanded_event,
-    frame_deleted_event,
+    updating_tryblks_event,
+    frame_udm_changed_event,
     frame_udm_created_event,
     frame_udm_deleted_event,
     frame_udm_renamed_event,
-    frame_udm_changed_event,
+    func_tail_deleted_event,
+    deleting_func_tail_event,
+    func_noret_changed_event,
+    func_tail_appended_event,
+    tail_owner_changed_event,
+    thunk_func_created_event,
 )
 
 
@@ -43,7 +43,7 @@ def test_func_added(test_binary: Path, session_idauser: Path, work_dir: Path):
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_funcs
 
@@ -56,7 +56,7 @@ def test_func_added(test_binary: Path, session_idauser: Path, work_dir: Path):
             ida_funcs.add_func(test_func_ea)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -73,14 +73,14 @@ def test_func_added(test_binary: Path, session_idauser: Path, work_dir: Path):
         timestamp=actual.timestamp,
         pfn=FuncModel(
             start_ea=0x401000,
-            end_ea=0x40103f,
+            end_ea=0x40103F,
             flags=0x4200,
             frame=0x401000,
             frsize=12,
             frregs=0,
             argsize=0,
             fpd=0,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             pntqty=0,
             regvarqty=0,
             regargqty=0,
@@ -101,7 +101,7 @@ def test_func_updated(test_binary: Path, session_idauser: Path, work_dir: Path):
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_funcs
 
@@ -111,7 +111,7 @@ def test_func_updated(test_binary: Path, session_idauser: Path, work_dir: Path):
             ida_funcs.set_func_end(test_func_ea, 0x40103e)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -128,14 +128,14 @@ def test_func_updated(test_binary: Path, session_idauser: Path, work_dir: Path):
         timestamp=actual.timestamp,
         pfn=FuncModel(
             start_ea=0x401000,
-            end_ea=0x40103e,
+            end_ea=0x40103E,
             flags=0x4000,
             frame=0x401000,
             frsize=12,
             frregs=0,
             argsize=0,
             fpd=0,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             pntqty=5,
             regvarqty=0,
             regargqty=0,
@@ -156,7 +156,7 @@ def test_set_func_start(test_binary: Path, session_idauser: Path, work_dir: Path
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_funcs
             import ida_ua
@@ -172,7 +172,7 @@ def test_set_func_start(test_binary: Path, session_idauser: Path, work_dir: Path
             result = ida_funcs.set_func_start(test_func_ea, new_start)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -189,14 +189,14 @@ def test_set_func_start(test_binary: Path, session_idauser: Path, work_dir: Path
         timestamp=actual.timestamp,
         pfn=FuncModel(
             start_ea=0x401000,
-            end_ea=0x40103f,
+            end_ea=0x40103F,
             flags=0x5400,
             frame=0x401000,
             frsize=12,
             frregs=0,
             argsize=0,
             fpd=0,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             pntqty=6,
             regvarqty=0,
             regargqty=0,
@@ -218,7 +218,7 @@ def test_set_func_end(test_binary: Path, session_idauser: Path, work_dir: Path):
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_funcs
 
@@ -228,7 +228,7 @@ def test_set_func_end(test_binary: Path, session_idauser: Path, work_dir: Path):
             ida_funcs.set_func_end(test_func_ea, 0x40103e)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -245,14 +245,14 @@ def test_set_func_end(test_binary: Path, session_idauser: Path, work_dir: Path):
         timestamp=actual.timestamp,
         pfn=FuncModel(
             start_ea=0x401000,
-            end_ea=0x40103f,
+            end_ea=0x40103F,
             flags=0x5400,
             frame=0x401000,
             frsize=12,
             frregs=0,
             argsize=0,
             fpd=0,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             pntqty=6,
             regvarqty=0,
             regargqty=0,
@@ -261,7 +261,7 @@ def test_set_func_end(test_binary: Path, session_idauser: Path, work_dir: Path):
             refqty=12,
             name="sub_401000",
         ),
-        new_end=0x40103e,
+        new_end=0x40103E,
     )
     assert actual == expected
 
@@ -274,7 +274,7 @@ def test_func_deleted(test_binary: Path, session_idauser: Path, work_dir: Path):
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_funcs
 
@@ -283,7 +283,7 @@ def test_func_deleted(test_binary: Path, session_idauser: Path, work_dir: Path):
             ida_funcs.del_func(test_func_ea)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -301,14 +301,14 @@ def test_func_deleted(test_binary: Path, session_idauser: Path, work_dir: Path):
         timestamp=deleting_actual.timestamp,
         pfn=FuncModel(
             start_ea=0x401000,
-            end_ea=0x40103f,
+            end_ea=0x40103F,
             flags=0x5400,
             frame=0x401000,
             frsize=12,
             frregs=0,
             argsize=0,
             fpd=0,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             pntqty=6,
             regvarqty=0,
             regargqty=0,
@@ -328,7 +328,9 @@ def test_func_deleted(test_binary: Path, session_idauser: Path, work_dir: Path):
     assert deleted_actual == deleted_expected
 
 
-@pytest.mark.xfail(reason="thunk_func_created requires set_func_name_if_jumpfunc() which is not exposed to Python - hook only fires during auto-analysis thunk detection")
+@pytest.mark.xfail(
+    reason="thunk_func_created requires set_func_name_if_jumpfunc() which is not exposed to Python - hook only fires during auto-analysis thunk detection"
+)
 def test_thunk_func_created(test_binary: Path, session_idauser: Path, work_dir: Path):
     """Test that setting FUNC_THUNK flag triggers thunk_func_created event."""
     events_path = work_dir / "events.json"
@@ -337,7 +339,7 @@ def test_thunk_func_created(test_binary: Path, session_idauser: Path, work_dir: 
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_funcs
 
@@ -348,7 +350,7 @@ def test_thunk_func_created(test_binary: Path, session_idauser: Path, work_dir: 
             ida_funcs.update_func(func)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -365,14 +367,14 @@ def test_thunk_func_created(test_binary: Path, session_idauser: Path, work_dir: 
         timestamp=actual.timestamp,
         pfn=FuncModel(
             start_ea=0x401000,
-            end_ea=0x40103f,
+            end_ea=0x40103F,
             flags=0x5480,
             frame=0x401000,
             frsize=12,
             frregs=0,
             argsize=0,
             fpd=0,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             pntqty=6,
             regvarqty=0,
             regargqty=0,
@@ -393,7 +395,7 @@ def test_func_tail_appended(test_binary: Path, session_idauser: Path, work_dir: 
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_funcs
             import ida_segment
@@ -416,7 +418,7 @@ def test_func_tail_appended(test_binary: Path, session_idauser: Path, work_dir: 
             ida_funcs.append_func_tail(func, tail_start, tail_end)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -445,7 +447,7 @@ def test_func_tail_deleted(test_binary: Path, session_idauser: Path, work_dir: P
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_funcs
             import ida_segment
@@ -470,7 +472,7 @@ def test_func_tail_deleted(test_binary: Path, session_idauser: Path, work_dir: P
             ida_funcs.remove_func_tail(func, tail_start)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -488,14 +490,14 @@ def test_func_tail_deleted(test_binary: Path, session_idauser: Path, work_dir: P
         timestamp=deleting_actual.timestamp,
         pfn=FuncModel(
             start_ea=0x401000,
-            end_ea=0x40103f,
+            end_ea=0x40103F,
             flags=0x4000,
             frame=0x401000,
             frsize=12,
             frregs=0,
             argsize=0,
             fpd=0,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             pntqty=6,
             regvarqty=0,
             regargqty=0,
@@ -516,14 +518,14 @@ def test_func_tail_deleted(test_binary: Path, session_idauser: Path, work_dir: P
         timestamp=deleted_actual.timestamp,
         pfn=FuncModel(
             start_ea=0x401000,
-            end_ea=0x40103f,
+            end_ea=0x40103F,
             flags=0x4000,
             frame=0x401000,
             frsize=12,
             frregs=0,
             argsize=0,
             fpd=0,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             pntqty=6,
             regvarqty=0,
             regargqty=0,
@@ -545,7 +547,7 @@ def test_tail_owner_changed(test_binary: Path, session_idauser: Path, work_dir: 
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_funcs
             import ida_segment
@@ -577,7 +579,7 @@ def test_tail_owner_changed(test_binary: Path, session_idauser: Path, work_dir: 
             ida_funcs.set_tail_owner(tail_chunk, second_func.start_ea)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -601,7 +603,7 @@ def test_tail_owner_changed(test_binary: Path, session_idauser: Path, work_dir: 
             frregs=actual.tail.frregs,
             argsize=0,
             fpd=0,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             pntqty=0,
             regvarqty=0,
             regargqty=0,
@@ -616,7 +618,9 @@ def test_tail_owner_changed(test_binary: Path, session_idauser: Path, work_dir: 
     assert actual == expected
 
 
-@pytest.mark.xfail(reason="func_noret_changed requires set_noreturn_flag() which is not exposed to Python - hook only fires during auto-analysis detection")
+@pytest.mark.xfail(
+    reason="func_noret_changed requires set_noreturn_flag() which is not exposed to Python - hook only fires during auto-analysis detection"
+)
 def test_func_noret_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
     """Test that setting FUNC_NORET flag triggers func_noret_changed event."""
     events_path = work_dir / "events.json"
@@ -625,7 +629,7 @@ def test_func_noret_changed(test_binary: Path, session_idauser: Path, work_dir: 
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_funcs
 
@@ -636,7 +640,7 @@ def test_func_noret_changed(test_binary: Path, session_idauser: Path, work_dir: 
             ida_funcs.update_func(func)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -653,14 +657,14 @@ def test_func_noret_changed(test_binary: Path, session_idauser: Path, work_dir: 
         timestamp=actual.timestamp,
         pfn=FuncModel(
             start_ea=0x401000,
-            end_ea=0x40103f,
+            end_ea=0x40103F,
             flags=0x5400,
             frame=0x401000,
             frsize=12,
             frregs=0,
             argsize=0,
             fpd=0,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             pntqty=6,
             regvarqty=0,
             regargqty=0,
@@ -681,7 +685,7 @@ def test_tryblks_events(test_binary: Path, session_idauser: Path, work_dir: Path
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_funcs
             import ida_tryblks
@@ -697,7 +701,7 @@ def test_tryblks_events(test_binary: Path, session_idauser: Path, work_dir: Path
                 pass
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -718,7 +722,7 @@ def test_stkpnts_changed(test_binary: Path, session_idauser: Path, work_dir: Pat
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_frame
             import ida_funcs
@@ -729,7 +733,7 @@ def test_stkpnts_changed(test_binary: Path, session_idauser: Path, work_dir: Pat
             ida_frame.add_user_stkpnt(func_ea + 1, -4)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -743,14 +747,14 @@ def test_stkpnts_changed(test_binary: Path, session_idauser: Path, work_dir: Pat
         timestamp=actual.timestamp,
         pfn=FuncModel(
             start_ea=0x401000,
-            end_ea=0x40103f,
+            end_ea=0x40103F,
             flags=0x5400,
             frame=0x401000,
             frsize=12,
             frregs=0,
             argsize=0,
             fpd=0,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             pntqty=7,
             regvarqty=0,
             regargqty=0,
@@ -771,7 +775,7 @@ def test_frame_created(test_binary: Path, session_idauser: Path, work_dir: Path)
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_frame
             import ida_funcs
@@ -798,7 +802,7 @@ def test_frame_created(test_binary: Path, session_idauser: Path, work_dir: Path)
             ida_frame.add_frame(pfn, 16, 4, 0)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -823,7 +827,7 @@ def test_frame_expanded(test_binary: Path, session_idauser: Path, work_dir: Path
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_typeinf
             import ida_funcs
@@ -838,7 +842,7 @@ def test_frame_expanded(test_binary: Path, session_idauser: Path, work_dir: Path
             result = frame.expand_udt(0, 8, ETF_FRAME)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -865,7 +869,7 @@ def test_frame_deleted(test_binary: Path, session_idauser: Path, work_dir: Path)
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_frame
             import ida_funcs
@@ -876,7 +880,7 @@ def test_frame_deleted(test_binary: Path, session_idauser: Path, work_dir: Path)
             ida_frame.del_frame(pfn)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -890,19 +894,19 @@ def test_frame_deleted(test_binary: Path, session_idauser: Path, work_dir: Path)
         timestamp=actual.timestamp,
         pfn=FuncModel(
             start_ea=0x401000,
-            end_ea=0x40103f,
+            end_ea=0x40103F,
             flags=0x5400,
-            frame=0xffffffffffffffff,
+            frame=0xFFFFFFFFFFFFFFFF,
             frsize=0,
             frregs=0,
             argsize=0,
             fpd=0,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             pntqty=6,
             regvarqty=0,
             regargqty=0,
             tailqty=0,
-            owner=0xffffffffffffffff,
+            owner=0xFFFFFFFFFFFFFFFF,
             refqty=0,
             name="sub_401000",
         ),
@@ -918,7 +922,7 @@ def test_frame_udm_created(test_binary: Path, session_idauser: Path, work_dir: P
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_typeinf
             import ida_frame
@@ -940,7 +944,7 @@ def test_frame_udm_created(test_binary: Path, session_idauser: Path, work_dir: P
             frame.add_udm(udm, ETF_FRAME)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -958,7 +962,7 @@ def test_frame_udm_created(test_binary: Path, session_idauser: Path, work_dir: P
             size=0x20,
             name="my_new_var",
             cmt="",
-            tid=0xffffffffffffffff,
+            tid=0xFFFFFFFFFFFFFFFF,
             repr="",
             effalign=0,
             tafld_bits=0,
@@ -976,7 +980,7 @@ def test_frame_udm_deleted(test_binary: Path, session_idauser: Path, work_dir: P
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_typeinf
             import ida_frame
@@ -992,7 +996,7 @@ def test_frame_udm_deleted(test_binary: Path, session_idauser: Path, work_dir: P
             frame.del_udm(0, ETF_FRAME)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -1011,7 +1015,7 @@ def test_frame_udm_deleted(test_binary: Path, session_idauser: Path, work_dir: P
             size=32,
             name="__return_address",
             cmt="",
-            tid=0xffffffffffffffff,
+            tid=0xFFFFFFFFFFFFFFFF,
             repr="",
             effalign=0,
             tafld_bits=0x1000,
@@ -1029,7 +1033,7 @@ def test_frame_udm_renamed(test_binary: Path, session_idauser: Path, work_dir: P
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_typeinf
             import ida_frame
@@ -1045,7 +1049,7 @@ def test_frame_udm_renamed(test_binary: Path, session_idauser: Path, work_dir: P
             frame.rename_udm(0, "renamed_var", ETF_FRAME)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -1063,7 +1067,7 @@ def test_frame_udm_renamed(test_binary: Path, session_idauser: Path, work_dir: P
             size=0,
             name="renamed_var",
             cmt="",
-            tid=0xffffffffffffffff,
+            tid=0xFFFFFFFFFFFFFFFF,
             repr="",
             effalign=0,
             tafld_bits=0,
@@ -1082,7 +1086,7 @@ def test_frame_udm_changed(test_binary: Path, session_idauser: Path, work_dir: P
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_typeinf
             import ida_frame
@@ -1098,7 +1102,7 @@ def test_frame_udm_changed(test_binary: Path, session_idauser: Path, work_dir: P
             frame.set_udm_cmt(0, "test comment for frame member", False, ETF_FRAME)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -1117,7 +1121,7 @@ def test_frame_udm_changed(test_binary: Path, session_idauser: Path, work_dir: P
             size=0,
             name="__return_address",
             cmt="",
-            tid=0xffffffffffffffff,
+            tid=0xFFFFFFFFFFFFFFFF,
             repr="",
             effalign=0,
             tafld_bits=0x1000,
@@ -1128,7 +1132,7 @@ def test_frame_udm_changed(test_binary: Path, session_idauser: Path, work_dir: P
             size=0,
             name="__return_address",
             cmt="test comment for frame member",
-            tid=0xffffffffffffffff,
+            tid=0xFFFFFFFFFFFFFFFF,
             repr="",
             effalign=0,
             tafld_bits=0x1000,

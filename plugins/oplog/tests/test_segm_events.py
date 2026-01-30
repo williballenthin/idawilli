@@ -1,27 +1,28 @@
-import pytest
 import textwrap
 from pathlib import Path
 
+import pytest
 from conftest import run_ida_script
+
 from oplog_events import (
     EventList,
     SegmentModel,
     SegmMoveInfoModel,
-    adding_segm_event,
     segm_added_event,
-    deleting_segm_event,
-    segm_deleted_event,
-    changing_segm_start_event,
-    segm_start_changed_event,
-    changing_segm_end_event,
-    segm_end_changed_event,
-    segm_name_changed_event,
-    segm_class_changed_event,
-    segm_attrs_updated_event,
     segm_moved_event,
-    allsegs_moved_event,
+    adding_segm_event,
     sgr_changed_event,
     sgr_deleted_event,
+    segm_deleted_event,
+    allsegs_moved_event,
+    deleting_segm_event,
+    segm_end_changed_event,
+    changing_segm_end_event,
+    segm_name_changed_event,
+    segm_attrs_updated_event,
+    segm_class_changed_event,
+    segm_start_changed_event,
+    changing_segm_start_event,
 )
 
 
@@ -33,14 +34,14 @@ def test_segm_name_changed(test_binary: Path, session_idauser: Path, work_dir: P
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_segment
 
             seg = ida_segment.get_first_seg()
             ida_segment.set_segm_name(seg, "renamed_seg")
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -65,9 +66,9 @@ def test_segm_name_changed(test_binary: Path, session_idauser: Path, work_dir: P
             bitness=1,
             flags=16,
             sel=1,
-            defsr=[0, 0, 0, 3, 0xffffffffffffffff, 0xffffffffffffffff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            defsr=[0, 0, 0, 3, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             type=2,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             segment_name="renamed_seg",
             segment_class="CODE",
         ),
@@ -83,14 +84,14 @@ def test_segm_class_changed(test_binary: Path, session_idauser: Path, work_dir: 
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_segment
 
             seg = ida_segment.get_first_seg()
             ida_segment.set_segm_class(seg, "TEST_CLASS")
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -115,9 +116,9 @@ def test_segm_class_changed(test_binary: Path, session_idauser: Path, work_dir: 
             bitness=1,
             flags=16,
             sel=1,
-            defsr=[0, 0, 0, 3, 0xffffffffffffffff, 0xffffffffffffffff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            defsr=[0, 0, 0, 3, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             type=2,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             segment_name=".text",
             segment_class="TEST_CLASS",
         ),
@@ -133,14 +134,14 @@ def test_segm_attrs_updated(test_binary: Path, session_idauser: Path, work_dir: 
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_segment
 
             seg = ida_segment.get_first_seg()
             idc.set_segm_attr(seg.start_ea, idc.SEGATTR_PERM, 7)
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -164,9 +165,9 @@ def test_segm_attrs_updated(test_binary: Path, session_idauser: Path, work_dir: 
             bitness=1,
             flags=16,
             sel=1,
-            defsr=[0, 0, 0, 3, 0xffffffffffffffff, 0xffffffffffffffff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            defsr=[0, 0, 0, 3, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             type=2,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             segment_name=".text",
             segment_class="CODE",
         ),
@@ -182,7 +183,7 @@ def test_segm_added(test_binary: Path, session_idauser: Path, work_dir: Path):
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_segment
 
@@ -196,7 +197,7 @@ def test_segm_added(test_binary: Path, session_idauser: Path, work_dir: Path):
 
             ida_segment.add_segm(0, test_seg_start, test_seg_end, test_seg_name, "DATA")
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -225,9 +226,26 @@ def test_segm_added(test_binary: Path, session_idauser: Path, work_dir: Path):
             bitness=1,
             flags=0,
             sel=0,
-            defsr=[0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff],
+            defsr=[
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+            ],
             type=0,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             segment_name="seg004",
             segment_class=None,
         ),
@@ -253,9 +271,26 @@ def test_segm_added(test_binary: Path, session_idauser: Path, work_dir: Path):
             bitness=1,
             flags=0,
             sel=0,
-            defsr=[0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff],
+            defsr=[
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+            ],
             type=3,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             segment_name="TEST_NEW_SEG",
             segment_class="DATA",
         ),
@@ -271,7 +306,7 @@ def test_segm_deleted(test_binary: Path, session_idauser: Path, work_dir: Path):
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_segment
 
@@ -287,7 +322,7 @@ def test_segm_deleted(test_binary: Path, session_idauser: Path, work_dir: Path):
             seg_start = seg.start_ea
             ida_segment.del_segm(seg_start, ida_segment.SEGMOD_KILL)
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -330,7 +365,7 @@ def test_segm_start_changed(test_binary: Path, session_idauser: Path, work_dir: 
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_segment
 
@@ -348,7 +383,7 @@ def test_segm_start_changed(test_binary: Path, session_idauser: Path, work_dir: 
             new_start = seg.start_ea + 0x100
             ida_segment.set_segm_start(seg.start_ea, new_start, ida_segment.SEGMOD_KEEP)
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -379,9 +414,26 @@ def test_segm_start_changed(test_binary: Path, session_idauser: Path, work_dir: 
             bitness=1,
             flags=0,
             sel=0,
-            defsr=[0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff],
+            defsr=[
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+            ],
             type=3,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             segment_name="TEST_START_SEG",
             segment_class="DATA",
         ),
@@ -408,9 +460,26 @@ def test_segm_start_changed(test_binary: Path, session_idauser: Path, work_dir: 
             bitness=1,
             flags=0,
             sel=0,
-            defsr=[0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff],
+            defsr=[
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+            ],
             type=3,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             segment_name="TEST_START_SEG",
             segment_class="DATA",
         ),
@@ -426,7 +495,7 @@ def test_segm_end_changed(test_binary: Path, session_idauser: Path, work_dir: Pa
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_segment
 
@@ -444,7 +513,7 @@ def test_segm_end_changed(test_binary: Path, session_idauser: Path, work_dir: Pa
             new_end = seg.end_ea - 0x100
             ida_segment.set_segm_end(seg.start_ea, new_end, ida_segment.SEGMOD_KEEP)
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -454,14 +523,14 @@ def test_segm_end_changed(test_binary: Path, session_idauser: Path, work_dir: Pa
     assert len(changing_events) >= 1
     assert len(changed_events) >= 1
 
-    changing_matching = [e for e in changing_events if e.new_end == 0x93001f00]
+    changing_matching = [e for e in changing_events if e.new_end == 0x93001F00]
     assert len(changing_matching) >= 1
 
     actual_changing = changing_matching[-1]
     expected_changing = changing_segm_end_event(
         event_name="changing_segm_end",
         timestamp=actual_changing.timestamp,
-        new_end=0x93001f00,
+        new_end=0x93001F00,
         segmod_flags=2,
         s=SegmentModel(
             start_ea=0x93000000,
@@ -475,9 +544,26 @@ def test_segm_end_changed(test_binary: Path, session_idauser: Path, work_dir: Pa
             bitness=1,
             flags=0,
             sel=0,
-            defsr=[0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff],
+            defsr=[
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+            ],
             type=3,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             segment_name="TEST_END_SEG",
             segment_class="DATA",
         ),
@@ -494,7 +580,7 @@ def test_segm_end_changed(test_binary: Path, session_idauser: Path, work_dir: Pa
         oldend=0x93002000,
         s=SegmentModel(
             start_ea=0x93000000,
-            end_ea=0x93001f00,
+            end_ea=0x93001F00,
             name=actual_changed.s.name,
             sclass=actual_changed.s.sclass,
             orgbase=0,
@@ -504,9 +590,26 @@ def test_segm_end_changed(test_binary: Path, session_idauser: Path, work_dir: Pa
             bitness=1,
             flags=0,
             sel=0,
-            defsr=[0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff, 0xffffffffffffffff],
+            defsr=[
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+            ],
             type=3,
-            color=0xffffffff,
+            color=0xFFFFFFFF,
             segment_name="TEST_END_SEG",
             segment_class="DATA",
         ),
@@ -522,7 +625,7 @@ def test_segm_moved(test_binary: Path, session_idauser: Path, work_dir: Path):
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_segment
 
@@ -540,7 +643,7 @@ def test_segm_moved(test_binary: Path, session_idauser: Path, work_dir: Path):
             seg = ida_segment.get_segm_by_name(test_seg_name)
             ida_segment.move_segm(seg, new_base)
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -571,14 +674,14 @@ def test_allsegs_moved(test_binary: Path, session_idauser: Path, work_dir: Path)
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_segment
 
             delta = 0x1000
             ida_segment.rebase_program(delta, ida_segment.MSF_FIXONCE)
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -593,8 +696,8 @@ def test_allsegs_moved(test_binary: Path, session_idauser: Path, work_dir: Path)
         timestamp=actual.timestamp,
         moves=[
             SegmMoveInfoModel(from_ea=0x403000, to_ea=0x404000, size=0x1000),
-            SegmMoveInfoModel(from_ea=0x40206c, to_ea=0x40306c, size=0xf94),
-            SegmMoveInfoModel(from_ea=0x402000, to_ea=0x403000, size=0x6c),
+            SegmMoveInfoModel(from_ea=0x40206C, to_ea=0x40306C, size=0xF94),
+            SegmMoveInfoModel(from_ea=0x402000, to_ea=0x403000, size=0x6C),
             SegmMoveInfoModel(from_ea=0x401000, to_ea=0x402000, size=0x1000),
         ],
     )
@@ -617,7 +720,7 @@ def test_sgr_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_segment
             import ida_segregs
@@ -629,7 +732,7 @@ def test_sgr_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
             ida_segregs.split_sreg_range(seg.start_ea + 0x100, R_ds, 0x42, ida_segregs.SR_user, False)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -665,7 +768,7 @@ def test_sgr_deleted(test_binary: Path, session_idauser: Path, work_dir: Path):
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_segment
             import ida_segregs
@@ -677,7 +780,7 @@ def test_sgr_deleted(test_binary: Path, session_idauser: Path, work_dir: Path):
             ida_segregs.del_sreg_range(seg.start_ea, R_ds)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())

@@ -4,14 +4,10 @@ from datetime import datetime
 import ida_ua
 import ida_gdl
 import ida_idp
-import ida_name
-import ida_bytes
 import ida_funcs
 import ida_moves
 import ida_range
-import ida_idaapi
 import ida_dirtree
-import ida_kernwin
 import ida_segment
 import ida_typeinf
 
@@ -67,6 +63,7 @@ from oplog_events import (
     destroyed_items_event,
     determined_main_event,
     dirtree_rminode_event,
+    lt_udt_expanded_event,
     op_type_changed_event,
     stkpnts_changed_event,
     tryblks_updated_event,

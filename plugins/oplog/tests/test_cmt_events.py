@@ -2,14 +2,15 @@ import textwrap
 from pathlib import Path
 
 from conftest import run_ida_script
+
 from oplog_events import (
     EventList,
     RangeModel,
-    changing_cmt_event,
     cmt_changed_event,
-    changing_range_cmt_event,
-    range_cmt_changed_event,
+    changing_cmt_event,
     extra_cmt_changed_event,
+    range_cmt_changed_event,
+    changing_range_cmt_event,
 )
 
 
@@ -21,14 +22,14 @@ def test_cmt_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
 
             test_ea = 0x401000
             idc.set_cmt(test_ea, "test comment", False)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -67,7 +68,7 @@ def test_range_cmt_changed(test_binary: Path, session_idauser: Path, work_dir: P
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_funcs
 
@@ -76,7 +77,7 @@ def test_range_cmt_changed(test_binary: Path, session_idauser: Path, work_dir: P
             ida_funcs.set_func_cmt(func, "function comment", False)
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -93,7 +94,7 @@ def test_range_cmt_changed(test_binary: Path, session_idauser: Path, work_dir: P
         event_name="changing_range_cmt",
         timestamp=changing_actual.timestamp,
         kind=1,
-        a=RangeModel(start_ea=0x401000, end_ea=0x40103f),
+        a=RangeModel(start_ea=0x401000, end_ea=0x40103F),
         cmt="function comment",
         repeatable=False,
     )
@@ -103,7 +104,7 @@ def test_range_cmt_changed(test_binary: Path, session_idauser: Path, work_dir: P
         event_name="range_cmt_changed",
         timestamp=changed_actual.timestamp,
         kind=1,
-        a=RangeModel(start_ea=0x401000, end_ea=0x40103f),
+        a=RangeModel(start_ea=0x401000, end_ea=0x40103F),
         cmt="function comment",
         repeatable=False,
     )
@@ -118,7 +119,7 @@ def test_extra_cmt_changed(test_binary: Path, session_idauser: Path, work_dir: P
         binary_path=test_binary,
         idauser=session_idauser,
         work_dir=work_dir,
-        script=textwrap.dedent(f'''
+        script=textwrap.dedent(f"""
             import idc
             import ida_lines
 
@@ -126,7 +127,7 @@ def test_extra_cmt_changed(test_binary: Path, session_idauser: Path, work_dir: P
             ida_lines.update_extra_cmt(test_ea, ida_lines.E_PREV, "anterior comment")
 
             idc.eval_idc('oplog_export("{events_path}")')
-        '''),
+        """),
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
@@ -140,7 +141,7 @@ def test_extra_cmt_changed(test_binary: Path, session_idauser: Path, work_dir: P
         event_name="extra_cmt_changed",
         timestamp=actual.timestamp,
         ea=0x401000,
-        line_idx=0x3e8,
+        line_idx=0x3E8,
         cmt="anterior comment",
     )
     assert actual == expected

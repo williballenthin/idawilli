@@ -1,9 +1,9 @@
 import logging
 import threading
-from typing import Any, Literal, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal
 from datetime import datetime
 
-from pydantic import BaseModel, Field, RootModel, field_validator
+from pydantic import Field, BaseModel, RootModel, field_validator
 
 if TYPE_CHECKING:
     import ida_ua
@@ -39,6 +39,7 @@ class FuncModel(BaseModel):
     def from_func_t(cls, func: "ida_funcs.func_t") -> "FuncModel":
         """Create FuncModel from ida_funcs.func_t instance."""
         import ida_funcs
+
         name = ida_funcs.get_func_name(func.start_ea)
         return cls(
             start_ea=func.start_ea,
@@ -410,6 +411,7 @@ class segm_moved_event(BaseModel):
 
 class SegmMoveInfoModel(BaseModel):
     """Pydantic model for ida_moves.segm_move_info_t structure."""
+
     from_ea: int
     to_ea: int
     size: int

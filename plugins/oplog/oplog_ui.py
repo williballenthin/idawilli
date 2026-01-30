@@ -3,14 +3,13 @@ from typing import TYPE_CHECKING
 from datetime import datetime
 from dataclasses import dataclass
 
-from PyQt5 import QtCore
-
 import ida_name
 import ida_bytes
 import ida_funcs
 import ida_lines
 import ida_idaapi
 import ida_kernwin
+from PyQt5 import QtCore
 
 from oplog_events import Events, current_item_changed_event
 from oplog_render import render_event
@@ -196,7 +195,7 @@ class UILocationHook(ida_kernwin.UI_Hooks):
     def __init__(self, events: Events, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.events = events
-        self._prev_item_ea = None
+        self._prev_item_ea = 0
 
     @staticmethod
     def _get_item_head(ea: int) -> int:

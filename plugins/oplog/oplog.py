@@ -140,6 +140,7 @@ class oplog_plugmod_t(ida_idaapi.plugmod_t):
             self.register_ui_closing_hooks()
 
             from oplog_ui import UIManager
+
             self.ui_manager = UIManager(self, self.events)
             self.ui_manager.setup()
 
