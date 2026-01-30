@@ -1,0 +1,51 @@
+name: oplog tests
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+permissions: read-all
+
+jobs:
+  oplog-tests:
+    name: oplog tests on IDA ${{ matrix.ida.version }} / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.13"]
+        ida:
+          - version: 9.0
+            slug: "release/9.0/ida-essential/ida-essential_90_x64linux.run"
+          - version: 9.1
+            slug: "release/9.1/ida-essential/ida-essential_91_x64linux.run"
+          - version: 9.2
+            slug: "release/9.2/ida-essential/ida-essential_92_x64linux.run"
+    steps:
+    - name: Checkout with submodules
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      with:
+        submodules: recursive
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # v5.0.0
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Setup uv
+      uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
+    - name: Install Python dependencies
+      run: |
+        pip install idapro ida-domain pydantic pytest
+    - name: Install IDA ${{ matrix.ida.version }}
+      run: |
+        uv run --with ida-hcli hcli --disable-updates ida install --download-id ${{ matrix.ida.slug }} --license-id ${{ secrets.IDA_LICENSE_ID }} --set-default --yes
+      env:
+        HCLI_API_KEY: ${{ secrets.HCLI_API_KEY }}
+        IDA_LICENSE_ID: ${{ secrets.IDA_LICENSE_ID }}
+    - name: Run oplog tests
+      if: ${{ env.IDA_LICENSE_ID != 0 }}
+      run: |
+        python -m pytest plugins/oplog/tests/ -v
+      env:
+        IDA_LICENSE_ID: ${{ secrets.IDA_LICENSE_ID }}
