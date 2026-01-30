@@ -7,6 +7,7 @@ from pydantic import Field, BaseModel, RootModel, field_validator
 
 if TYPE_CHECKING:
     import ida_ua
+    import ida_nalt
     import ida_funcs
     import ida_range
     import ida_segment
@@ -375,6 +376,187 @@ class EdmModel(BaseModel):
         )
 
 
+class RefInfoModel(BaseModel):
+    """Model for offset/reference operand info (refinfo_t)."""
+
+    target: int
+    base: int
+    tdelta: int
+    flags: int
+    ref_type: int
+    target_name: str | None = None
+
+    @classmethod
+    def from_refinfo_t(cls, ri: "ida_nalt.refinfo_t") -> "RefInfoModel":
+        import idc
+
+        target_name = None
+        if ri.target != idc.BADADDR:
+            target_name = idc.get_name(ri.target) or None
+
+        return cls(
+            target=ri.target,
+            base=ri.base,
+            tdelta=ri.tdelta,
+            flags=ri.flags,
+            ref_type=ri.type(),
+            target_name=target_name,
+        )
+
+
+class EnumConstModel(BaseModel):
+    """Model for enum constant operand info (enum_const_t)."""
+
+    tid: int
+    serial: int
+    enum_name: str | None = None
+
+    @classmethod
+    def from_enum_const_t(cls, ec: "ida_nalt.enum_const_t") -> "EnumConstModel":
+        import ida_typeinf
+
+        enum_name = ida_typeinf.get_tid_name(ec.tid) or None
+
+        return cls(
+            tid=ec.tid,
+            serial=ec.serial,
+            enum_name=enum_name,
+        )
+
+
+class StrPathModel(BaseModel):
+    """Model for struct offset path operand info (strpath_t)."""
+
+    path_len: int
+    path_ids: list[int]
+    delta: int
+    path_names: list[str]
+
+    @classmethod
+    def from_strpath_t(cls, path: "ida_nalt.strpath_t") -> "StrPathModel":
+        import ida_typeinf
+
+        path_ids = [path.ids[i] for i in range(path.len)]
+        path_names = []
+        for tid in path_ids:
+            name = ida_typeinf.get_tid_name(tid)
+            path_names.append(name if name else "(unnamed)")
+
+        return cls(
+            path_len=path.len,
+            path_ids=path_ids,
+            delta=path.delta,
+            path_names=path_names,
+        )
+
+
+class OpInfoModel(BaseModel):
+    """Model for operand type info (opinfo_t union).
+
+    The opinfo_t is a union - only one field is valid depending on the operand flags.
+    """
+
+    kind: str
+    refinfo: RefInfoModel | None = None
+    enum_const: EnumConstModel | None = None
+    strpath: StrPathModel | None = None
+    struct_tid: int | None = None
+    struct_name: str | None = None
+    strtype: int | None = None
+
+    @classmethod
+    def from_opinfo_t(cls, opinfo: "ida_nalt.opinfo_t") -> "OpInfoModel | None":
+        import idc
+        import ida_typeinf
+
+        if opinfo is None:
+            return None
+
+        ri = opinfo.ri_
+        if ri.type() != 0:
+            return cls(
+                kind="offset",
+                refinfo=RefInfoModel.from_refinfo_t(ri),
+            )
+
+        ec = opinfo.ec_
+        if ec.tid != 0 and ec.tid != idc.BADADDR:
+            return cls(
+                kind="enum",
+                enum_const=EnumConstModel.from_enum_const_t(ec),
+            )
+
+        path = opinfo.path_
+        if path.len > 0:
+            return cls(
+                kind="stroff",
+                strpath=StrPathModel.from_strpath_t(path),
+            )
+
+        tid = opinfo.tid_
+        if tid != 0 and tid != idc.BADADDR:
+            struct_name = ida_typeinf.get_tid_name(tid) or None
+            return cls(
+                kind="struct",
+                struct_tid=tid,
+                struct_name=struct_name,
+            )
+
+        strtype = opinfo.strtype_
+        if strtype != 0:
+            return cls(
+                kind="string",
+                strtype=strtype,
+            )
+
+        return None
+
+    @classmethod
+    def from_database(cls, ea: int, n: int) -> "OpInfoModel | None":
+        """Create OpInfoModel by querying the database for current operand info at ea, n."""
+        import ida_nalt
+        import ida_bytes
+        import ida_typeinf
+
+        flags = ida_bytes.get_flags(ea)
+
+        if ida_bytes.is_off(flags, n):
+            ri = ida_nalt.refinfo_t()
+            if ida_nalt.get_refinfo(ri, ea, n):
+                return cls(
+                    kind="offset",
+                    refinfo=RefInfoModel.from_refinfo_t(ri),
+                )
+
+        if ida_bytes.is_enum(flags, n):
+            opinfo = ida_nalt.opinfo_t()
+            if ida_bytes.get_opinfo(opinfo, ea, n, flags):
+                return cls(
+                    kind="enum",
+                    enum_const=EnumConstModel.from_enum_const_t(opinfo.ec_),
+                )
+
+        if ida_bytes.is_stroff(flags, n):
+            opinfo = ida_nalt.opinfo_t()
+            if ida_bytes.get_opinfo(opinfo, ea, n, flags):
+                return cls(
+                    kind="stroff",
+                    strpath=StrPathModel.from_strpath_t(opinfo.path_),
+                )
+
+        if ida_bytes.is_struct(flags):
+            opinfo = ida_nalt.opinfo_t()
+            if ida_bytes.get_opinfo(opinfo, ea, n, flags):
+                struct_name = ida_typeinf.get_tid_name(opinfo.tid_) or None
+                return cls(
+                    kind="struct",
+                    struct_tid=opinfo.tid_,
+                    struct_name=struct_name,
+                )
+
+        return None
+
+
 class adding_segm_event(BaseModel):
     event_name: Literal["adding_segm"]
     timestamp: datetime
@@ -724,8 +906,7 @@ class changing_op_type_event(BaseModel):
     timestamp: datetime
     ea: int
     n: int
-    # TODO: this is pretty complex and not directly serializable
-    # opinfo: Any
+    opinfo: OpInfoModel | None = None
 
 
 class op_type_changed_event(BaseModel):
@@ -733,6 +914,7 @@ class op_type_changed_event(BaseModel):
     timestamp: datetime
     ea: int
     n: int
+    opinfo: OpInfoModel | None = None
 
 
 class dirtree_mkdir_event(BaseModel):

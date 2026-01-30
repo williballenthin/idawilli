@@ -19,6 +19,7 @@ from oplog_events import (
     FuncModel,
     InsnModel,
     RangeModel,
+    OpInfoModel,
     TryblkModel,
     SegmentModel,
     SegmMoveInfoModel,
@@ -746,14 +747,17 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         )
         self.events.add_event(ev)
 
-    # TODO: what is opinfo? type?
-    # https://python.docs.hex-rays.com/ida_nalt/index.html#ida_nalt.opinfo_t
-    # this has more info than op_type_changed
     def changing_op_type(self, ea: int, n: int, opinfo) -> None:
         """An operand type (offset, hex, etc...) is to be changed."""
         logger.debug("changing_op_type(ea=%d, n=%d, opinfo=%s)", ea, n, opinfo)
-        # TODO: opinfo cannot be serialized
-        ev = changing_op_type_event(event_name="changing_op_type", timestamp=datetime.now(), ea=ea, n=n)
+        opinfo_model = OpInfoModel.from_opinfo_t(opinfo)
+        ev = changing_op_type_event(
+            event_name="changing_op_type",
+            timestamp=datetime.now(),
+            ea=ea,
+            n=n,
+            opinfo=opinfo_model,
+        )
         self.events.add_event(ev)
 
     def op_type_changed(self, ea: int, n: int) -> None:
@@ -764,7 +768,18 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             n: Operand number, eventually or'ed with OPND_OUTER or OPND_ALL.
         """
         logger.debug("op_type_changed(ea=%d, n=%d)", ea, n)
-        ev = op_type_changed_event(event_name="op_type_changed", timestamp=datetime.now(), ea=ea, n=n)
+        try:
+            opinfo_model = OpInfoModel.from_database(ea, n)
+        except Exception:
+            logger.exception("Failed to get opinfo from database")
+            opinfo_model = None
+        ev = op_type_changed_event(
+            event_name="op_type_changed",
+            timestamp=datetime.now(),
+            ea=ea,
+            n=n,
+            opinfo=opinfo_model,
+        )
         self.events.add_event(ev)
 
     ### dirtree

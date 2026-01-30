@@ -662,3 +662,37 @@ def test_op_type_changed_binary(test_binary: Path, session_idauser: Path, work_d
         n=1,
     )
     assert changed_actual == changed_expected
+
+
+def test_op_type_changed_offset(test_binary: Path, session_idauser: Path, work_dir: Path):
+    """Test that changing operand to offset captures refinfo details in op_type_changed."""
+    events_path = work_dir / "events.json"
+
+    run_ida_script(
+        binary_path=test_binary,
+        idauser=session_idauser,
+        work_dir=work_dir,
+        script=textwrap.dedent(f"""
+            import idc
+
+            test_ea = 0x401000
+            target_ea = 0x401010
+            idc.op_offset(test_ea, 1, idc.REF_OFF32, target_ea)
+
+            idc.eval_idc('oplog_export("{events_path}")')
+        """),
+    )
+
+    event_list = EventList.model_validate_json(events_path.read_text())
+    changed_events = [e for e in event_list.root if isinstance(e, op_type_changed_event)]
+
+    assert len(changed_events) >= 1
+
+    changed_actual = changed_events[-1]
+
+    assert changed_actual.ea == 0x401000
+    assert changed_actual.n == 1
+    assert changed_actual.opinfo is not None
+    assert changed_actual.opinfo.kind == "offset"
+    assert changed_actual.opinfo.refinfo is not None
+    assert changed_actual.opinfo.refinfo.target == 0x401010

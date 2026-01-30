@@ -428,9 +428,41 @@ def render_bookmark_changed(ev: bookmark_changed_event):
     return f'{pretty_date(ev.timestamp)}: bookmark changed: {render_address(ev.ea)} "{ev.desc}"'
 
 
+def render_opinfo(opinfo):
+    if opinfo is None:
+        return ""
+
+    if opinfo.kind == "offset":
+        ri = opinfo.refinfo
+        if ri.target_name:
+            return f" -> offset to {ri.target_name} ({render_address(ri.target)})"
+        return f" -> offset to {render_address(ri.target)}"
+
+    if opinfo.kind == "enum":
+        ec = opinfo.enum_const
+        if ec.enum_name:
+            return f" -> enum {ec.enum_name}"
+        return f" -> enum tid:{ec.tid}"
+
+    if opinfo.kind == "stroff":
+        sp = opinfo.strpath
+        path_str = ".".join(sp.path_names)
+        return f" -> stroff {path_str}"
+
+    if opinfo.kind == "struct":
+        if opinfo.struct_name:
+            return f" -> struct {opinfo.struct_name}"
+        return f" -> struct tid:{opinfo.struct_tid}"
+
+    if opinfo.kind == "string":
+        return f" -> string type:{opinfo.strtype}"
+
+    return ""
+
+
 def render_changing_op_type(ev: changing_op_type_event):
-    # TODO: capture and render operand type (e.g., imm -> offset)
-    return f"{pretty_date(ev.timestamp)}: operand type changing: {render_address(ev.ea)} op{ev.n}"
+    opinfo_str = render_opinfo(ev.opinfo)
+    return f"{pretty_date(ev.timestamp)}: operand type changing: {render_address(ev.ea)} op{ev.n}{opinfo_str}"
 
 
 def render_op_type_changed(ev: op_type_changed_event):
