@@ -36,7 +36,7 @@ def test_byte_patched(test_binary: Path, session_idauser: Path, work_dir: Path):
         event_name="byte_patched",
         timestamp=actual.timestamp,
         ea=0x401000,
-        old_value=139,
+        old_value=0x8b,
     )
     assert actual == expected
 
@@ -77,7 +77,7 @@ def test_byte_patched_multiple(test_binary: Path, session_idauser: Path, work_di
         event_name="byte_patched",
         timestamp=matching_base[-1].timestamp,
         ea=0x401000,
-        old_value=139,
+        old_value=0x8b,
     )
     assert matching_base[-1] == expected_1
 
@@ -85,7 +85,7 @@ def test_byte_patched_multiple(test_binary: Path, session_idauser: Path, work_di
         event_name="byte_patched",
         timestamp=matching_plus1[-1].timestamp,
         ea=0x401001,
-        old_value=84,
+        old_value=0x54,
     )
     assert matching_plus1[-1] == expected_2
 
@@ -93,7 +93,7 @@ def test_byte_patched_multiple(test_binary: Path, session_idauser: Path, work_di
         event_name="byte_patched",
         timestamp=matching_plus2[-1].timestamp,
         ea=0x401002,
-        old_value=36,
+        old_value=0x24,
     )
     assert matching_plus2[-1] == expected_3
 

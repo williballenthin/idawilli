@@ -38,7 +38,7 @@ def test_item_color_changed(test_binary: Path, session_idauser: Path, work_dir: 
         event_name="item_color_changed",
         timestamp=actual.timestamp,
         ea=0x401000,
-        color=255,
+        color=0xff,
     )
     assert actual == expected
 
@@ -74,6 +74,6 @@ def test_item_color_reset(test_binary: Path, session_idauser: Path, work_dir: Pa
         event_name="item_color_changed",
         timestamp=actual.timestamp,
         ea=0x401000,
-        color=4294967295,
+        color=0xffffffff,
     )
     assert actual == expected

@@ -263,8 +263,8 @@ def test_frame_udm_created(test_binary: Path, session_idauser: Path, work_dir: P
         timestamp=actual.timestamp,
         func_ea=0x401000,
         udm=UdmModel(
-            offset=2048,
-            size=32,
+            offset=0x800,
+            size=0x20,
             name="my_new_var",
             cmt="",
             tid=0xffffffffffffffff,
@@ -323,7 +323,7 @@ def test_frame_udm_deleted(test_binary: Path, session_idauser: Path, work_dir: P
             tid=0xffffffffffffffff,
             repr="",
             effalign=0,
-            tafld_bits=4096,
+            tafld_bits=0x1000,
             fda=0,
         ),
     )
@@ -429,7 +429,7 @@ def test_frame_udm_changed(test_binary: Path, session_idauser: Path, work_dir: P
             tid=0xffffffffffffffff,
             repr="",
             effalign=0,
-            tafld_bits=4096,
+            tafld_bits=0x1000,
             fda=0,
         ),
         udmnew=UdmModel(
@@ -440,7 +440,7 @@ def test_frame_udm_changed(test_binary: Path, session_idauser: Path, work_dir: P
             tid=0xffffffffffffffff,
             repr="",
             effalign=0,
-            tafld_bits=4096,
+            tafld_bits=0x1000,
             fda=0,
         ),
     )

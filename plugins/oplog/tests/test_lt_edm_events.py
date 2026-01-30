@@ -194,7 +194,7 @@ def test_lt_edm_changed(test_binary: Path, session_idauser: Path, work_dir: Path
             enum_tif3 = ida_typeinf.tinfo_t()
             enum_tif3.get_named_type(til, "TestEnum4")
 
-            enum_tif3.edit_edm(0, 999)
+            enum_tif3.edit_edm(0, 0x3e7)
 
             idc.eval_idc('oplog_export("{events_path}")')
         '''),
@@ -212,4 +212,4 @@ def test_lt_edm_changed(test_binary: Path, session_idauser: Path, work_dir: Path
     assert actual.edmold.name == "VALUE_ONE"
     assert actual.edmold.value == 1
     assert actual.edmnew.name == "VALUE_ONE"
-    assert actual.edmnew.value == 999
+    assert actual.edmnew.value == 0x3e7

@@ -140,7 +140,7 @@ def test_extra_cmt_changed(test_binary: Path, session_idauser: Path, work_dir: P
         event_name="extra_cmt_changed",
         timestamp=actual.timestamp,
         ea=0x401000,
-        line_idx=1000,
+        line_idx=0x3e8,
         cmt="anterior comment",
     )
     assert actual == expected

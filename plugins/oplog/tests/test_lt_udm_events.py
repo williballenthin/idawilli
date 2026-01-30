@@ -62,7 +62,7 @@ def test_lt_udm_created(test_binary: Path, session_idauser: Path, work_dir: Path
             size=32,
             name="field_a",
             cmt="",
-            tid=18446744073709551615,
+            tid=0xffffffffffffffff,
             repr="",
             effalign=0,
             tafld_bits=0,

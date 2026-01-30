@@ -34,7 +34,7 @@ def test_rename_captures_event(test_binary: Path, temp_idauser: Path, work_dir: 
     expected = renamed_event(
         event_name="renamed",
         timestamp=actual.timestamp,
-        ea=4200480,
+        ea=0x401820,
         new_name="test_renamed_entry",
         local_name=False,
         old_name="start",
