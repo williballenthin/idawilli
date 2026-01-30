@@ -857,6 +857,7 @@ def test_frame_expanded(test_binary: Path, session_idauser: Path, work_dir: Path
         event_name="frame_expanded",
         timestamp=actual.timestamp,
         func_ea=0x401000,
+        func_name="sub_401000",
         udm_name=actual.udm_name,
         delta=8,
     )
@@ -959,6 +960,7 @@ def test_frame_udm_created(test_binary: Path, session_idauser: Path, work_dir: P
         event_name="frame_udm_created",
         timestamp=actual.timestamp,
         func_ea=0x401000,
+        func_name="sub_401000",
         udm=UdmModel(
             offset=0x800,
             size=0x20,
@@ -1011,6 +1013,7 @@ def test_frame_udm_deleted(test_binary: Path, session_idauser: Path, work_dir: P
         event_name="frame_udm_deleted",
         timestamp=actual.timestamp,
         func_ea=0x401000,
+        func_name="sub_401000",
         udm=UdmModel(
             offset=96,
             size=32,
@@ -1063,6 +1066,7 @@ def test_frame_udm_renamed(test_binary: Path, session_idauser: Path, work_dir: P
         event_name="frame_udm_renamed",
         timestamp=actual.timestamp,
         func_ea=0x401000,
+        func_name="sub_401000",
         udm=UdmModel(
             offset=96,
             size=0,
@@ -1116,6 +1120,7 @@ def test_frame_udm_changed(test_binary: Path, session_idauser: Path, work_dir: P
         event_name="frame_udm_changed",
         timestamp=actual.timestamp,
         func_ea=0x401000,
+        func_name="sub_401000",
         udmold=UdmModel(
             offset=96,
             size=0,
