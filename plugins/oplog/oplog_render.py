@@ -522,8 +522,7 @@ def render_op_ti_changed(ev: op_ti_changed_event):
 
 
 def render_local_types_changed(ev: local_types_changed_event):
-    # TODO: describe the type changes
-    return f"{pretty_date(ev.timestamp)}: local types changed: {codname(ev.name or "")} (ordinal: {ev.ordinal})"
+    return f"{pretty_date(ev.timestamp)}: local type {ev.ltc.name.lower()}: {codname(ev.name or '')} (ordinal: {ev.ordinal})"
 
 
 def render_lt_udm_created(ev: lt_udm_created_event):

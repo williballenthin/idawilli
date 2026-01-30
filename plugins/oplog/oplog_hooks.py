@@ -22,6 +22,7 @@ from oplog_events import (
     OpInfoModel,
     TryblkModel,
     SegmentModel,
+    LocalTypeChange,
     SegmMoveInfoModel,
     renamed_event,
     make_code_event,
@@ -911,13 +912,17 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         """Local types have been changed.
 
         Args:
-            ltc (local_type_change_t):
+            ltc (local_type_change_t): integer enum value
             ordinal: 0 means ordinal is unknown
             name: nullptr means name is unknown
         """
-        logger.debug("local_types_changed(ltc=%s, ordinal=%d, name=%s)", ltc, ordinal, name)
+        try:
+            ltc_enum = LocalTypeChange(ltc)
+        except ValueError:
+            return
+        logger.debug("local_types_changed(ltc=%s, ordinal=%d, name=%s)", ltc_enum.name, ordinal, name)
         ev = local_types_changed_event(
-            event_name="local_types_changed", timestamp=datetime.now(), ltc=ltc, ordinal=ordinal, name=name
+            event_name="local_types_changed", timestamp=datetime.now(), ltc=ltc_enum, ordinal=ordinal, name=name
         )
         self.events.add_event(ev)
 

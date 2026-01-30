@@ -1,5 +1,6 @@
 import logging
 import threading
+from enum import IntEnum
 from typing import TYPE_CHECKING, Any, Literal
 from datetime import datetime
 
@@ -1001,10 +1002,21 @@ class op_ti_changed_event(BaseModel):
     type_str: str | None = None
 
 
+class LocalTypeChange(IntEnum):
+    ADDED = 1
+    DELETED = 2
+    EDITED = 3
+    ALIASED = 4
+    COMPILER = 5
+    TIL_LOADED = 6
+    TIL_UNLOADED = 7
+    TIL_COMPACTED = 8
+
+
 class local_types_changed_event(BaseModel):
     event_name: Literal["local_types_changed"]
     timestamp: datetime
-    ltc: Any
+    ltc: LocalTypeChange
     ordinal: int
     name: str | None
 

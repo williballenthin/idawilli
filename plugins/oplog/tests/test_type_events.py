@@ -8,6 +8,7 @@ from oplog_events import (
     EdmModel,
     UdmModel,
     EventList,
+    LocalTypeChange,
     ti_changed_event,
     changing_ti_event,
     op_ti_changed_event,
@@ -192,7 +193,7 @@ def test_local_types_changed(test_binary: Path, session_idauser: Path, work_dir:
     expected = local_types_changed_event(
         event_name="local_types_changed",
         timestamp=actual.timestamp,
-        ltc=1,
+        ltc=LocalTypeChange.ADDED,
         name="OplogTestStruct",
         ordinal=15,
     )
