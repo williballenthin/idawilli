@@ -236,7 +236,7 @@ def test_make_data(test_binary: Path, session_idauser: Path, work_dir: Path):
         timestamp=actual.timestamp,
         ea=0x401000,
         flags=0x20000400,
-        tid=0xFFFFFFFFFFFFFFFF,
+        type_name="(unnamed)",
         len=4,
     )
     assert actual == expected
@@ -275,7 +275,7 @@ def test_make_data_byte(test_binary: Path, session_idauser: Path, work_dir: Path
         timestamp=actual.timestamp,
         ea=0x401010,
         flags=0x400,
-        tid=0xFFFFFFFFFFFFFFFF,
+        type_name="(unnamed)",
         len=1,
     )
     assert actual == expected
@@ -322,7 +322,7 @@ def test_make_data_word(test_binary: Path, session_idauser: Path, work_dir: Path
         timestamp=actual.timestamp,
         ea=test_ea,
         flags=0x10000400,
-        tid=0xFFFFFFFFFFFFFFFF,
+        type_name="(unnamed)",
         len=2,
     )
     assert actual == expected

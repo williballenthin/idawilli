@@ -265,7 +265,7 @@ class UdmModel(BaseModel):
     size: int
     name: str
     cmt: str
-    tid: int  # from udm.type.get_tid()
+    type_name: str
     repr: str
     effalign: int
     tafld_bits: int
@@ -278,7 +278,7 @@ class UdmModel(BaseModel):
             size=udm.size,
             name=udm.name,
             cmt=udm.cmt,
-            tid=udm.type.get_tid(),
+            type_name=udm.type.get_type_name() or "(unnamed)",
             repr=str(udm.repr),
             effalign=udm.effalign,
             tafld_bits=udm.tafld_bits,
@@ -292,20 +292,13 @@ class EdmModel(BaseModel):
     name: str
     comment: str
     value: int
-    tid: int
 
     @classmethod
     def from_edm_t(cls, edm: "ida_typeinf.edm_t") -> "EdmModel":
-        name = edm.name
-        comment = edm.cmt
-        value = edm.value
-        tid = edm.get_tid()
-
         return cls(
-            name=name,
-            comment=comment,
-            value=value,
-            tid=tid,
+            name=edm.name,
+            comment=edm.cmt,
+            value=edm.value,
         )
 
 
@@ -601,7 +594,7 @@ class make_data_event(BaseModel):
     timestamp: datetime
     ea: int
     flags: int
-    tid: int
+    type_name: str
     len: int
 
 
@@ -768,7 +761,6 @@ class lt_udm_deleted_event(BaseModel):
     event_name: Literal["lt_udm_deleted"]
     timestamp: datetime
     udtname: str
-    udm_tid: int
     udm: UdmModel
 
 
@@ -784,7 +776,6 @@ class lt_udm_changed_event(BaseModel):
     event_name: Literal["lt_udm_changed"]
     timestamp: datetime
     udtname: str
-    udm_tid: int
     udmold: UdmModel
     udmnew: UdmModel
 
@@ -793,7 +784,7 @@ class lt_udt_expanded_event(BaseModel):
     event_name: Literal["lt_udt_expanded"]
     timestamp: datetime
     udtname: str
-    udm_tid: int
+    udm_name: str
     delta: int
 
 
@@ -808,7 +799,6 @@ class lt_edm_deleted_event(BaseModel):
     event_name: Literal["lt_edm_deleted"]
     timestamp: datetime
     enumname: str
-    edm_tid: int
     edm: EdmModel
 
 
@@ -824,7 +814,6 @@ class lt_edm_changed_event(BaseModel):
     event_name: Literal["lt_edm_changed"]
     timestamp: datetime
     enumname: str
-    edm_tid: int
     edmold: EdmModel
     edmnew: EdmModel
 
@@ -845,7 +834,7 @@ class frame_expanded_event(BaseModel):
     event_name: Literal["frame_expanded"]
     timestamp: datetime
     func_ea: int
-    udm_tid: int
+    udm_name: str
     delta: int
 
 
@@ -866,7 +855,6 @@ class frame_udm_deleted_event(BaseModel):
     event_name: Literal["frame_udm_deleted"]
     timestamp: datetime
     func_ea: int
-    udm_tid: int
     udm: UdmModel
 
 
@@ -882,7 +870,6 @@ class frame_udm_changed_event(BaseModel):
     event_name: Literal["frame_udm_changed"]
     timestamp: datetime
     func_ea: int
-    udm_tid: int
     udmold: UdmModel
     udmnew: UdmModel
 

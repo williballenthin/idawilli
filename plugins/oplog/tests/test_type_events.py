@@ -244,7 +244,6 @@ def test_lt_edm_created(test_binary: Path, session_idauser: Path, work_dir: Path
             name="VALUE_ONE",
             value=1,
             comment="",
-            tid=0xFF000000000000C0,
         ),
     )
     assert actual == expected
@@ -300,12 +299,10 @@ def test_lt_edm_deleted(test_binary: Path, session_idauser: Path, work_dir: Path
         event_name="lt_edm_deleted",
         timestamp=actual.timestamp,
         enumname="TestEnum2",
-        edm_tid=0xFF000000000000C0,
         edm=EdmModel(
             name="VALUE_ONE",
             value=1,
             comment="",
-            tid=0xFFFFFFFFFFFFFFFF,
         ),
     )
     assert actual == expected
@@ -366,7 +363,6 @@ def test_lt_edm_renamed(test_binary: Path, session_idauser: Path, work_dir: Path
             name="NEW_VALUE",
             value=1,
             comment="",
-            tid=0xFF000000000000C0,
         ),
     )
     assert actual == expected
@@ -422,18 +418,15 @@ def test_lt_edm_changed(test_binary: Path, session_idauser: Path, work_dir: Path
         event_name="lt_edm_changed",
         timestamp=actual.timestamp,
         enumname="TestEnum4",
-        edm_tid=0xFF000000000000C0,
         edmold=EdmModel(
             name="VALUE_ONE",
             value=1,
             comment="",
-            tid=0xFF000000000000C0,
         ),
         edmnew=EdmModel(
             name="VALUE_ONE",
             value=999,
             comment="",
-            tid=0xFF000000000000C0,
         ),
     )
     assert actual == expected
@@ -494,7 +487,7 @@ def test_lt_udm_created(test_binary: Path, session_idauser: Path, work_dir: Path
             size=32,
             name="field_a",
             cmt="",
-            tid=0xFFFFFFFFFFFFFFFF,
+            type_name="(unnamed)",
             repr="",
             effalign=0,
             tafld_bits=0,
@@ -558,13 +551,12 @@ def test_lt_udm_deleted(test_binary: Path, session_idauser: Path, work_dir: Path
         event_name="lt_udm_deleted",
         timestamp=actual.timestamp,
         udtname="TestStruct2",
-        udm_tid=actual.udm_tid,
         udm=UdmModel(
             offset=0,
             size=32,
             name="field_a",
             cmt="",
-            tid=0xFFFFFFFFFFFFFFFF,
+            type_name="(unnamed)",
             repr="",
             effalign=4,
             tafld_bits=0,
@@ -634,7 +626,7 @@ def test_lt_udm_renamed(test_binary: Path, session_idauser: Path, work_dir: Path
             size=0,
             name="renamed_field",
             cmt="",
-            tid=0xFFFFFFFFFFFFFFFF,
+            type_name="(unnamed)",
             repr="",
             effalign=0,
             tafld_bits=0,
@@ -700,13 +692,12 @@ def test_lt_udm_changed(test_binary: Path, session_idauser: Path, work_dir: Path
         event_name="lt_udm_changed",
         timestamp=actual.timestamp,
         udtname="TestStruct4",
-        udm_tid=actual.udm_tid,
         udmold=UdmModel(
             offset=0,
             size=32,
             name="field_a",
             cmt="",
-            tid=0xFFFFFFFFFFFFFFFF,
+            type_name="(unnamed)",
             repr="",
             effalign=4,
             tafld_bits=0,
@@ -717,7 +708,7 @@ def test_lt_udm_changed(test_binary: Path, session_idauser: Path, work_dir: Path
             size=8,
             name="field_a",
             cmt="",
-            tid=0xFFFFFFFFFFFFFFFF,
+            type_name="(unnamed)",
             repr="",
             effalign=4,
             tafld_bits=0,
@@ -792,7 +783,7 @@ def test_lt_udt_expanded(test_binary: Path, session_idauser: Path, work_dir: Pat
         event_name="lt_udt_expanded",
         timestamp=actual.timestamp,
         udtname="TestStructExpand",
-        udm_tid=actual.udm_tid,
+        udm_name=actual.udm_name,
         delta=4,
     )
     assert actual == expected

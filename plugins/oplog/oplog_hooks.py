@@ -5,6 +5,7 @@ import ida_ua
 import ida_gdl
 import ida_idp
 import ida_funcs
+import ida_frame
 import ida_moves
 import ida_range
 import ida_dirtree
@@ -629,7 +630,12 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
     def make_data(self, ea: int, flags: int, tid: int, len: int) -> None:
         """A data item is being created."""
         logger.debug("make_data(ea=%d, flags=%d, tid=%d, len=%d)", ea, flags, tid, len)
-        ev = make_data_event(event_name="make_data", timestamp=datetime.now(), ea=ea, flags=flags, tid=tid, len=len)
+        tif = ida_typeinf.tinfo_t()
+        if tif.get_type_by_tid(tid):
+            type_name = tif.get_type_name() or "(unnamed)"
+        else:
+            type_name = "(unnamed)"
+        ev = make_data_event(event_name="make_data", timestamp=datetime.now(), ea=ea, flags=flags, type_name=type_name, len=len)
         self.events.add_event(ev)
 
     def destroyed_items(self, ea1: int, ea2: int, will_disable_range: bool) -> None:
@@ -857,7 +863,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         udm_model = UdmModel.from_udm_t(udm)
         logger.debug("lt_udm_deleted(udtname=%s, udm_tid=%d, udm=%s)", udtname, udm_tid, udm_model.model_dump_json())
         ev = lt_udm_deleted_event(
-            event_name="lt_udm_deleted", timestamp=datetime.now(), udtname=udtname, udm_tid=udm_tid, udm=udm_model
+            event_name="lt_udm_deleted", timestamp=datetime.now(), udtname=udtname, udm=udm_model
         )
         self.events.add_event(ev)
 
@@ -891,7 +897,6 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             event_name="lt_udm_changed",
             timestamp=datetime.now(),
             udtname=udtname,
-            udm_tid=udm_tid,
             udmold=udmold_model,
             udmnew=udmnew_model,
         )
@@ -905,8 +910,13 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             delta: Number of added/removed bytes.
         """
         logger.debug("lt_udt_expanded(udtname=%s, udm_tid=%d, delta=%d)", udtname, udm_tid, delta)
+        tif = ida_typeinf.tinfo_t()
+        tif.get_named_type(None, udtname)
+        udm = ida_typeinf.udm_t()
+        idx = tif.get_udm_by_tid(udm, udm_tid)
+        udm_name = udm.name if idx >= 0 else "(unnamed)"
         ev = lt_udt_expanded_event(
-            event_name="lt_udt_expanded", timestamp=datetime.now(), udtname=udtname, udm_tid=udm_tid, delta=delta
+            event_name="lt_udt_expanded", timestamp=datetime.now(), udtname=udtname, udm_name=udm_name, delta=delta
         )
         self.events.add_event(ev)
 
@@ -924,7 +934,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         edm_model = EdmModel.from_edm_t(edm)
         logger.debug("lt_edm_deleted(enumname=%s, edm_tid=%d, edm=%s)", enumname, edm_tid, edm_model.model_dump_json())
         ev = lt_edm_deleted_event(
-            event_name="lt_edm_deleted", timestamp=datetime.now(), enumname=enumname, edm_tid=edm_tid, edm=edm_model
+            event_name="lt_edm_deleted", timestamp=datetime.now(), enumname=enumname, edm=edm_model
         )
         self.events.add_event(ev)
 
@@ -958,7 +968,6 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             event_name="lt_edm_changed",
             timestamp=datetime.now(),
             enumname=enumname,
-            edm_tid=edm_tid,
             edmold=edmold_model,
             edmnew=edmnew_model,
         )
@@ -990,8 +999,13 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             delta: Number of added/removed bytes.
         """
         logger.debug("frame_expanded(func_ea=%d, udm_tid=%d, delta=%d)", func_ea, udm_tid, delta)
+        frame_tif = ida_typeinf.tinfo_t()
+        ida_frame.get_func_frame(frame_tif, ida_funcs.get_func(func_ea))
+        udm = ida_typeinf.udm_t()
+        idx = frame_tif.get_udm_by_tid(udm, udm_tid)
+        udm_name = udm.name if idx >= 0 else "(unnamed)"
         ev = frame_expanded_event(
-            event_name="frame_expanded", timestamp=datetime.now(), func_ea=func_ea, udm_tid=udm_tid, delta=delta
+            event_name="frame_expanded", timestamp=datetime.now(), func_ea=func_ea, udm_name=udm_name, delta=delta
         )
         self.events.add_event(ev)
 
@@ -1019,7 +1033,7 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         udm_model = UdmModel.from_udm_t(udm)
         logger.debug("frame_udm_deleted(func_ea=%d, udm_tid=%d, udm=%s)", func_ea, udm_tid, udm_model.model_dump_json())
         ev = frame_udm_deleted_event(
-            event_name="frame_udm_deleted", timestamp=datetime.now(), func_ea=func_ea, udm_tid=udm_tid, udm=udm_model
+            event_name="frame_udm_deleted", timestamp=datetime.now(), func_ea=func_ea, udm=udm_model
         )
         self.events.add_event(ev)
 
@@ -1053,7 +1067,6 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             event_name="frame_udm_changed",
             timestamp=datetime.now(),
             func_ea=func_ea,
-            udm_tid=udm_tid,
             udmold=udmold_model,
             udmnew=udmnew_model,
         )
