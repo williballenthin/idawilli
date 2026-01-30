@@ -51,8 +51,20 @@ def test_ti_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
     changing_actual = changing_events[-1]
     changed_actual = changed_events[-1]
 
-    assert changing_actual.event_name == "changing_ti"
-    assert changing_actual.ea == 0x90000000
+    changing_expected = changing_ti_event(
+        event_name="changing_ti",
+        timestamp=changing_actual.timestamp,
+        ea=0x90000000,
+        new_type=b'=\x04int',
+        new_fnames=b'',
+    )
+    assert changing_actual == changing_expected
 
-    assert changed_actual.event_name == "ti_changed"
-    assert changed_actual.ea == 0x90000000
+    changed_expected = ti_changed_event(
+        event_name="ti_changed",
+        timestamp=changed_actual.timestamp,
+        ea=0x90000000,
+        type=b'=\x04int',
+        fnames=b'',
+    )
+    assert changed_actual == changed_expected

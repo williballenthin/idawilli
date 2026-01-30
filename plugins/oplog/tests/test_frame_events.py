@@ -160,7 +160,7 @@ def test_frame_expanded(test_binary: Path, session_idauser: Path, work_dir: Path
         event_name="frame_expanded",
         timestamp=actual.timestamp,
         func_ea=0x401000,
-        udm_tid=actual.udm_tid,
+        udm_tid=0xff00000000000056,
         delta=8,
     )
     assert actual == expected
@@ -314,7 +314,7 @@ def test_frame_udm_deleted(test_binary: Path, session_idauser: Path, work_dir: P
         event_name="frame_udm_deleted",
         timestamp=actual.timestamp,
         func_ea=0x401000,
-        udm_tid=actual.udm_tid,
+        udm_tid=0xff00000000000056,
         udm=UdmModel(
             offset=96,
             size=32,
@@ -420,7 +420,7 @@ def test_frame_udm_changed(test_binary: Path, session_idauser: Path, work_dir: P
         event_name="frame_udm_changed",
         timestamp=actual.timestamp,
         func_ea=0x401000,
-        udm_tid=actual.udm_tid,
+        udm_tid=0xff00000000000056,
         udmold=UdmModel(
             offset=96,
             size=0,

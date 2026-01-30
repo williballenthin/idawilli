@@ -54,10 +54,18 @@ def test_lt_edm_created(test_binary: Path, session_idauser: Path, work_dir: Path
 
     actual = edm_created[-1]
 
-    assert actual.event_name == "lt_edm_created"
-    assert actual.enumname == "TestEnum"
-    assert actual.edm.name == "VALUE_ONE"
-    assert actual.edm.value == 1
+    expected = lt_edm_created_event(
+        event_name="lt_edm_created",
+        timestamp=actual.timestamp,
+        enumname="TestEnum",
+        edm=EdmModel(
+            name="VALUE_ONE",
+            value=1,
+            comment="",
+            tid=0xff000000000000c0,
+        ),
+    )
+    assert actual == expected
 
 
 def test_lt_edm_deleted(test_binary: Path, session_idauser: Path, work_dir: Path):
@@ -105,10 +113,19 @@ def test_lt_edm_deleted(test_binary: Path, session_idauser: Path, work_dir: Path
 
     actual = edm_deleted[-1]
 
-    assert actual.event_name == "lt_edm_deleted"
-    assert actual.enumname == "TestEnum2"
-    assert actual.edm.name == "VALUE_ONE"
-    assert actual.edm.value == 1
+    expected = lt_edm_deleted_event(
+        event_name="lt_edm_deleted",
+        timestamp=actual.timestamp,
+        enumname="TestEnum2",
+        edm_tid=0xff000000000000c0,
+        edm=EdmModel(
+            name="VALUE_ONE",
+            value=1,
+            comment="",
+            tid=0xffffffffffffffff,
+        ),
+    )
+    assert actual == expected
 
 
 def test_lt_edm_renamed(test_binary: Path, session_idauser: Path, work_dir: Path):
@@ -156,10 +173,19 @@ def test_lt_edm_renamed(test_binary: Path, session_idauser: Path, work_dir: Path
 
     actual = edm_renamed[-1]
 
-    assert actual.event_name == "lt_edm_renamed"
-    assert actual.enumname == "TestEnum3"
-    assert actual.oldname == "OLD_VALUE"
-    assert actual.edm.name == "NEW_VALUE"
+    expected = lt_edm_renamed_event(
+        event_name="lt_edm_renamed",
+        timestamp=actual.timestamp,
+        enumname="TestEnum3",
+        oldname="OLD_VALUE",
+        edm=EdmModel(
+            name="NEW_VALUE",
+            value=1,
+            comment="",
+            tid=0xff000000000000c0,
+        ),
+    )
+    assert actual == expected
 
 
 def test_lt_edm_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
@@ -207,9 +233,22 @@ def test_lt_edm_changed(test_binary: Path, session_idauser: Path, work_dir: Path
 
     actual = edm_changed[-1]
 
-    assert actual.event_name == "lt_edm_changed"
-    assert actual.enumname == "TestEnum4"
-    assert actual.edmold.name == "VALUE_ONE"
-    assert actual.edmold.value == 1
-    assert actual.edmnew.name == "VALUE_ONE"
-    assert actual.edmnew.value == 0x3e7
+    expected = lt_edm_changed_event(
+        event_name="lt_edm_changed",
+        timestamp=actual.timestamp,
+        enumname="TestEnum4",
+        edm_tid=0xff000000000000c0,
+        edmold=EdmModel(
+            name="VALUE_ONE",
+            value=1,
+            comment="",
+            tid=0xff000000000000c0,
+        ),
+        edmnew=EdmModel(
+            name="VALUE_ONE",
+            value=999,
+            comment="",
+            tid=0xff000000000000c0,
+        ),
+    )
+    assert actual == expected

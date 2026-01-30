@@ -175,10 +175,30 @@ def test_set_func_start(test_binary: Path, session_idauser: Path, work_dir: Path
 
     actual = matching[-1]
 
-    assert actual.event_name == "set_func_start"
-    assert actual.pfn.start_ea == 0x401000
-    assert actual.new_start > 0x401000
-    assert actual.new_start < actual.pfn.end_ea
+    expected = set_func_start_event(
+        event_name="set_func_start",
+        timestamp=actual.timestamp,
+        pfn=FuncModel(
+            start_ea=0x401000,
+            end_ea=0x40103f,
+            flags=0x5400,
+            frame=0x401000,
+            frsize=12,
+            frregs=0,
+            argsize=0,
+            fpd=0,
+            color=0xffffffff,
+            pntqty=6,
+            regvarqty=0,
+            regargqty=0,
+            tailqty=0,
+            owner=0x401000,
+            refqty=12,
+            name="sub_401000",
+        ),
+        new_start=0x401004,
+    )
+    assert actual == expected
 
 
 def test_set_func_end(test_binary: Path, session_idauser: Path, work_dir: Path):
@@ -557,10 +577,34 @@ def test_tail_owner_changed(test_binary: Path, session_idauser: Path, work_dir: 
 
     actual = owner_change_events[-1]
 
-    assert actual.event_name == "tail_owner_changed"
-    assert actual.tail.start_ea == 0x80000000
-    assert actual.tail.end_ea == 0x80000010
-    assert actual.old_owner == 0x401000
+    # frregs is non-deterministic for this synthetic tail (varies: 0xea40, 0x55f0, 0xdab0, etc)
+    # because the test creates an artificial function chunk with NOPs, not a real compiled function.
+    # The important fields (start_ea, end_ea, flags, owner, name) are hardcoded as regression snapshot.
+    expected = tail_owner_changed_event(
+        event_name="tail_owner_changed",
+        timestamp=actual.timestamp,
+        tail=FuncModel(
+            start_ea=0x80000000,
+            end_ea=0x80000010,
+            flags=0x8000,
+            frame=0x401040,
+            frsize=2,
+            frregs=actual.tail.frregs,
+            argsize=0,
+            fpd=0,
+            color=0xffffffff,
+            pntqty=0,
+            regvarqty=0,
+            regargqty=0,
+            tailqty=0,
+            owner=0x401040,
+            refqty=2,
+            name="sub_401040",
+        ),
+        owner_func=0x401040,
+        old_owner=0x401000,
+    )
+    assert actual == expected
 
 
 @pytest.mark.xfail(reason="func_noret_changed requires set_noreturn_flag() which is not exposed to Python - hook only fires during auto-analysis detection")

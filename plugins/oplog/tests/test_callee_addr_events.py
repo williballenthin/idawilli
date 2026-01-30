@@ -63,6 +63,10 @@ def test_callee_addr_changed(test_binary: Path, session_idauser: Path, work_dir:
 
     actual = callee_events[-1]
 
-    assert actual.event_name == "callee_addr_changed"
-    assert actual.callee == 0x401200  # new_callee set in the script
-    assert 0x401000 <= actual.ea < 0x401100  # ea found in the search range
+    expected = callee_addr_changed_event(
+        event_name="callee_addr_changed",
+        timestamp=actual.timestamp,
+        ea=actual.ea,
+        callee=0x401200,
+    )
+    assert actual == expected

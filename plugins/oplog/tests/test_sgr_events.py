@@ -47,12 +47,16 @@ def test_sgr_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
     assert len(sgr_events) >= 1
     actual = sgr_events[-1]
 
-    assert actual.event_name == "sgr_changed"
-    assert actual.start_ea == 0x401100  # seg.start_ea + 0x100
-    assert actual.regnum == 3  # R_ds
-    assert actual.value == 0x42
-    assert actual.old_value == 0x23
-    assert actual.tag == 2  # SR_user
+    expected = sgr_changed_event(
+        event_name="sgr_changed",
+        timestamp=actual.timestamp,
+        start_ea=0x401100,
+        regnum=3,
+        value=0x42,
+        old_value=0x23,
+        tag=2,
+    )
+    assert actual == expected
 
 
 @pytest.mark.xfail(
@@ -91,6 +95,10 @@ def test_sgr_deleted(test_binary: Path, session_idauser: Path, work_dir: Path):
     assert len(sgr_events) >= 1
     actual = sgr_events[-1]
 
-    assert actual.event_name == "sgr_deleted"
-    assert actual.start_ea == 0x401000  # seg.start_ea
-    assert actual.regnum == 3  # R_ds
+    expected = sgr_deleted_event(
+        event_name="sgr_deleted",
+        timestamp=actual.timestamp,
+        start_ea=0x401000,
+        regnum=3,
+    )
+    assert actual == expected

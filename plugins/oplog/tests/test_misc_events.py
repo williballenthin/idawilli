@@ -67,8 +67,12 @@ def test_extlang_changed(test_binary: Path, session_idauser: Path, work_dir: Pat
 
     actual = matching[-1]
 
-    assert actual.event_name == "extlang_changed"
-    assert actual.kind == 2
+    expected = extlang_changed_event(
+        event_name="extlang_changed",
+        timestamp=actual.timestamp,
+        kind=2,
+    )
+    assert actual == expected
 
 
 @pytest.mark.xfail(reason="idasgn_matched_ea requires FLIRT signature files matching the test binary")
@@ -97,5 +101,9 @@ def test_idasgn_matched_ea(test_binary: Path, session_idauser: Path, work_dir: P
 
     actual = matching[-1]
 
-    assert actual.event_name == "idasgn_matched_ea"
-    assert actual.ea == 0x401000
+    expected = idasgn_matched_ea_event(
+        event_name="idasgn_matched_ea",
+        timestamp=actual.timestamp,
+        ea=0x401000,
+    )
+    assert actual == expected

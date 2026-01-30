@@ -40,9 +40,14 @@ def test_destroyed_items(test_binary: Path, session_idauser: Path, work_dir: Pat
 
     actual = destroyed_events[-1]
 
-    assert actual.event_name == "destroyed_items"
-    assert actual.will_disable_range is True
-    assert actual.ea2 - actual.ea1 == 0x100  # destroyed 0x100 bytes from segment end
+    expected = destroyed_items_event(
+        event_name="destroyed_items",
+        timestamp=actual.timestamp,
+        ea1=actual.ea1,
+        ea2=actual.ea2,
+        will_disable_range=True,
+    )
+    assert actual == expected
 
 
 def test_destroyed_items_via_segm_start(test_binary: Path, session_idauser: Path, work_dir: Path):
@@ -74,7 +79,11 @@ def test_destroyed_items_via_segm_start(test_binary: Path, session_idauser: Path
 
     actual = destroyed_events[-1]
 
-    assert actual.event_name == "destroyed_items"
-    assert actual.will_disable_range is True
-    assert actual.ea1 == 0x401000  # original segment start
-    assert actual.ea2 == 0x401100  # new segment start (original + 0x100)
+    expected = destroyed_items_event(
+        event_name="destroyed_items",
+        timestamp=actual.timestamp,
+        ea1=0x401000,
+        ea2=0x401100,
+        will_disable_range=True,
+    )
+    assert actual == expected

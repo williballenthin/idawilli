@@ -44,10 +44,22 @@ def test_op_ti_changed(test_binary: Path, session_idauser: Path, work_dir: Path)
     changing_actual = changing_events[-1]
     changed_actual = changed_events[-1]
 
-    assert changing_actual.event_name == "changing_op_ti"
-    assert changing_actual.ea == 0x401000
-    assert changing_actual.n == 0
+    changing_expected = changing_op_ti_event(
+        event_name="changing_op_ti",
+        timestamp=changing_actual.timestamp,
+        ea=0x401000,
+        n=0,
+        new_type=b'=\x04int',
+        new_fnames=b'',
+    )
+    assert changing_actual == changing_expected
 
-    assert changed_actual.event_name == "op_ti_changed"
-    assert changed_actual.ea == 0x401000
-    assert changed_actual.n == 0
+    changed_expected = op_ti_changed_event(
+        event_name="op_ti_changed",
+        timestamp=changed_actual.timestamp,
+        ea=0x401000,
+        n=0,
+        type=b'=\x04int',
+        fnames=b'',
+    )
+    assert changed_actual == changed_expected

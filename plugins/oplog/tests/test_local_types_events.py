@@ -44,7 +44,11 @@ def test_local_types_changed(test_binary: Path, session_idauser: Path, work_dir:
 
     actual = matching[-1]
 
-    assert actual.event_name == "local_types_changed"
-    assert actual.ltc == 1  # LTC_ADDED
-    assert actual.name == "OplogTestStruct"
-    assert actual.ordinal > 0  # ordinal is dynamically assigned
+    expected = local_types_changed_event(
+        event_name="local_types_changed",
+        timestamp=actual.timestamp,
+        ltc=1,
+        name="OplogTestStruct",
+        ordinal=15,
+    )
+    assert actual == expected
