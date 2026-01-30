@@ -5,7 +5,7 @@
     "name": "oplog",
     "entryPoint": "oplog_entry.py",
     "version": "0.2.0",
-    "idaVersions": ">=9.2",
+    "idaVersions": ">=9.0",
     "description": "oplog is an IDA Pro plugin that records operations during analysis.",
     "license": "Apache 2.0",
     "categories": [
