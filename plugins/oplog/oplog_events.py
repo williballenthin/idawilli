@@ -38,6 +38,8 @@ class FuncModel(BaseModel):
     @classmethod
     def from_func_t(cls, func: "ida_funcs.func_t") -> "FuncModel":
         """Create FuncModel from ida_funcs.func_t instance."""
+        import ida_funcs
+        name = ida_funcs.get_func_name(func.start_ea)
         return cls(
             start_ea=func.start_ea,
             end_ea=func.end_ea,
@@ -54,7 +56,7 @@ class FuncModel(BaseModel):
             tailqty=func.tailqty,
             owner=func.owner,
             refqty=func.refqty,
-            name=func.get_name() if hasattr(func, "get_name") else None,
+            name=name if name else None,
         )
 
 

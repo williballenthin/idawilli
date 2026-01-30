@@ -16,8 +16,6 @@ REPO_ROOT = PLUGIN_DIR.parent.parent
 TEST_BINARY = REPO_ROOT / "tests" / "data" / "Practical Malware Analysis Lab 01-01.exe_"
 DEFAULT_IDAUSR = Path.home() / ".idapro"
 
-IDB_EXTENSIONS = [".i64", ".id0", ".id1", ".id2", ".nam", ".til"]
-
 
 @pytest.fixture(scope="session")
 def test_binary() -> Path:
@@ -27,15 +25,6 @@ def test_binary() -> Path:
 @pytest.fixture
 def work_dir(tmp_path: Path) -> Path:
     return tmp_path
-
-
-@pytest.fixture(autouse=True)
-def cleanup_idb(test_binary: Path):
-    yield
-    for ext in IDB_EXTENSIONS:
-        idb_file = test_binary.parent / (test_binary.name + ext)
-        if idb_file.exists():
-            idb_file.unlink()
 
 
 def get_ida_install_dir() -> str:
@@ -124,6 +113,9 @@ def run_ida_script(
 ) -> subprocess.CompletedProcess:
     import textwrap
 
+    local_binary = work_dir / binary_path.name
+    shutil.copy(binary_path, local_binary)
+
     env = os.environ.copy()
     env["IDAUSR"] = str(idauser)
 
@@ -136,24 +128,30 @@ import traceback
 
 try:
     import idapro
-    print("Opening database...", file=sys.stderr)
-    idapro.open_database("{binary_path}", run_auto_analysis=True)
-    print("Database opened, running script...", file=sys.stderr)
+    idapro.enable_console_messages(True)
+    idapro.open_database("{local_binary}", run_auto_analysis=True)
+
+    import ida_kernwin
+    version = ida_kernwin.get_kernel_version()
+
+    # IDA 9.0 bug fixed in 9.1: "Python plugins or processor modules would not
+    # work in idalib context started from an external Python process"
+    # https://docs.hex-rays.com/release-notes/9_1
+    if version.startswith("9.0"):
+        oplog_plugin_dir = "{idauser}/plugins/oplog"
+        sys.path.insert(0, oplog_plugin_dir)
+        import oplog_entry
+        plugin = oplog_entry.PLUGIN_ENTRY()
+        _plugmod = plugin.init()  # keep reference to prevent GC
 
 {indented_script}
 
-    print("Script complete, closing database...", file=sys.stderr)
     idapro.close_database()
-    print("Done.", file=sys.stderr)
 except Exception as e:
     print("EXCEPTION in IDA script:", file=sys.stderr)
     traceback.print_exc()
     sys.exit(1)
 ''')
-
-    print(f"DEBUG: Running script in {work_dir}")
-    print(f"DEBUG: Script file: {script_file}")
-    print(f"DEBUG: IDAUSR: {idauser}")
 
     result = subprocess.run(
         ["python", str(script_file)],
@@ -164,14 +162,9 @@ except Exception as e:
         cwd=str(work_dir),
     )
 
-    print(f"DEBUG: Return code: {result.returncode}")
-    print(f"DEBUG: STDOUT:\n{result.stdout}")
-    print(f"DEBUG: STDERR:\n{result.stderr}")
-
-    work_dir_contents = list(work_dir.iterdir())
-    print(f"DEBUG: work_dir contents after script: {[f.name for f in work_dir_contents]}")
-
     if result.returncode != 0:
+        print(f"STDOUT:\n{result.stdout}")
+        print(f"STDERR:\n{result.stderr}")
         assert False, f"IDA script failed with return code {result.returncode}"
 
     return result

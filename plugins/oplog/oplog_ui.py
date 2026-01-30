@@ -199,14 +199,14 @@ class UILocationHook(ida_kernwin.UI_Hooks):
         self._prev_item_ea = None
 
     @staticmethod
-    def _get_item_head(ea: ida_idaapi.ea_t) -> ida_idaapi.ea_t:
+    def _get_item_head(ea: int) -> int:
         head_ea = ida_bytes.get_item_head(ea)
         func = ida_funcs.get_func(head_ea)
         if func is not None:
             head_ea = func.start_ea
         return head_ea
 
-    def screen_ea_changed(self, ea: ida_idaapi.ea_t, prev_ea: ida_idaapi.ea_t) -> None:
+    def screen_ea_changed(self, ea: int, prev_ea: int) -> None:
         current_head_ea = self._get_item_head(ea)
 
         if current_head_ea == self._prev_item_ea:
