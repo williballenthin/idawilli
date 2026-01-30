@@ -50,7 +50,6 @@ from oplog_events import (
     destroyed_items_event,
     determined_main_event,
     dirtree_rminode_event,
-    extlang_changed_event,
     lt_udt_expanded_event,
     op_type_changed_event,
     stkpnts_changed_event,
@@ -598,10 +597,6 @@ def render_determined_main(ev: determined_main_event):
         return f"{pretty_date(ev.timestamp)}: main function determined: {render_address(ev.main)}"
 
 
-def render_extlang_changed(ev: extlang_changed_event):
-    return f"{pretty_date(ev.timestamp)}: external language changed: kind {ev.kind} idx {ev.idx}"
-
-
 def render_idasgn_matched_ea(ev: idasgn_matched_ea_event):
     return f"{pretty_date(ev.timestamp)}: signature matched: {cname(ev.name, ev.ea)} from {codname(ev.lib_name)}"
 
@@ -765,8 +760,6 @@ def render_event(ev: idb_event | ui_event) -> str:
         return render_frame_udm_changed(ev)
     elif ev.event_name == "determined_main":
         return render_determined_main(ev)
-    elif ev.event_name == "extlang_changed":
-        return render_extlang_changed(ev)
     elif ev.event_name == "idasgn_matched_ea":
         return render_idasgn_matched_ea(ev)
     elif ev.event_name == "current_item_changed":

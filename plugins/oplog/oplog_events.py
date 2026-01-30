@@ -889,14 +889,6 @@ class determined_main_event(BaseModel):
     main: int
 
 
-class extlang_changed_event(BaseModel):
-    event_name: Literal["extlang_changed"]
-    timestamp: datetime
-    kind: int
-    el: Any
-    idx: int
-
-
 class idasgn_matched_ea_event(BaseModel):
     event_name: Literal["idasgn_matched_ea"]
     timestamp: datetime
@@ -949,7 +941,6 @@ idb_event = (
     | destroyed_items_event
     | determined_main_event
     | dirtree_rminode_event
-    | extlang_changed_event
     | lt_udt_expanded_event
     | op_type_changed_event
     | stkpnts_changed_event

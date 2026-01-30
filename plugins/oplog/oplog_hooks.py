@@ -67,8 +67,6 @@ from oplog_events import (
     destroyed_items_event,
     determined_main_event,
     dirtree_rminode_event,
-    extlang_changed_event,
-    lt_udt_expanded_event,
     op_type_changed_event,
     stkpnts_changed_event,
     tryblks_updated_event,
@@ -155,8 +153,8 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
             idx: Extlang index.
         """
         logger.debug("extlang_changed(kind=%d, el=%s, idx=%d)", kind, el, idx)
-        ev = extlang_changed_event(event_name="extlang_changed", timestamp=datetime.now(), kind=kind, el=el, idx=idx)
-        self.events.add_event(ev)
+        pass
+        # not analytically relevant if idc/idapython/whatever are enabled/disabled
 
     def idasgn_loaded(self, short_sig_name: str) -> None:
         """FLIRT signature has been loaded for normal processing."""

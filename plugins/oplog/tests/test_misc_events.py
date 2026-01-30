@@ -7,7 +7,6 @@ from conftest import run_ida_script
 from oplog_events import (
     EventList,
     determined_main_event,
-    extlang_changed_event,
     idasgn_matched_ea_event,
 )
 
@@ -41,36 +40,6 @@ def test_determined_main(test_binary: Path, session_idauser: Path, work_dir: Pat
         event_name="determined_main",
         timestamp=actual.timestamp,
         main=0x401000,
-    )
-    assert actual == expected
-
-
-@pytest.mark.xfail(reason="enable_extlang_python may crash when disabling Python while running Python code")
-def test_extlang_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
-    """Test that changing the extlang triggers extlang_changed event."""
-    events_path = work_dir / "events.json"
-
-    run_ida_script(
-        binary_path=test_binary,
-        idauser=session_idauser,
-        work_dir=work_dir,
-        script=textwrap.dedent(f'''
-            import idc
-
-            idc.eval_idc('oplog_export("{events_path}")')
-        '''),
-    )
-
-    event_list = EventList.model_validate_json(events_path.read_text())
-    matching = [e for e in event_list.root if isinstance(e, extlang_changed_event)]
-    assert len(matching) >= 1
-
-    actual = matching[-1]
-
-    expected = extlang_changed_event(
-        event_name="extlang_changed",
-        timestamp=actual.timestamp,
-        kind=2,
     )
     assert actual == expected
 
