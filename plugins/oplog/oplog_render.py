@@ -321,14 +321,33 @@ def render_func_noret_changed(ev: func_noret_changed_event):
         return f"{pretty_date(ev.timestamp)}: function noret changed: {render_address(ev.pfn.start_ea)}"
 
 
+def _render_tryblk_summary(tryblks) -> str:
+    if not tryblks:
+        return "(none)"
+    parts = []
+    for tb in tryblks:
+        if tb.ranges:
+            addr = render_address(tb.ranges[0].start_ea)
+        else:
+            addr = "?"
+        if tb.kind == "cpp":
+            catch_count = len(tb.catches) if tb.catches else 0
+            parts.append(f"C++ try@{addr} ({catch_count} catches)")
+        elif tb.kind == "seh":
+            parts.append(f"SEH try@{addr}")
+        else:
+            parts.append(f"try@{addr}")
+    return ", ".join(parts)
+
+
 def render_updating_tryblks(ev: updating_tryblks_event):
-    # TODO: describe which function
-    return f"{pretty_date(ev.timestamp)}: tryblks updating"
+    summary = _render_tryblk_summary(ev.tryblks)
+    return f"{pretty_date(ev.timestamp)}: tryblks updating: {summary}"
 
 
 def render_tryblks_updated(ev: tryblks_updated_event):
-    # TODO: describe which function
-    return f"{pretty_date(ev.timestamp)}: tryblks updated"
+    summary = _render_tryblk_summary(ev.tryblks)
+    return f"{pretty_date(ev.timestamp)}: tryblks updated: {summary}"
 
 
 def render_deleting_tryblks(ev: deleting_tryblks_event):

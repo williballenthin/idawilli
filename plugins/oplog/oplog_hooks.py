@@ -19,6 +19,7 @@ from oplog_events import (
     FuncModel,
     InsnModel,
     RangeModel,
+    TryblkModel,
     SegmentModel,
     SegmMoveInfoModel,
     renamed_event,
@@ -517,17 +518,18 @@ class IDBChangedHook(ida_idp.IDB_Hooks):
         ev = func_noret_changed_event(event_name="func_noret_changed", timestamp=datetime.now(), pfn=pfn_model)
         self.events.add_event(ev)
 
-    # TODO: type of tbv
     def updating_tryblks(self, tbv) -> None:
         """About to update tryblk information."""
-        logger.debug("updating_tryblks(tbv=%s)", tbv)
-        ev = updating_tryblks_event(event_name="updating_tryblks", timestamp=datetime.now(), tbv=tbv)
+        tryblks = [TryblkModel.from_tryblk_t(tb) for tb in tbv]
+        logger.debug("updating_tryblks(tryblks=%s)", tryblks)
+        ev = updating_tryblks_event(event_name="updating_tryblks", timestamp=datetime.now(), tryblks=tryblks)
         self.events.add_event(ev)
 
     def tryblks_updated(self, tbv) -> None:
         """Updated tryblk information."""
-        logger.debug("tryblks_updated(tbv=%s)", tbv)
-        ev = tryblks_updated_event(event_name="tryblks_updated", timestamp=datetime.now(), tbv=tbv)
+        tryblks = [TryblkModel.from_tryblk_t(tb) for tb in tbv]
+        logger.debug("tryblks_updated(tryblks=%s)", tryblks)
+        ev = tryblks_updated_event(event_name="tryblks_updated", timestamp=datetime.now(), tryblks=tryblks)
         self.events.add_event(ev)
 
     def deleting_tryblks(self, range: ida_range.range_t) -> None:

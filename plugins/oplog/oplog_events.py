@@ -258,6 +258,79 @@ class RangeModel(BaseModel):
         )
 
 
+class CatchModel(BaseModel):
+    """Pydantic model for C++ catch block (catch_t structure)."""
+
+    ranges: list[RangeModel]
+    disp: int
+    fpreg: int
+    obj: int
+    type_id: int
+
+    @classmethod
+    def from_catch_t(cls, catch_obj) -> "CatchModel":
+        return cls(
+            ranges=[RangeModel(start_ea=r.start_ea, end_ea=r.end_ea) for r in catch_obj],
+            disp=catch_obj.disp,
+            fpreg=catch_obj.fpreg,
+            obj=catch_obj.obj,
+            type_id=catch_obj.type_id,
+        )
+
+
+class SehModel(BaseModel):
+    """Pydantic model for SEH exception handler (seh_t structure)."""
+
+    ranges: list[RangeModel]
+    disp: int
+    fpreg: int
+    filter_ranges: list[RangeModel]
+    seh_code: int
+
+    @classmethod
+    def from_seh_t(cls, seh_obj) -> "SehModel":
+        return cls(
+            ranges=[RangeModel(start_ea=r.start_ea, end_ea=r.end_ea) for r in seh_obj],
+            disp=seh_obj.disp,
+            fpreg=seh_obj.fpreg,
+            filter_ranges=[RangeModel(start_ea=r.start_ea, end_ea=r.end_ea) for r in seh_obj.filter],
+            seh_code=seh_obj.seh_code,
+        )
+
+
+class TryblkModel(BaseModel):
+    """Pydantic model for try block (tryblk_t structure)."""
+
+    kind: str
+    level: int
+    ranges: list[RangeModel]
+    catches: list[CatchModel] | None = None
+    seh: SehModel | None = None
+
+    @classmethod
+    def from_tryblk_t(cls, tb) -> "TryblkModel":
+        ranges = [RangeModel(start_ea=r.start_ea, end_ea=r.end_ea) for r in tb]
+
+        kind_map = {0: "none", 1: "seh", 2: "cpp"}
+        kind = kind_map.get(tb.get_kind(), "unknown")
+
+        catches = None
+        seh = None
+
+        if tb.is_cpp():
+            catches = [CatchModel.from_catch_t(c) for c in tb.cpp()]
+        elif tb.is_seh():
+            seh = SehModel.from_seh_t(tb.seh())
+
+        return cls(
+            kind=kind,
+            level=tb.level,
+            ranges=ranges,
+            catches=catches,
+            seh=seh,
+        )
+
+
 class UdmModel(BaseModel):
     """Pydantic model for ida_typeinf.udm_t structure."""
 
@@ -507,13 +580,13 @@ class func_noret_changed_event(BaseModel):
 class updating_tryblks_event(BaseModel):
     event_name: Literal["updating_tryblks"]
     timestamp: datetime
-    tbv: Any
+    tryblks: list[TryblkModel]
 
 
 class tryblks_updated_event(BaseModel):
     event_name: Literal["tryblks_updated"]
     timestamp: datetime
-    tbv: Any
+    tryblks: list[TryblkModel]
 
 
 class deleting_tryblks_event(BaseModel):
