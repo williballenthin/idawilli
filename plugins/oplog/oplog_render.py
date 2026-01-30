@@ -390,9 +390,8 @@ def render_make_code(ev: make_code_event):
 
 
 def render_make_data(ev: make_data_event):
-    # TODO: describe data type
-    # TODO: capture and show name of location
-    return f"{pretty_date(ev.timestamp)}: data created: {render_address(ev.ea)} (size: {ev.len})"
+    type_desc = f" as {codname(ev.type_name)}" if ev.type_name != "(unnamed)" else ""
+    return f"{pretty_date(ev.timestamp)}: data created: {render_address(ev.ea)}{type_desc} (size: {ev.len})"
 
 
 def render_destroyed_items(ev: destroyed_items_event):
@@ -489,11 +488,13 @@ def render_local_types_changed(ev: local_types_changed_event):
 
 
 def render_lt_udm_created(ev: lt_udm_created_event):
-    return f"{pretty_date(ev.timestamp)}: struct member created: {codname(ev.udm.name)} in {codname(ev.udtname)}"
+    type_desc = f": {codname(ev.udm.type_name)}" if ev.udm.type_name != "(unnamed)" else ""
+    return f"{pretty_date(ev.timestamp)}: struct member created: {codname(ev.udm.name)}{type_desc} in {codname(ev.udtname)}"
 
 
 def render_lt_udm_deleted(ev: lt_udm_deleted_event):
-    return f"{pretty_date(ev.timestamp)}: struct member deleted: {codname(ev.udm.name)} from {codname(ev.udtname)}"
+    type_desc = f": {codname(ev.udm.type_name)}" if ev.udm.type_name != "(unnamed)" else ""
+    return f"{pretty_date(ev.timestamp)}: struct member deleted: {codname(ev.udm.name)}{type_desc} from {codname(ev.udtname)}"
 
 
 def render_lt_udm_renamed(ev: lt_udm_renamed_event):
@@ -501,11 +502,20 @@ def render_lt_udm_renamed(ev: lt_udm_renamed_event):
 
 
 def render_lt_udm_changed(ev: lt_udm_changed_event):
-    return f"{pretty_date(ev.timestamp)}: struct member changed: {codname(ev.udmnew.name)} in {codname(ev.udtname)}"
+    changes = []
+    if ev.udmold.type_name != ev.udmnew.type_name:
+        changes.append(f"type: {codname(ev.udmold.type_name)} → {codname(ev.udmnew.type_name)}")
+    if ev.udmold.size != ev.udmnew.size:
+        changes.append(f"size: {ev.udmold.size} → {ev.udmnew.size}")
+    if ev.udmold.cmt != ev.udmnew.cmt:
+        changes.append("comment")
+    change_desc = f" ({', '.join(changes)})" if changes else ""
+    return f"{pretty_date(ev.timestamp)}: struct member changed: {codname(ev.udmnew.name)} in {codname(ev.udtname)}{change_desc}"
 
 
 def render_lt_udt_expanded(ev: lt_udt_expanded_event):
-    return f"{pretty_date(ev.timestamp)}: struct expanded: {codname(ev.udtname)} (delta: {ev.delta})"
+    member_desc = f" before {codname(ev.udm_name)}" if ev.udm_name != "(unnamed)" else ""
+    return f"{pretty_date(ev.timestamp)}: struct expanded: {codname(ev.udtname)}{member_desc} (delta: {ev.delta})"
 
 
 def render_lt_edm_created(ev: lt_edm_created_event):
@@ -542,12 +552,10 @@ def render_frame_created(ev: frame_created_event):
 
 
 def render_frame_expanded(ev: frame_expanded_event):
-    # TODO: capture func name into event
     func_name = ida_funcs.get_func_name(ev.func_ea)
-    if func_name:
-        return f"{pretty_date(ev.timestamp)}: frame expanded: {cname(func_name, ev.func_ea)} (delta: {ev.delta})"
-    else:
-        return f"{pretty_date(ev.timestamp)}: frame expanded: {render_address(ev.func_ea)} (delta: {ev.delta})"
+    func_desc = cname(func_name, ev.func_ea) if func_name else render_address(ev.func_ea)
+    member_desc = f" before {cname(ev.udm_name)}" if ev.udm_name != "(unnamed)" else ""
+    return f"{pretty_date(ev.timestamp)}: frame expanded: {func_desc}{member_desc} (delta: {ev.delta})"
 
 
 def render_frame_deleted(ev: frame_deleted_event):
@@ -560,32 +568,31 @@ def render_frame_deleted(ev: frame_deleted_event):
 
 
 def render_frame_udm_created(ev: frame_udm_created_event):
-    # TODO: capture func name into event
     func_name = ida_funcs.get_func_name(ev.func_ea)
-    if func_name:
-        return f"{pretty_date(ev.timestamp)}: local variable created: {cname(ev.udm.name)} in {cname(func_name, ev.func_ea)}"
-    else:
-        return (
-            f"{pretty_date(ev.timestamp)}: local variable created: {cname(ev.udm.name)} in {render_address(ev.func_ea)}"
-        )
+    func_desc = cname(func_name, ev.func_ea) if func_name else render_address(ev.func_ea)
+    type_desc = f": {codname(ev.udm.type_name)}" if ev.udm.type_name != "(unnamed)" else ""
+    return f"{pretty_date(ev.timestamp)}: local variable created: {cname(ev.udm.name)}{type_desc} in {func_desc}"
 
 
 def render_frame_udm_deleted(ev: frame_udm_deleted_event):
-    # TODO: capture func name into event
     func_name = ida_funcs.get_func_name(ev.func_ea)
-    if func_name:
-        return f"{pretty_date(ev.timestamp)}: local variable deleted: {cname(ev.udm.name)} from {cname(func_name, ev.func_ea)}"
-    else:
-        return f"{pretty_date(ev.timestamp)}: local variable deleted: {cname(ev.udm.name)} from {render_address(ev.func_ea)}"
+    func_desc = cname(func_name, ev.func_ea) if func_name else render_address(ev.func_ea)
+    type_desc = f": {codname(ev.udm.type_name)}" if ev.udm.type_name != "(unnamed)" else ""
+    return f"{pretty_date(ev.timestamp)}: local variable deleted: {cname(ev.udm.name)}{type_desc} from {func_desc}"
 
 
 def render_frame_udm_changed(ev: frame_udm_changed_event):
-    # TODO: capture func name into event
     func_name = ida_funcs.get_func_name(ev.func_ea)
-    if func_name:
-        return f"{pretty_date(ev.timestamp)}: local variable changed: {cname(ev.udmnew.name)} in {cname(func_name, ev.func_ea)}"
-    else:
-        return f"{pretty_date(ev.timestamp)}: local variable changed: {cname(ev.udmnew.name)} in {render_address(ev.func_ea)}"
+    func_desc = cname(func_name, ev.func_ea) if func_name else render_address(ev.func_ea)
+    changes = []
+    if ev.udmold.type_name != ev.udmnew.type_name:
+        changes.append(f"type: {codname(ev.udmold.type_name)} → {codname(ev.udmnew.type_name)}")
+    if ev.udmold.size != ev.udmnew.size:
+        changes.append(f"size: {ev.udmold.size} → {ev.udmnew.size}")
+    if ev.udmold.cmt != ev.udmnew.cmt:
+        changes.append("comment")
+    change_desc = f" ({', '.join(changes)})" if changes else ""
+    return f"{pretty_date(ev.timestamp)}: local variable changed: {cname(ev.udmnew.name)} in {func_desc}{change_desc}"
 
 
 def render_determined_main(ev: determined_main_event):
