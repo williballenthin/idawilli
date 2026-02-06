@@ -1,4 +1,5 @@
 import logging
+import struct
 from dataclasses import dataclass
 from typing import Iterator
 
@@ -221,6 +222,15 @@ def format_char_value(value: int) -> str:
     return ""
 
 
+def format_float_value(value: int, size: int) -> str:
+    """Format raw integer bytes as a floating-point value."""
+    if size == 4:
+        return f"{struct.unpack('f', struct.pack('I', value))[0]:g}"
+    elif size == 8:
+        return f"{struct.unpack('d', struct.pack('Q', value))[0]:g}"
+    return format_integer_value(value, size)
+
+
 def format_pointer_value(value: int) -> str:
     """Format a pointer, including target name if known."""
     name = get_name_at(value)
@@ -257,6 +267,10 @@ class GlobalStructDissectorHooks(idaapi.IDP_Hooks):
                 ctx.out_tagon(ida_lines.COLOR_CREF)
                 ctx.out_line(format_pointer_value(value))
                 ctx.out_tagoff(ida_lines.COLOR_CREF)
+            elif field.tinfo.is_floating():
+                ctx.out_tagon(ida_lines.COLOR_NUMBER)
+                ctx.out_line(format_float_value(value, field.size))
+                ctx.out_tagoff(ida_lines.COLOR_NUMBER)
             else:
                 ctx.out_tagon(ida_lines.COLOR_NUMBER)
                 ctx.out_line(format_integer_value(value, field.size))

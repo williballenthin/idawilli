@@ -44,7 +44,7 @@ def test_simple_struct(test_binary: Path, session_idauser: Path, work_dir: Path)
             hooks.hook()
             ida_auto.auto_wait()
 
-            result = ida_lines.generate_disassembly(data_ea, 30, [], [], False)
+            result = ida_lines.generate_disassembly(data_ea, 30, False, False)
             _, tagged_lines = result
             lines = [ida_lines.tag_remove(line) for line in tagged_lines]
 
@@ -56,12 +56,11 @@ def test_simple_struct(test_binary: Path, session_idauser: Path, work_dir: Path)
     )
 
     lines = json.loads(output_path.read_text())
-    joined = "\n".join(lines)
 
-    assert "struct SimpleStruct {" in joined
-    assert "+0x00: field_a = 0x00000000" in joined
-    assert "+0x04: field_b = 0x00000000" in joined
-    assert "}" in joined
+    assert any("struct SimpleStruct {" in l for l in lines)
+    assert ".data:00403000                   +0x00: field_a = 0x00000000" in lines
+    assert ".data:00403000                   +0x04: field_b = 0x00000000" in lines
+    assert ".data:00403000                 }" in lines
 
 
 def test_nested_struct(test_binary: Path, session_idauser: Path, work_dir: Path):
@@ -114,7 +113,7 @@ def test_nested_struct(test_binary: Path, session_idauser: Path, work_dir: Path)
             hooks.hook()
             ida_auto.auto_wait()
 
-            result = ida_lines.generate_disassembly(data_ea, 30, [], [], False)
+            result = ida_lines.generate_disassembly(data_ea, 30, False, False)
             _, tagged_lines = result
             lines = [ida_lines.tag_remove(line) for line in tagged_lines]
 
@@ -126,17 +125,18 @@ def test_nested_struct(test_binary: Path, session_idauser: Path, work_dir: Path)
     )
 
     lines = json.loads(output_path.read_text())
-    joined = "\n".join(lines)
 
-    assert "struct OuterStruct {" in joined
-    assert "+0x00: header = " in joined
-    assert "+0x04: nested =" in joined
-    assert "struct InnerStruct {" in joined
-    assert "+0x00: x = " in joined
-    assert "+0x04: y = " in joined
-    assert "+0x0C: trailer = " in joined
+    assert any("struct OuterStruct {" in l for l in lines)
+    assert ".data:00403010                   +0x00: header = 0x6E72656B" in lines
+    assert ".data:00403010                   +0x04: nested =" in lines
+    assert ".data:00403010                     struct InnerStruct {" in lines
+    assert ".data:00403010                       +0x00: x = 0x32333165" in lines
+    assert ".data:00403010                       +0x04: y = 0x6C6C642E" in lines
+    assert ".data:00403010                     }" in lines
+    assert ".data:00403010                   +0x0C: trailer = 0x00000000" in lines
+    assert ".data:00403010                 }" in lines
 
-    # Verify nesting: InnerStruct should appear after "nested ="
+    # Verify nesting order: InnerStruct should appear after "nested ="
     outer_open_idx = next(i for i, l in enumerate(lines) if "struct OuterStruct {" in l)
     nested_idx = next(i for i, l in enumerate(lines) if "+0x04: nested =" in l)
     inner_open_idx = next(i for i, l in enumerate(lines) if "struct InnerStruct {" in l)
@@ -184,7 +184,7 @@ def test_array_of_structs(test_binary: Path, session_idauser: Path, work_dir: Pa
             hooks.hook()
             ida_auto.auto_wait()
 
-            result = ida_lines.generate_disassembly(data_ea, 30, [], [], False)
+            result = ida_lines.generate_disassembly(data_ea, 30, False, False)
             _, tagged_lines = result
             lines = [ida_lines.tag_remove(line) for line in tagged_lines]
 
@@ -198,9 +198,14 @@ def test_array_of_structs(test_binary: Path, session_idauser: Path, work_dir: Pa
     lines = json.loads(output_path.read_text())
     joined = "\n".join(lines)
 
-    # Array should show [0] and [1] markers
-    assert "/* [0] */" in joined
-    assert "/* [1] */" in joined
+    # Array should show [0] and [1] markers with struct dissection
+    assert any("/* [0] */" in l for l in lines)
+    assert ".data:00403030                 struct ArrayElemStruct {" in lines
+    assert ".data:00403030                   +0x00: field_a = 0x6578652E" in lines
+    assert ".data:00403030                   +0x04: field_b = 0x00000000" in lines
+    assert ".data:00403030                 /* [1] */" in lines
+    assert ".data:00403030                   +0x00: field_a = 0x00002A5C" in lines
+    assert ".data:00403030                   +0x04: field_b = 0x00002E2E" in lines
 
     # Each element should have struct dissection
     struct_count = joined.count("struct ArrayElemStruct {")
@@ -244,7 +249,7 @@ def test_union(test_binary: Path, session_idauser: Path, work_dir: Path):
             hooks.hook()
             ida_auto.auto_wait()
 
-            result = ida_lines.generate_disassembly(data_ea, 30, [], [], False)
+            result = ida_lines.generate_disassembly(data_ea, 30, False, False)
             _, tagged_lines = result
             lines = [ida_lines.tag_remove(line) for line in tagged_lines]
 
@@ -256,13 +261,13 @@ def test_union(test_binary: Path, session_idauser: Path, work_dir: Path):
     )
 
     lines = json.loads(output_path.read_text())
-    joined = "\n".join(lines)
 
-    assert "union TestUnion {" in joined
-    assert "/* union - showing all interpretations */" in joined
+    assert ".data:00403060                 union TestUnion {" in lines
+    assert ".data:00403060                   /* union - showing all interpretations */" in lines
     # Both members should show offset +0x00 since it's a union
-    assert "+0x00: as_int = " in joined
-    assert "+0x00: as_float = " in joined
+    assert ".data:00403060                   +0x00: as_int = 0x6E72656B" in lines
+    assert ".data:00403060                   +0x00: as_float = 1.87545e+28" in lines
+    assert ".data:00403060                 }" in lines
 
 
 def test_struct_with_pointer(test_binary: Path, session_idauser: Path, work_dir: Path):
@@ -305,7 +310,7 @@ def test_struct_with_pointer(test_binary: Path, session_idauser: Path, work_dir:
             hooks.hook()
             ida_auto.auto_wait()
 
-            result = ida_lines.generate_disassembly(data_ea, 30, [], [], False)
+            result = ida_lines.generate_disassembly(data_ea, 30, False, False)
             _, tagged_lines = result
             lines = [ida_lines.tag_remove(line) for line in tagged_lines]
 
@@ -317,12 +322,12 @@ def test_struct_with_pointer(test_binary: Path, session_idauser: Path, work_dir:
     )
 
     lines = json.loads(output_path.read_text())
-    joined = "\n".join(lines)
 
-    assert "struct PtrStruct {" in joined
-    assert "+0x00: value = " in joined
+    assert ".data:00403050                 struct PtrStruct {" in lines
+    assert ".data:00403050                   +0x00: value = 0x6F646E69" in lines
     # Pointer field should show the pointer value (rendered with 0x prefix)
-    assert "+0x04: next = 0x" in joined
+    assert ".data:00403050                   +0x04: next = 0x735C7377" in lines
+    assert ".data:00403050                 }" in lines
 
 
 def test_code_segment_not_dissected(test_binary: Path, session_idauser: Path, work_dir: Path):
@@ -349,7 +354,7 @@ def test_code_segment_not_dissected(test_binary: Path, session_idauser: Path, wo
 
             # 0x401000 is in .text (code) segment
             code_ea = 0x401000
-            result = ida_lines.generate_disassembly(code_ea, 30, [], [], False)
+            result = ida_lines.generate_disassembly(code_ea, 30, False, False)
             _, tagged_lines = result
             lines = [ida_lines.tag_remove(line) for line in tagged_lines]
 
@@ -361,12 +366,11 @@ def test_code_segment_not_dissected(test_binary: Path, session_idauser: Path, wo
     )
 
     lines = json.loads(output_path.read_text())
-    joined = "\n".join(lines)
 
     # Code segment lines should NOT have struct dissection
-    assert "struct" not in joined.lower() or "struct " not in joined
+    assert not any("+0x" in l and ": " in l and " = " in l for l in lines)
     # Should have typical code segment content
-    assert ".text:" in joined
+    assert any(".text:" in l for l in lines)
 
 
 def test_no_type_not_dissected(test_binary: Path, session_idauser: Path, work_dir: Path):
@@ -394,7 +398,7 @@ def test_no_type_not_dissected(test_binary: Path, session_idauser: Path, work_di
 
             # 0x403080 is in .data but has no struct type applied
             data_ea = 0x403080
-            result = ida_lines.generate_disassembly(data_ea, 30, [], [], False)
+            result = ida_lines.generate_disassembly(data_ea, 30, False, False)
             _, tagged_lines = result
             lines = [ida_lines.tag_remove(line) for line in tagged_lines]
 
@@ -412,11 +416,12 @@ def test_no_type_not_dissected(test_binary: Path, session_idauser: Path, work_di
     data = json.loads(output_path.read_text())
     lines = data["lines"]
     has_type = data["has_type"]
-    joined = "\n".join(lines)
 
     assert not has_type
     # Without a struct type, should show raw data (db/dd), not struct dissection
-    assert "+0x00:" not in joined
+    assert not any("+0x00:" in l for l in lines)
+    # Should show raw byte data instead
+    assert any("db " in l or "db," in l for l in lines)
 
 
 def test_struct_with_byte_field(test_binary: Path, session_idauser: Path, work_dir: Path):
@@ -457,7 +462,7 @@ def test_struct_with_byte_field(test_binary: Path, session_idauser: Path, work_d
             hooks.hook()
             ida_auto.auto_wait()
 
-            result = ida_lines.generate_disassembly(data_ea, 30, [], [], False)
+            result = ida_lines.generate_disassembly(data_ea, 30, False, False)
             _, tagged_lines = result
             lines = [ida_lines.tag_remove(line) for line in tagged_lines]
 
@@ -469,11 +474,11 @@ def test_struct_with_byte_field(test_binary: Path, session_idauser: Path, work_d
     )
 
     lines = json.loads(output_path.read_text())
-    joined = "\n".join(lines)
 
-    assert "struct CharStruct {" in joined
-    assert "+0x00: ch = 0x00" in joined
-    assert "+0x04: value = " in joined
+    assert ".rdata:0040206C                 struct CharStruct {" in lines
+    assert ".rdata:0040206C                   +0x00: ch = 0x00" in lines
+    assert ".rdata:0040206C                   +0x04: value = 0xFFFFFFFF" in lines
+    assert ".rdata:0040206C                 }" in lines
 
 
 def test_struct_with_array_of_ints(test_binary: Path, session_idauser: Path, work_dir: Path):
@@ -518,7 +523,7 @@ def test_struct_with_array_of_ints(test_binary: Path, session_idauser: Path, wor
             hooks.hook()
             ida_auto.auto_wait()
 
-            result = ida_lines.generate_disassembly(data_ea, 30, [], [], False)
+            result = ida_lines.generate_disassembly(data_ea, 30, False, False)
             _, tagged_lines = result
             lines = [ida_lines.tag_remove(line) for line in tagged_lines]
 
@@ -530,11 +535,11 @@ def test_struct_with_array_of_ints(test_binary: Path, session_idauser: Path, wor
     )
 
     lines = json.loads(output_path.read_text())
-    joined = "\n".join(lines)
 
-    assert "struct ArrayIntStruct {" in joined
-    assert "+0x00: header = " in joined
-    # Array elements should be shown with indices
-    assert "values[0]" in joined
-    assert "values[1]" in joined
-    assert "values[2]" in joined
+    assert any("struct ArrayIntStruct {" in l for l in lines)
+    assert ".data:00403000                   +0x00: header = 0x00000000" in lines
+    # Array elements should be shown with indices and values
+    assert ".data:00403000                   +0x04: values[0] = 0x00000000" in lines
+    assert ".data:00403000                   +0x08: values[1] = 0x00000000" in lines
+    assert ".data:00403000                   +0x0C: values[2] = 0x00000000" in lines
+    assert ".data:00403000                 }" in lines
