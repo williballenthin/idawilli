@@ -266,7 +266,7 @@ def test_union(test_binary: Path, session_idauser: Path, work_dir: Path):
     assert ".data:00403060                   /* union - showing all interpretations */" in lines
     # Both members should show offset +0x00 since it's a union
     assert ".data:00403060                   +0x00: as_int = 0x6E72656B" in lines
-    assert ".data:00403060                   +0x00: as_float = 0x6E72656B" in lines
+    assert ".data:00403060                   +0x00: as_float = 1.87545e+28" in lines
     assert ".data:00403060                 }" in lines
 
 
