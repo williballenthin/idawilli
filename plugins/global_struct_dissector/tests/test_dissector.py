@@ -20,7 +20,6 @@ def test_simple_struct(test_binary: Path, session_idauser: Path, work_dir: Path)
             import json
             import ida_typeinf
             import ida_lines
-            import ida_nalt
             import ida_auto
 
             sys.path.insert(0, "{PLUGIN_DIR}")
@@ -28,9 +27,10 @@ def test_simple_struct(test_binary: Path, session_idauser: Path, work_dir: Path)
 
             til = ida_typeinf.get_idati()
 
-            udt = ida_typeinf.udt_type_data_t()
-            udt.add_member("field_a", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32))
-            udt.add_member("field_b", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32))
+            udt = build_udt([
+                ("field_a", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32)),
+                ("field_b", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32)),
+            ])
             tif = ida_typeinf.tinfo_t()
             tif.create_udt(udt)
             tif.set_named_type(til, "SimpleStruct", ida_typeinf.NTF_TYPE)
@@ -56,9 +56,6 @@ def test_simple_struct(test_binary: Path, session_idauser: Path, work_dir: Path)
     )
 
     lines = json.loads(output_path.read_text())
-
-    # Find the struct dissection lines (after segment header comments)
-    # The dissector should produce: struct SimpleStruct { ... field_a = ... field_b = ... }
     joined = "\n".join(lines)
 
     assert "struct SimpleStruct {" in joined
@@ -88,20 +85,22 @@ def test_nested_struct(test_binary: Path, session_idauser: Path, work_dir: Path)
             til = ida_typeinf.get_idati()
 
             # Inner struct
-            udt_inner = ida_typeinf.udt_type_data_t()
-            udt_inner.add_member("x", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32))
-            udt_inner.add_member("y", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32))
+            udt_inner = build_udt([
+                ("x", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32)),
+                ("y", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32)),
+            ])
             inner_tif = ida_typeinf.tinfo_t()
             inner_tif.create_udt(udt_inner)
             inner_tif.set_named_type(til, "InnerStruct", ida_typeinf.NTF_TYPE)
 
             # Outer struct with nested inner
-            udt_outer = ida_typeinf.udt_type_data_t()
-            udt_outer.add_member("header", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32))
             inner_ref = ida_typeinf.tinfo_t()
             inner_ref.get_named_type(til, "InnerStruct")
-            udt_outer.add_member("nested", inner_ref)
-            udt_outer.add_member("trailer", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32))
+            udt_outer = build_udt([
+                ("header", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32)),
+                ("nested", inner_ref),
+                ("trailer", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32)),
+            ])
             outer_tif = ida_typeinf.tinfo_t()
             outer_tif.create_udt(udt_outer)
             outer_tif.set_named_type(til, "OuterStruct", ida_typeinf.NTF_TYPE)
@@ -164,9 +163,10 @@ def test_array_of_structs(test_binary: Path, session_idauser: Path, work_dir: Pa
 
             til = ida_typeinf.get_idati()
 
-            udt = ida_typeinf.udt_type_data_t()
-            udt.add_member("field_a", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32))
-            udt.add_member("field_b", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32))
+            udt = build_udt([
+                ("field_a", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32)),
+                ("field_b", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32)),
+            ])
             tif = ida_typeinf.tinfo_t()
             tif.create_udt(udt)
             tif.set_named_type(til, "ArrayElemStruct", ida_typeinf.NTF_TYPE)
@@ -227,10 +227,10 @@ def test_union(test_binary: Path, session_idauser: Path, work_dir: Path):
 
             til = ida_typeinf.get_idati()
 
-            udt = ida_typeinf.udt_type_data_t()
-            udt.is_union = True
-            udt.add_member("as_int", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32))
-            udt.add_member("as_float", ida_typeinf.tinfo_t(ida_typeinf.BTF_FLOAT))
+            udt = build_udt([
+                ("as_int", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32)),
+                ("as_float", ida_typeinf.tinfo_t(ida_typeinf.BTF_FLOAT)),
+            ], is_union=True)
             union_tif = ida_typeinf.tinfo_t()
             union_tif.create_udt(udt, ida_typeinf.BTF_UNION)
             union_tif.set_named_type(til, "TestUnion", ida_typeinf.NTF_TYPE)
@@ -288,9 +288,10 @@ def test_struct_with_pointer(test_binary: Path, session_idauser: Path, work_dir:
             ptr_tif = ida_typeinf.tinfo_t()
             ptr_tif.create_ptr(ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32))
 
-            udt = ida_typeinf.udt_type_data_t()
-            udt.add_member("value", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32))
-            udt.add_member("next", ptr_tif)
+            udt = build_udt([
+                ("value", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32)),
+                ("next", ptr_tif),
+            ])
             struct_tif = ida_typeinf.tinfo_t()
             struct_tif.create_udt(udt)
             struct_tif.set_named_type(til, "PtrStruct", ida_typeinf.NTF_TYPE)
@@ -432,16 +433,16 @@ def test_struct_with_byte_field(test_binary: Path, session_idauser: Path, work_d
             import ida_typeinf
             import ida_lines
             import ida_auto
-            import ida_bytes
 
             sys.path.insert(0, "{PLUGIN_DIR}")
             from global_struct_dissector import GlobalStructDissectorHooks
 
             til = ida_typeinf.get_idati()
 
-            udt = ida_typeinf.udt_type_data_t()
-            udt.add_member("ch", ida_typeinf.tinfo_t(ida_typeinf.BTF_CHAR))
-            udt.add_member("value", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32))
+            udt = build_udt([
+                ("ch", ida_typeinf.tinfo_t(ida_typeinf.BTF_CHAR)),
+                ("value", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32)),
+            ])
             tif = ida_typeinf.tinfo_t()
             tif.create_udt(udt)
             tif.set_named_type(til, "CharStruct", ida_typeinf.NTF_TYPE)
@@ -500,9 +501,10 @@ def test_struct_with_array_of_ints(test_binary: Path, session_idauser: Path, wor
             arr_tif = ida_typeinf.tinfo_t()
             arr_tif.create_array(int_tif, 3)
 
-            udt = ida_typeinf.udt_type_data_t()
-            udt.add_member("header", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32))
-            udt.add_member("values", arr_tif)
+            udt = build_udt([
+                ("header", ida_typeinf.tinfo_t(ida_typeinf.BTF_INT32)),
+                ("values", arr_tif),
+            ])
             tif = ida_typeinf.tinfo_t()
             tif.create_udt(udt)
             tif.set_named_type(til, "ArrayIntStruct", ida_typeinf.NTF_TYPE)

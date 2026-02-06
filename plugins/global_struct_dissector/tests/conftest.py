@@ -104,6 +104,22 @@ try:
     idapro.enable_console_messages(True)
     idapro.open_database("{local_binary}", run_auto_analysis=True)
 
+    # helper: IDA 9.0-compatible struct builder using push_back
+    import ida_typeinf
+
+    def make_udt_member(name, type_tif):
+        udm = ida_typeinf.udm_t()
+        udm.name = name
+        udm.type = type_tif
+        return udm
+
+    def build_udt(fields, is_union=False):
+        udt = ida_typeinf.udt_type_data_t()
+        udt.is_union = is_union
+        for name, type_tif in fields:
+            udt.push_back(make_udt_member(name, type_tif))
+        return udt
+
 {indented_script}
 
     idapro.close_database()
