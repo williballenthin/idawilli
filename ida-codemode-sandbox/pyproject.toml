@@ -1,5 +1,5 @@
 [project]
-name = "ida-monty-sandbox"
+name = "ida-codemode-sandbox"
 authors = [
   {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
 ]
@@ -20,7 +20,7 @@ test = [
 ]
 
 [project.urls]
-source = "https://github.com/williballenthin/idawilli/tree/master/ida-sandbox"
+source = "https://github.com/williballenthin/idawilli/tree/master/ida-codemode-sandbox"
 repository = "https://github.com/williballenthin/idawilli"
 
 [build-system]
@@ -28,7 +28,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["ida_sandbox*"]
+include = ["ida_codemode_sandbox*"]
 
 [tool.setuptools.package-data]
-ida_sandbox = ["prompts/*.md"]
+ida_codemode_sandbox = ["prompts/*.md"]

@@ -16,7 +16,7 @@ import sys
 from ida_domain import Database
 from ida_domain.database import IdaCommandOptions
 
-from ida_sandbox import IdaSandbox
+from ida_codemode_sandbox import IdaSandbox
 
 logger = logging.getLogger(__name__)
 

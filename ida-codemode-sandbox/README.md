@@ -1,4 +1,4 @@
-# ida-sandbox
+# ida-codemode-sandbox
 
 A secure Python sandbox for IDA Pro binary analysis, built on
 [pydantic-monty](https://github.com/pydantic/monty).
@@ -13,7 +13,7 @@ AI-generated or untrusted analysis code against a real IDA database.
 ```python
 from ida_domain import Database
 from ida_domain.database import IdaCommandOptions
-from ida_sandbox import IdaSandbox
+from ida_codemode_sandbox import IdaSandbox
 
 ida_opts = IdaCommandOptions(auto_analysis=True, new_database=False)
 with Database.open("sample.exe", ida_opts, save_on_close=False) as db:
@@ -353,7 +353,7 @@ result.error.inner_type # e.g. "ZeroDivisionError"
 ## Running tests
 
 ```bash
-python -m pytest ida-sandbox/tests/ -v
+python -m pytest ida-codemode-sandbox/tests/ -v
 ```
 
 Tests run against real IDA Pro analysis of the shared test binary

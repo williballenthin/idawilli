@@ -138,7 +138,7 @@ class IdaSandbox:
     Usage::
 
         from ida_domain import Database
-        from ida_sandbox import IdaSandbox
+        from ida_codemode_sandbox import IdaSandbox
 
         with Database.open(path, options) as db:
             sandbox = IdaSandbox(db)

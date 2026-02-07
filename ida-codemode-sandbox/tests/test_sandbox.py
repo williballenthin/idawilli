@@ -23,7 +23,7 @@ from ida_codemode_api import (
     FUNCTION_NAMES,
     TYPE_STUBS,
 )
-from ida_sandbox.sandbox import (
+from ida_codemode_sandbox.sandbox import (
     IdaSandbox,
     SandboxError,
     SandboxResult,

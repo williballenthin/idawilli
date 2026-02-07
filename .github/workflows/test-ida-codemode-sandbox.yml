@@ -1,4 +1,4 @@
-name: ida-sandbox tests
+name: ida-codemode-sandbox tests
 
 on:
   push:
@@ -9,8 +9,8 @@ on:
 permissions: read-all
 
 jobs:
-  ida-sandbox-tests:
-    name: ida-sandbox tests on IDA ${{ matrix.ida.version }} / Python ${{ matrix.python-version }}
+  ida-codemode-sandbox-tests:
+    name: ida-codemode-sandbox tests on IDA ${{ matrix.ida.version }} / Python ${{ matrix.python-version }}
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -38,16 +38,16 @@ jobs:
       run: |
         pip install idapro pydantic-monty pytest
         pip install --editable ida-codemode-api
-        pip install --editable ida-sandbox
+        pip install --editable ida-codemode-sandbox
     - name: Install IDA ${{ matrix.ida.version }}
       run: |
         uv run --with ida-hcli hcli --disable-updates ida install --download-id ${{ matrix.ida.tag }} --license-id ${{ secrets.IDA_LICENSE_ID }} --set-default --yes
       env:
         HCLI_API_KEY: ${{ secrets.HCLI_API_KEY }}
         IDA_LICENSE_ID: ${{ secrets.IDA_LICENSE_ID }}
-    - name: Run ida-sandbox tests
+    - name: Run ida-codemode-sandbox tests
       if: ${{ env.IDA_LICENSE_ID != 0 }}
       run: |
-        python -m pytest ida-sandbox/tests/ -v
+        python -m pytest ida-codemode-sandbox/tests/ -v
       env:
         IDA_LICENSE_ID: ${{ secrets.IDA_LICENSE_ID }}

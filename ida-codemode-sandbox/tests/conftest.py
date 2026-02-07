@@ -1,4 +1,4 @@
-"""Shared fixtures for ida-sandbox tests.
+"""Shared fixtures for ida-codemode-sandbox tests.
 
 Opens the shared test binary with real IDA Pro analysis.
 No mocks — every test exercises real IDA.
@@ -23,7 +23,7 @@ TEST_BINARY = TESTS_DIR / "data" / "Practical Malware Analysis Lab 01-01.exe_"
 @pytest.fixture(scope="session")
 def test_binary(tmp_path_factory) -> Path:
     """Copy the shared test binary to a temp dir to avoid IDB conflicts."""
-    work = tmp_path_factory.mktemp("ida_sandbox")
+    work = tmp_path_factory.mktemp("ida_codemode_sandbox")
     dest = work / TEST_BINARY.name
     shutil.copy(TEST_BINARY, dest)
     return dest
