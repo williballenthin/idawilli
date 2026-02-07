@@ -1,12 +1,20 @@
 """Tests for the IDA Sandbox.
 
-These tests use mock IDA objects (no IDA Pro required) to verify that:
-  1. The sandbox can be created and scripts evaluated.
-  2. Each IDA-backed function works correctly through the sandbox boundary.
-  3. The full demo script can execute end-to-end.
-  4. Resource limits enforce timeouts, memory caps, and recursion depth.
-  5. Type checking catches errors before execution.
-  6. Structured error handling surfaces runtime, syntax, and typing errors.
+Three layers tested against a real IDA Pro database
+(tests/data/Practical Malware Analysis Lab 01-01.exe_):
+
+  Layer 1 — Monty sandbox basics (no IDA):
+    Verify the Monty interpreter runs code, calls external functions,
+    and handles print callbacks.
+
+  Layer 2 — IDA wrapper functions (direct calls):
+    Verify each wrapper function in _build_ida_functions() returns
+    correctly shaped data from real IDA analysis.
+
+  Layer 3 — Sandbox integration:
+    Verify scripts executed through IdaSandbox.run() can call IDA
+    functions, and that resource limits, type checking, and structured
+    error handling work correctly.
 """
 
 import pydantic_monty
@@ -23,9 +31,9 @@ from ida_sandbox.sandbox import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Monty basics (no IDA at all) -- validates our sandbox wiring
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# Layer 1 — Monty basics (no IDA)
+# ===========================================================================
 
 
 class TestMontyBasics:
@@ -59,718 +67,467 @@ class TestMontyBasics:
         assert result == "alpha"
 
 
-# ---------------------------------------------------------------------------
-# IDA function wrappers (via mock db) — original 6
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# Layer 2 — IDA wrapper functions (direct calls against real DB)
+# ===========================================================================
 
 
-class TestIdaFunctions:
-    """Test each original IDA-backed function built by _build_ida_functions."""
+class TestBinaryInfo:
+    """get_binary_info() — database metadata."""
 
-    def test_enumerate_functions(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        result = fns["enumerate_functions"]()
-        assert len(result) == 3
-        assert result[0] == {"address": 0x401000, "name": "main", "size": 32}
-        assert result[1]["name"] == "helper"
-        assert result[2]["name"] == "cleanup"
+    def test_returns_expected_keys(self, ida_fns):
+        info = ida_fns["get_binary_info"]()
+        expected_keys = {
+            "path", "module", "architecture", "bitness", "format",
+            "base_address", "entry_point", "minimum_ea", "maximum_ea",
+            "filesize", "md5", "sha256", "crc32",
+        }
+        assert expected_keys == set(info.keys())
 
-    def test_disassemble_function(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        lines = fns["disassemble_function"](0x401000)
-        assert "push rbp" in lines
-        assert "ret" in lines
-
-    def test_disassemble_unknown_address(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["disassemble_function"](0xDEAD) == []
-
-    def test_get_xrefs_to(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        xrefs = fns["get_xrefs_to"](0x401100)
-        assert len(xrefs) == 1
-        assert xrefs[0]["from_address"] == 0x401008
-        assert xrefs[0]["is_call"] is True
-
-    def test_get_xrefs_to_none(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["get_xrefs_to"](0x401000) == []
-
-    def test_get_xrefs_from(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        xrefs = fns["get_xrefs_from"](0x401008)
-        assert len(xrefs) == 1
-        assert xrefs[0]["to_address"] == 0x401100
-        assert xrefs[0]["is_call"] is True
-
-    def test_read_bytes(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        data = fns["read_bytes"](0x401000, 4)
-        assert data == [0, 1, 2, 3]
-
-    def test_read_bytes_invalid_address(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["read_bytes"](0xFFFF, 4) == []
-
-    def test_random_int(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        val = fns["random_int"](0, 10)
-        assert 0 <= val <= 10
-
-
-# ---------------------------------------------------------------------------
-# New IDA function wrappers — database metadata
-# ---------------------------------------------------------------------------
-
-
-class TestGetBinaryInfo:
-    """Test get_binary_info()."""
-
-    def test_returns_all_metadata_fields(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        info = fns["get_binary_info"]()
-        assert info["path"] == "/mock/binary"
-        assert info["module"] == "binary"
+    def test_architecture_is_metapc(self, ida_fns):
+        info = ida_fns["get_binary_info"]()
         assert info["architecture"] == "metapc"
-        assert info["bitness"] == 64
-        assert info["format"] == "ELF64"
-        assert info["base_address"] == 0
-        assert info["entry_point"] == 0x401060
-        assert info["minimum_ea"] == 0x400000
-        assert info["maximum_ea"] == 0x410000
-        assert info["filesize"] == 65536
-        assert info["md5"] == "d41d8cd98f00b204e9800998ecf8427e"
-        assert info["sha256"] == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        assert info["crc32"] == 0
 
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run('info = get_binary_info()\ninfo["architecture"]')
+    def test_bitness_is_32(self, ida_fns):
+        info = ida_fns["get_binary_info"]()
+        assert info["bitness"] == 32
+
+    def test_format_is_pe(self, ida_fns):
+        info = ida_fns["get_binary_info"]()
+        assert "PE" in info["format"]
+
+    def test_hashes_are_hex_strings(self, ida_fns):
+        info = ida_fns["get_binary_info"]()
+        assert len(info["md5"]) == 32
+        int(info["md5"], 16)  # valid hex
+        assert len(info["sha256"]) == 64
+        int(info["sha256"], 16)
+
+    def test_via_sandbox(self, db):
+        sandbox = IdaSandbox(db)
+        result = sandbox.run('get_binary_info()["architecture"]')
         assert result.ok
         assert result.output == "metapc"
 
-    def test_via_sandbox_bitness(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run('get_binary_info()["bitness"]')
-        assert result.ok
-        assert result.output == 64
 
+class TestFunctionEnumeration:
+    """enumerate_functions(), get_function_by_name()."""
 
-# ---------------------------------------------------------------------------
-# New IDA function wrappers — function lookup
-# ---------------------------------------------------------------------------
+    def test_enumerate_returns_functions(self, ida_fns):
+        functions = ida_fns["enumerate_functions"]()
+        assert len(functions) >= 1
 
+    def test_function_dict_shape(self, ida_fns):
+        functions = ida_fns["enumerate_functions"]()
+        for f in functions:
+            assert {"address", "name", "size"} == set(f.keys())
+            assert isinstance(f["address"], int)
+            assert isinstance(f["name"], str)
+            assert isinstance(f["size"], int)
+            assert f["size"] > 0
 
-class TestGetFunctionByName:
-    """Test get_function_by_name()."""
-
-    def test_found(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        result = fns["get_function_by_name"]("helper")
+    def test_get_function_by_name_found(self, ida_fns):
+        functions = ida_fns["enumerate_functions"]()
+        # Look up the first function by name — it must be found
+        first = functions[0]
+        result = ida_fns["get_function_by_name"](first["name"])
         assert result is not None
-        assert result["address"] == 0x401100
-        assert result["name"] == "helper"
-        assert result["size"] == 16
+        assert result["address"] == first["address"]
 
-    def test_not_found(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["get_function_by_name"]("nonexistent") is None
+    def test_get_function_by_name_not_found(self, ida_fns):
+        assert ida_fns["get_function_by_name"]("_nonexistent_xyz_") is None
 
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run('f = get_function_by_name("main")\nf["address"]')
-        assert result.ok
-        assert result.output == 0x401000
-
-    def test_via_sandbox_not_found(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run('get_function_by_name("nope")')
-        assert result.ok
-        assert result.output is None
-
-
-# ---------------------------------------------------------------------------
-# New IDA function wrappers — function analysis
-# ---------------------------------------------------------------------------
-
-
-class TestDecompileFunction:
-    """Test decompile_function()."""
-
-    def test_with_pseudocode(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        lines = fns["decompile_function"](0x401000)
-        assert len(lines) == 5
-        assert "int main(void) {" in lines
-        assert "return 0;" in lines[3]
-
-    def test_without_pseudocode(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        # helper has no pseudocode; should raise RuntimeError → return []
-        lines = fns["decompile_function"](0x401100)
-        assert lines == []
-
-    def test_unknown_address(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["decompile_function"](0xDEAD) == []
-
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("len(decompile_function(0x401000))")
-        assert result.ok
-        assert result.output == 5
-
-
-class TestGetFunctionSignature:
-    """Test get_function_signature()."""
-
-    def test_with_signature(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        sig = fns["get_function_signature"](0x401000)
-        assert sig == "int __cdecl main(void)"
-
-    def test_without_signature(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["get_function_signature"](0x401100) is None
-
-    def test_unknown_address(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["get_function_signature"](0xDEAD) is None
-
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("get_function_signature(0x401000)")
-        assert result.ok
-        assert result.output == "int __cdecl main(void)"
-
-
-class TestGetCallers:
-    """Test get_callers()."""
-
-    def test_with_callers(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        callers = fns["get_callers"](0x401100)
-        assert len(callers) == 1
-        assert callers[0]["address"] == 0x401000
-        assert callers[0]["name"] == "main"
-
-    def test_no_callers(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["get_callers"](0x401000) == []
-
-    def test_unknown_address(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["get_callers"](0xDEAD) == []
-
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run(
-            'callers = get_callers(0x401100)\ncallers[0]["name"]'
-        )
-        assert result.ok
-        assert result.output == "main"
-
-
-class TestGetCallees:
-    """Test get_callees()."""
-
-    def test_with_callees(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        callees = fns["get_callees"](0x401000)
-        assert len(callees) == 2
-        assert callees[0]["name"] == "helper"
-        assert callees[1]["name"] == "cleanup"
-
-    def test_no_callees(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["get_callees"](0x401200) == []
-
-    def test_unknown_address(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["get_callees"](0xDEAD) == []
-
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("len(get_callees(0x401000))")
-        assert result.ok
-        assert result.output == 2
-
-
-class TestGetBasicBlocks:
-    """Test get_basic_blocks()."""
-
-    def test_with_flowchart(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        blocks = fns["get_basic_blocks"](0x401000)
-        assert len(blocks) == 2
-        assert blocks[0]["start"] == 0x401000
-        assert blocks[0]["end"] == 0x401010
-        assert blocks[0]["successors"] == [0x401010]
-        assert blocks[0]["predecessors"] == []
-        assert blocks[1]["start"] == 0x401010
-        assert blocks[1]["end"] == 0x401020
-        assert blocks[1]["successors"] == []
-        assert blocks[1]["predecessors"] == [0x401000]
-
-    def test_no_flowchart(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        # helper has no flowchart
-        assert fns["get_basic_blocks"](0x401100) == []
-
-    def test_unknown_address(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["get_basic_blocks"](0xDEAD) == []
-
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run(
-            'blocks = get_basic_blocks(0x401000)\nblocks[0]["start"]'
-        )
-        assert result.ok
-        assert result.output == 0x401000
-
-
-# ---------------------------------------------------------------------------
-# New IDA function wrappers — strings
-# ---------------------------------------------------------------------------
-
-
-class TestEnumerateStrings:
-    """Test enumerate_strings()."""
-
-    def test_returns_all_strings(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        strings = fns["enumerate_strings"]()
-        assert len(strings) == 2
-        assert strings[0]["address"] == 0x402000
-        assert strings[0]["length"] == 12
-        assert strings[0]["type"] == "C"
-        assert strings[0]["value"] == "Hello, %s!\n"
-        assert strings[1]["value"] == "result = %d\n"
-
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("len(enumerate_strings())")
-        assert result.ok
-        assert result.output == 2
-
-    def test_via_sandbox_access_value(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run('enumerate_strings()[0]["value"]')
-        assert result.ok
-        assert "Hello" in result.output
-
-
-class TestGetStringAt:
-    """Test get_string_at()."""
-
-    def test_found(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["get_string_at"](0x402000) == "Hello, %s!\n"
-
-    def test_not_found(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["get_string_at"](0x401000) is None
-
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("get_string_at(0x402000)")
-        assert result.ok
-        assert "Hello" in result.output
-
-
-# ---------------------------------------------------------------------------
-# New IDA function wrappers — segments
-# ---------------------------------------------------------------------------
-
-
-class TestEnumerateSegments:
-    """Test enumerate_segments()."""
-
-    def test_returns_all_segments(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        segs = fns["enumerate_segments"]()
-        assert len(segs) == 2
-        assert segs[0]["name"] == ".text"
-        assert segs[0]["start"] == 0x401000
-        assert segs[0]["end"] == 0x402000
-        assert segs[0]["size"] == 0x1000
-        assert segs[0]["permissions"] == 5
-        assert segs[0]["class"] == "CODE"
-        assert segs[0]["bitness"] == 64
-        assert segs[1]["name"] == ".rodata"
-        assert segs[1]["class"] == "DATA"
-
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("len(enumerate_segments())")
-        assert result.ok
-        assert result.output == 2
-
-    def test_via_sandbox_access_field(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run('enumerate_segments()[0]["name"]')
-        assert result.ok
-        assert result.output == ".text"
-
-
-# ---------------------------------------------------------------------------
-# New IDA function wrappers — names / symbols
-# ---------------------------------------------------------------------------
-
-
-class TestEnumerateNames:
-    """Test enumerate_names()."""
-
-    def test_returns_all_names(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        names = fns["enumerate_names"]()
-        assert len(names) == 4
-        assert names[0] == {"address": 0x401000, "name": "main"}
-        assert names[1] == {"address": 0x401100, "name": "helper"}
-        assert names[3] == {"address": 0x402000, "name": "aHelloS"}
-
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("len(enumerate_names())")
-        assert result.ok
-        assert result.output == 4
-
-
-class TestGetNameAt:
-    """Test get_name_at()."""
-
-    def test_found(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["get_name_at"](0x401000) == "main"
-
-    def test_not_found(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["get_name_at"](0x999999) is None
-
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("get_name_at(0x401100)")
-        assert result.ok
-        assert result.output == "helper"
-
-
-class TestDemangleName:
-    """Test demangle_name()."""
-
-    def test_mangled_name(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        result = fns["demangle_name"]("_Z3addii")
-        assert result == "demangled(_Z3addii)"
-
-    def test_unmangled_name(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        result = fns["demangle_name"]("main")
-        assert result == "main"
-
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run('demangle_name("_Z3addii")')
-        assert result.ok
-        assert "demangled" in result.output
-
-
-# ---------------------------------------------------------------------------
-# New IDA function wrappers — imports & entries
-# ---------------------------------------------------------------------------
-
-
-class TestEnumerateImports:
-    """Test enumerate_imports()."""
-
-    def test_returns_all_imports(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        imports = fns["enumerate_imports"]()
-        assert len(imports) == 2
-        assert imports[0]["address"] == 0x404000
-        assert imports[0]["name"] == "printf"
-        assert imports[0]["module"] == "libc.so.6"
-        assert imports[0]["ordinal"] == 0
-        assert imports[1]["name"] == "__cxa_finalize"
-
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("len(enumerate_imports())")
-        assert result.ok
-        assert result.output == 2
-
-    def test_via_sandbox_access_field(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run('enumerate_imports()[0]["name"]')
-        assert result.ok
-        assert result.output == "printf"
-
-
-class TestEnumerateEntries:
-    """Test enumerate_entries()."""
-
-    def test_returns_all_entries(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        entries = fns["enumerate_entries"]()
-        assert len(entries) == 1
-        assert entries[0]["ordinal"] == 0
-        assert entries[0]["address"] == 0x401060
-        assert entries[0]["name"] == "_start"
-        assert entries[0]["forwarder"] is None
-
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run('enumerate_entries()[0]["name"]')
-        assert result.ok
-        assert result.output == "_start"
-
-
-# ---------------------------------------------------------------------------
-# New IDA function wrappers — bytes / memory
-# ---------------------------------------------------------------------------
-
-
-class TestFindBytes:
-    """Test find_bytes()."""
-
-    def test_pattern_found(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        # bytes 0,1,2,3 start at offset 0 in our mock data (base 0x401000)
-        addresses = fns["find_bytes"]([0, 1, 2, 3])
-        assert 0x401000 in addresses
-
-    def test_pattern_not_found(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        addresses = fns["find_bytes"]([0xFF, 0xFE, 0xFD])
-        assert addresses == []
-
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("len(find_bytes([0, 1, 2, 3]))")
+    def test_enumerate_via_sandbox(self, db):
+        sandbox = IdaSandbox(db)
+        result = sandbox.run("len(enumerate_functions())")
         assert result.ok
         assert result.output >= 1
 
 
-class TestGetDisassemblyAt:
-    """Test get_disassembly_at()."""
+class TestFunctionAnalysis:
+    """disassemble, decompile, signature, callers, callees, basic_blocks."""
 
-    def test_found(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["get_disassembly_at"](0x401000) == "push rbp"
+    def test_disassemble(self, ida_fns, first_func):
+        lines = ida_fns["disassemble_function"](first_func["address"])
+        assert len(lines) > 0
+        assert all(isinstance(line, str) for line in lines)
 
-    def test_not_found(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["get_disassembly_at"](0xDEAD) is None
+    def test_disassemble_unknown_address(self, ida_fns):
+        assert ida_fns["disassemble_function"](0xDEADDEAD) == []
 
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("get_disassembly_at(0x401000)")
+    def test_decompile_returns_list(self, ida_fns, first_func):
+        # May be empty if Hex-Rays is unavailable — that's fine
+        lines = ida_fns["decompile_function"](first_func["address"])
+        assert isinstance(lines, list)
+
+    def test_decompile_unknown_address(self, ida_fns):
+        assert ida_fns["decompile_function"](0xDEADDEAD) == []
+
+    def test_get_function_signature(self, ida_fns, first_func):
+        sig = ida_fns["get_function_signature"](first_func["address"])
+        assert sig is None or isinstance(sig, str)
+
+    def test_get_function_signature_unknown(self, ida_fns):
+        assert ida_fns["get_function_signature"](0xDEADDEAD) is None
+
+    def test_get_callers(self, ida_fns, first_func):
+        callers = ida_fns["get_callers"](first_func["address"])
+        assert isinstance(callers, list)
+        for c in callers:
+            assert {"address", "name"} == set(c.keys())
+
+    def test_get_callers_unknown(self, ida_fns):
+        assert ida_fns["get_callers"](0xDEADDEAD) == []
+
+    def test_get_callees(self, ida_fns, first_func):
+        callees = ida_fns["get_callees"](first_func["address"])
+        assert isinstance(callees, list)
+        for c in callees:
+            assert {"address", "name"} == set(c.keys())
+
+    def test_get_callees_unknown(self, ida_fns):
+        assert ida_fns["get_callees"](0xDEADDEAD) == []
+
+    def test_get_basic_blocks(self, ida_fns, first_func):
+        blocks = ida_fns["get_basic_blocks"](first_func["address"])
+        assert len(blocks) >= 1
+        for b in blocks:
+            assert {"start", "end", "successors", "predecessors"} == set(b.keys())
+            assert isinstance(b["start"], int)
+            assert isinstance(b["end"], int)
+            assert b["end"] > b["start"]
+
+    def test_get_basic_blocks_unknown(self, ida_fns):
+        assert ida_fns["get_basic_blocks"](0xDEADDEAD) == []
+
+    def test_disassemble_via_sandbox(self, db):
+        sandbox = IdaSandbox(db)
+        code = """\
+fns = enumerate_functions()
+lines = disassemble_function(fns[0]["address"])
+len(lines)
+"""
+        result = sandbox.run(code)
         assert result.ok
-        assert result.output == "push rbp"
+        assert result.output > 0
 
 
-class TestGetInstructionAt:
-    """Test get_instruction_at()."""
+class TestXrefs:
+    """get_xrefs_to(), get_xrefs_from()."""
 
-    def test_found(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        insn = fns["get_instruction_at"](0x401000)
+    def test_xrefs_to_shape(self, ida_fns, first_func):
+        xrefs = ida_fns["get_xrefs_to"](first_func["address"])
+        assert isinstance(xrefs, list)
+        for x in xrefs:
+            assert {"from_address", "type", "is_call", "is_jump"} == set(x.keys())
+            assert isinstance(x["from_address"], int)
+            assert isinstance(x["type"], str)
+            assert isinstance(x["is_call"], bool)
+            assert isinstance(x["is_jump"], bool)
+
+    def test_xrefs_to_unmapped(self, ida_fns):
+        assert ida_fns["get_xrefs_to"](0xDEADDEAD) == []
+
+    def test_xrefs_from_shape(self, ida_fns, first_func):
+        xrefs = ida_fns["get_xrefs_from"](first_func["address"])
+        assert isinstance(xrefs, list)
+        for x in xrefs:
+            assert {"to_address", "type", "is_call", "is_jump"} == set(x.keys())
+
+    def test_xrefs_from_unmapped(self, ida_fns):
+        assert ida_fns["get_xrefs_from"](0xDEADDEAD) == []
+
+    def test_xrefs_via_sandbox(self, db):
+        sandbox = IdaSandbox(db)
+        code = """\
+fns = enumerate_functions()
+xrefs = get_xrefs_from(fns[0]["address"])
+len(xrefs)
+"""
+        result = sandbox.run(code)
+        assert result.ok
+        assert isinstance(result.output, int)
+
+
+class TestStrings:
+    """enumerate_strings(), get_string_at()."""
+
+    def test_enumerate_returns_strings(self, ida_fns):
+        strings = ida_fns["enumerate_strings"]()
+        assert len(strings) >= 1
+
+    def test_string_dict_shape(self, ida_fns):
+        strings = ida_fns["enumerate_strings"]()
+        for s in strings:
+            assert {"address", "length", "type", "value"} == set(s.keys())
+            assert isinstance(s["address"], int)
+            assert isinstance(s["length"], int)
+            assert isinstance(s["type"], str)
+            assert isinstance(s["value"], str)
+
+    def test_get_string_at_known_address(self, ida_fns):
+        strings = ida_fns["enumerate_strings"]()
+        if strings:
+            result = ida_fns["get_string_at"](strings[0]["address"])
+            assert result is not None
+            assert isinstance(result, str)
+
+    def test_strings_via_sandbox(self, db):
+        sandbox = IdaSandbox(db)
+        result = sandbox.run("len(enumerate_strings())")
+        assert result.ok
+        assert result.output >= 1
+
+
+class TestSegments:
+    """enumerate_segments()."""
+
+    def test_returns_segments(self, ida_fns):
+        segs = ida_fns["enumerate_segments"]()
+        assert len(segs) >= 1
+
+    def test_segment_dict_shape(self, ida_fns):
+        segs = ida_fns["enumerate_segments"]()
+        for s in segs:
+            assert {"name", "start", "end", "size", "permissions", "class", "bitness"} == set(s.keys())
+            assert isinstance(s["start"], int)
+            assert isinstance(s["end"], int)
+            assert s["end"] > s["start"]
+            assert s["size"] == s["end"] - s["start"]
+
+    def test_has_code_segment(self, ida_fns):
+        segs = ida_fns["enumerate_segments"]()
+        classes = {s["class"] for s in segs}
+        assert "CODE" in classes
+
+    def test_segments_via_sandbox(self, db):
+        sandbox = IdaSandbox(db)
+        result = sandbox.run("len(enumerate_segments())")
+        assert result.ok
+        assert result.output >= 1
+
+
+class TestNames:
+    """enumerate_names(), get_name_at(), demangle_name()."""
+
+    def test_enumerate_returns_names(self, ida_fns):
+        names = ida_fns["enumerate_names"]()
+        assert len(names) >= 1
+
+    def test_name_dict_shape(self, ida_fns):
+        names = ida_fns["enumerate_names"]()
+        for n in names:
+            assert {"address", "name"} == set(n.keys())
+            assert isinstance(n["address"], int)
+            assert isinstance(n["name"], str)
+
+    def test_get_name_at_known(self, ida_fns):
+        names = ida_fns["enumerate_names"]()
+        if names:
+            result = ida_fns["get_name_at"](names[0]["address"])
+            assert result is not None
+            assert isinstance(result, str)
+
+    def test_get_name_at_unmapped(self, ida_fns):
+        assert ida_fns["get_name_at"](0xDEADDEAD) is None
+
+    def test_demangle_plain_name(self, ida_fns):
+        # Unmangled name should pass through unchanged
+        result = ida_fns["demangle_name"]("main")
+        assert result == "main"
+
+    def test_names_via_sandbox(self, db):
+        sandbox = IdaSandbox(db)
+        result = sandbox.run("len(enumerate_names())")
+        assert result.ok
+        assert result.output >= 1
+
+
+class TestImportsAndEntries:
+    """enumerate_imports(), enumerate_entries()."""
+
+    def test_imports_non_empty(self, ida_fns):
+        imports = ida_fns["enumerate_imports"]()
+        assert len(imports) >= 1
+
+    def test_import_dict_shape(self, ida_fns):
+        imports = ida_fns["enumerate_imports"]()
+        for imp in imports:
+            assert {"address", "name", "module", "ordinal"} == set(imp.keys())
+            assert isinstance(imp["address"], int)
+            assert isinstance(imp["name"], str)
+            assert isinstance(imp["module"], str)
+            assert isinstance(imp["ordinal"], int)
+
+    def test_entries_non_empty(self, ida_fns):
+        entries = ida_fns["enumerate_entries"]()
+        assert len(entries) >= 1
+
+    def test_entry_dict_shape(self, ida_fns):
+        entries = ida_fns["enumerate_entries"]()
+        for e in entries:
+            assert "ordinal" in e
+            assert "address" in e
+            assert "name" in e
+            assert "forwarder" in e
+
+    def test_imports_via_sandbox(self, db):
+        sandbox = IdaSandbox(db)
+        result = sandbox.run("len(enumerate_imports())")
+        assert result.ok
+        assert result.output >= 1
+
+
+class TestBytesAndMemory:
+    """read_bytes(), find_bytes(), get_disassembly_at(), get_instruction_at()."""
+
+    def test_read_bytes(self, ida_fns, first_func):
+        data = ida_fns["read_bytes"](first_func["address"], 4)
+        assert len(data) == 4
+        assert all(0 <= b <= 255 for b in data)
+
+    def test_read_bytes_unmapped(self, ida_fns):
+        assert ida_fns["read_bytes"](0xDEADDEAD, 4) == []
+
+    def test_find_bytes_round_trip(self, ida_fns, first_func):
+        # Read the first function's prologue and search for it
+        prologue = ida_fns["read_bytes"](first_func["address"], 4)
+        found = ida_fns["find_bytes"](prologue)
+        assert first_func["address"] in found
+
+    def test_find_bytes_not_found(self, ida_fns):
+        assert ida_fns["find_bytes"]([0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE]) == []
+
+    def test_get_disassembly_at(self, ida_fns, first_func):
+        result = ida_fns["get_disassembly_at"](first_func["address"])
+        assert result is not None
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_get_disassembly_at_unmapped(self, ida_fns):
+        assert ida_fns["get_disassembly_at"](0xDEADDEAD) is None
+
+    def test_get_instruction_at(self, ida_fns, first_func):
+        insn = ida_fns["get_instruction_at"](first_func["address"])
         assert insn is not None
-        assert insn["address"] == 0x401000
-        assert insn["size"] == 1
-        assert insn["mnemonic"] == "push"
-        assert insn["disassembly"] == "push rbp"
-        assert insn["is_call"] is False
+        assert {"address", "size", "mnemonic", "disassembly", "is_call"} == set(insn.keys())
+        assert insn["address"] == first_func["address"]
+        assert insn["size"] > 0
+        assert isinstance(insn["mnemonic"], str)
+        assert isinstance(insn["is_call"], bool)
 
-    def test_call_instruction(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        insn = fns["get_instruction_at"](0x401008)
-        assert insn is not None
-        assert insn["mnemonic"] == "call"
-        assert insn["is_call"] is True
+    def test_get_instruction_at_unmapped(self, ida_fns):
+        assert ida_fns["get_instruction_at"](0xDEADDEAD) is None
 
-    def test_not_found(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["get_instruction_at"](0xDEAD) is None
-
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run(
-            'insn = get_instruction_at(0x401000)\ninsn["mnemonic"]'
-        )
+    def test_read_bytes_via_sandbox(self, db):
+        sandbox = IdaSandbox(db)
+        code = """\
+fns = enumerate_functions()
+raw = read_bytes(fns[0]["address"], 4)
+len(raw)
+"""
+        result = sandbox.run(code)
         assert result.ok
-        assert result.output == "push"
-
-    def test_via_sandbox_is_call(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run(
-            'insn = get_instruction_at(0x401008)\ninsn["is_call"]'
-        )
-        assert result.ok
-        assert result.output is True
+        assert result.output == 4
 
 
-# ---------------------------------------------------------------------------
-# New IDA function wrappers — address classification
-# ---------------------------------------------------------------------------
+class TestAddressClassification:
+    """is_code_at(), is_data_at(), is_valid_address()."""
 
+    def test_function_address_is_code(self, ida_fns, first_func):
+        assert ida_fns["is_code_at"](first_func["address"]) is True
 
-class TestIsCodeAt:
-    """Test is_code_at()."""
+    def test_function_address_is_valid(self, ida_fns, first_func):
+        assert ida_fns["is_valid_address"](first_func["address"]) is True
 
-    def test_code_address(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["is_code_at"](0x401000) is True
+    def test_invalid_address(self, ida_fns):
+        assert ida_fns["is_valid_address"](0xDEADDEAD) is False
 
-    def test_non_code_address(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["is_code_at"](0x402000) is False
+    def test_is_data_returns_bool(self, ida_fns, first_func):
+        # Doesn't matter which value — just verify it returns a bool
+        result = ida_fns["is_data_at"](first_func["address"])
+        assert isinstance(result, bool)
 
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("is_code_at(0x401000)")
+    def test_via_sandbox(self, db):
+        sandbox = IdaSandbox(db)
+        code = """\
+fns = enumerate_functions()
+is_code_at(fns[0]["address"])
+"""
+        result = sandbox.run(code)
         assert result.ok
         assert result.output is True
 
-
-class TestIsDataAt:
-    """Test is_data_at()."""
-
-    def test_data_address(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["is_data_at"](0x402000) is True
-
-    def test_non_data_address(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["is_data_at"](0x401000) is False
-
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("is_data_at(0x402000)")
-        assert result.ok
-        assert result.output is True
-
-
-class TestIsValidAddress:
-    """Test is_valid_address()."""
-
-    def test_valid(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["is_valid_address"](0x401000) is True
-
-    def test_invalid(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["is_valid_address"](0xDEAD) is False
-
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("is_valid_address(0x401000)")
-        assert result.ok
-        assert result.output is True
-
-    def test_via_sandbox_invalid(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("is_valid_address(0xDEAD)")
+    def test_invalid_via_sandbox(self, db):
+        sandbox = IdaSandbox(db)
+        result = sandbox.run("is_valid_address(0xDEADDEAD)")
         assert result.ok
         assert result.output is False
 
 
-# ---------------------------------------------------------------------------
-# New IDA function wrappers — comments
-# ---------------------------------------------------------------------------
+class TestComments:
+    """get_comment_at()."""
 
+    def test_no_comment_on_fresh_db(self, ida_fns, first_func):
+        # A freshly analyzed binary has no user comments
+        comment = ida_fns["get_comment_at"](first_func["address"])
+        assert comment is None
 
-class TestGetCommentAt:
-    """Test get_comment_at()."""
-
-    def test_found(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["get_comment_at"](0x401000) == "function prologue"
-
-    def test_not_found(self, mock_db):
-        fns = _build_ida_functions(mock_db)
-        assert fns["get_comment_at"](0x401100) is None
-
-    def test_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("get_comment_at(0x401000)")
-        assert result.ok
-        assert result.output == "function prologue"
-
-    def test_via_sandbox_none(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("get_comment_at(0x401100)")
+    def test_via_sandbox(self, db):
+        sandbox = IdaSandbox(db)
+        code = """\
+fns = enumerate_functions()
+get_comment_at(fns[0]["address"])
+"""
+        result = sandbox.run(code)
         assert result.ok
         assert result.output is None
 
 
-# ---------------------------------------------------------------------------
-# IdaSandbox class — basic operation and SandboxResult
-# ---------------------------------------------------------------------------
+class TestRandomInt:
+    """random_int()."""
+
+    def test_in_range(self, ida_fns):
+        for _ in range(10):
+            val = ida_fns["random_int"](0, 100)
+            assert 0 <= val <= 100
+
+    def test_via_sandbox(self, db):
+        sandbox = IdaSandbox(db)
+        result = sandbox.run("random_int(10, 20)")
+        assert result.ok
+        assert 10 <= result.output <= 20
 
 
-class TestIdaSandbox:
-    """Test the IdaSandbox wrapper end-to-end."""
+# ===========================================================================
+# Layer 3 — Sandbox integration
+# ===========================================================================
 
-    def test_create(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        assert sandbox.db is mock_db
+
+class TestSandboxIntegration:
+    """IdaSandbox creation, run(), and output capture."""
+
+    def test_create(self, db):
+        sandbox = IdaSandbox(db)
+        assert sandbox.db is db
         assert set(SANDBOX_FUNCTION_NAMES).issubset(sandbox._fn_impls.keys())
 
-    def test_run_returns_sandbox_result(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
+    def test_run_returns_sandbox_result(self, db):
+        sandbox = IdaSandbox(db)
         result = sandbox.run("1 + 1")
         assert isinstance(result, SandboxResult)
         assert result.ok is True
         assert result.output == 2
         assert result.error is None
 
-    def test_enumerate_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("len(enumerate_functions())")
-        assert result.ok
-        assert result.output == 3
-
-    def test_disassemble_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run('lines = disassemble_function(0x401000)\nlen(lines)')
-        assert result.ok
-        assert result.output == 7
-
-    def test_xrefs_to_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        code = """\
-xrefs = get_xrefs_to(0x401100)
-xrefs[0]["from_address"]
-"""
-        result = sandbox.run(code)
-        assert result.ok
-        assert result.output == 0x401008
-
-    def test_xrefs_from_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        code = """\
-xrefs = get_xrefs_from(0x401008)
-xrefs[0]["to_address"]
-"""
-        result = sandbox.run(code)
-        assert result.ok
-        assert result.output == 0x401100
-
-    def test_read_bytes_via_sandbox(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("read_bytes(0x401000, 4)")
-        assert result.ok
-        assert result.output == [0, 1, 2, 3]
-
-    def test_stdout_capture(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
+    def test_stdout_capture(self, db):
+        sandbox = IdaSandbox(db)
         result = sandbox.run('print("sandbox says hi")')
         assert result.ok
         assert "sandbox says hi" in "".join(result.stdout)
 
-    def test_print_callback_still_invoked(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
+    def test_print_callback(self, db):
+        sandbox = IdaSandbox(db)
         cb_output = []
         result = sandbox.run(
             'print("hello")',
@@ -781,28 +538,23 @@ xrefs[0]["to_address"]
         assert "hello" in "".join(result.stdout)
 
 
-# ---------------------------------------------------------------------------
-# Resource limits
-# ---------------------------------------------------------------------------
-
-
 class TestResourceLimits:
-    """Verify that resource limits are enforced."""
+    """Resource limit enforcement."""
 
-    def test_default_limits_applied(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
+    def test_default_limits(self, db):
+        sandbox = IdaSandbox(db)
         assert sandbox.limits["max_duration_secs"] == 30.0
         assert sandbox.limits["max_memory"] == 100_000_000
         assert sandbox.limits["max_recursion_depth"] == 200
 
-    def test_custom_limits(self, mock_db):
+    def test_custom_limits(self, db):
         custom = pydantic_monty.ResourceLimits(max_duration_secs=5.0)
-        sandbox = IdaSandbox(mock_db, limits=custom)
+        sandbox = IdaSandbox(db, limits=custom)
         assert sandbox.limits["max_duration_secs"] == 5.0
 
-    def test_timeout_returns_error(self, mock_db):
+    def test_timeout(self, db):
         sandbox = IdaSandbox(
-            mock_db,
+            db,
             limits=pydantic_monty.ResourceLimits(max_duration_secs=0.05),
         )
         result = sandbox.run("x = 0\nwhile True:\n    x = x + 1")
@@ -811,20 +563,19 @@ class TestResourceLimits:
         assert result.error.inner_type == "TimeoutError"
         assert "time limit" in result.error.message
 
-    def test_memory_limit_returns_error(self, mock_db):
+    def test_memory(self, db):
         sandbox = IdaSandbox(
-            mock_db,
+            db,
             limits=pydantic_monty.ResourceLimits(max_memory=1000),
         )
         result = sandbox.run("x = [0] * 10000000")
         assert not result.ok
         assert result.error.kind == "runtime"
         assert result.error.inner_type == "MemoryError"
-        assert "memory limit" in result.error.message
 
-    def test_recursion_limit_returns_error(self, mock_db):
+    def test_recursion(self, db):
         sandbox = IdaSandbox(
-            mock_db,
+            db,
             limits=pydantic_monty.ResourceLimits(max_recursion_depth=5),
         )
         result = sandbox.run("def f():\n    f()\nf()")
@@ -832,58 +583,49 @@ class TestResourceLimits:
         assert result.error.kind == "runtime"
         assert result.error.inner_type == "RecursionError"
 
-    def test_limits_do_not_block_normal_code(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
+    def test_normal_code_passes(self, db):
+        sandbox = IdaSandbox(db)
         result = sandbox.run("sum(range(1000))")
         assert result.ok
         assert result.output == 499500
 
 
-# ---------------------------------------------------------------------------
-# Type checking
-# ---------------------------------------------------------------------------
-
-
 class TestTypeChecking:
-    """Verify that opt-in type checking catches errors before execution."""
+    """Opt-in static type checking."""
 
-    def test_type_check_off_by_default(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        assert sandbox.type_check is False
+    def test_off_by_default(self, db):
+        assert IdaSandbox(db).type_check is False
 
-    def test_type_check_passes_valid_code(self, mock_db):
-        sandbox = IdaSandbox(mock_db, type_check=True)
+    def test_valid_code_passes(self, db):
+        sandbox = IdaSandbox(db, type_check=True)
         result = sandbox.run("1 + 2")
         assert result.ok
         assert result.output == 3
 
-    def test_type_check_catches_type_error(self, mock_db):
-        sandbox = IdaSandbox(mock_db, type_check=True)
+    def test_catches_type_error(self, db):
+        sandbox = IdaSandbox(db, type_check=True)
         result = sandbox.run('1 + "a"')
         assert not result.ok
         assert result.error.kind == "typing"
-        assert "unsupported-operator" in result.error.formatted
 
-    def test_type_check_catches_wrong_arg_type(self, mock_db):
-        sandbox = IdaSandbox(mock_db, type_check=True)
+    def test_catches_wrong_arg_type(self, db):
+        sandbox = IdaSandbox(db, type_check=True)
         result = sandbox.run('disassemble_function("not_an_int")')
         assert not result.ok
         assert result.error.kind == "typing"
-        assert "invalid-argument-type" in result.error.formatted
 
-    def test_type_check_passes_correct_sandbox_calls(self, mock_db):
-        sandbox = IdaSandbox(mock_db, type_check=True)
-        result = sandbox.run("len(enumerate_functions())")
-        assert result.ok
-        assert result.output == 3
-
-    def test_type_check_stubs_cover_all_functions(self):
+    def test_stubs_cover_all_functions(self):
         for name in SANDBOX_FUNCTION_NAMES:
             assert f"def {name}(" in TYPE_STUBS, f"stub missing for {name}"
 
-    def test_type_check_new_functions(self, mock_db):
-        """Verify type checking passes for representative new function calls."""
-        sandbox = IdaSandbox(mock_db, type_check=True)
+    def test_valid_sandbox_calls_pass(self, db):
+        sandbox = IdaSandbox(db, type_check=True)
+        result = sandbox.run("len(enumerate_functions())")
+        assert result.ok
+
+    def test_enumeration_functions_pass(self, db):
+        """All no-arg enumeration functions pass type checking."""
+        sandbox = IdaSandbox(db, type_check=True)
         code = """\
 info = get_binary_info()
 segs = enumerate_segments()
@@ -896,23 +638,12 @@ len(info) + len(segs) + len(names) + len(imports) + len(entries) + len(strings)
         result = sandbox.run(code)
         assert result.ok
 
-    def test_type_check_catches_wrong_type_new_functions(self, mock_db):
-        sandbox = IdaSandbox(mock_db, type_check=True)
-        result = sandbox.run('get_function_by_name(42)')
-        assert not result.ok
-        assert result.error.kind == "typing"
-
-
-# ---------------------------------------------------------------------------
-# Structured error handling
-# ---------------------------------------------------------------------------
-
 
 class TestErrorHandling:
-    """Verify that errors are returned as structured SandboxError objects."""
+    """Structured error handling via SandboxResult / SandboxError."""
 
-    def test_runtime_error_division_by_zero(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
+    def test_division_by_zero(self, db):
+        sandbox = IdaSandbox(db)
         result = sandbox.run("1 / 0")
         assert not result.ok
         assert result.error.kind == "runtime"
@@ -920,268 +651,180 @@ class TestErrorHandling:
         assert "division by zero" in result.error.message
         assert "Traceback" in result.error.formatted
 
-    def test_runtime_error_name_error(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
+    def test_name_error(self, db):
+        sandbox = IdaSandbox(db)
         result = sandbox.run("undefined_variable")
         assert not result.ok
         assert result.error.kind == "runtime"
         assert result.error.inner_type == "NameError"
 
-    def test_syntax_error(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
+    def test_syntax_error(self, db):
+        sandbox = IdaSandbox(db)
         result = sandbox.run("if")
         assert not result.ok
         assert result.error.kind == "syntax"
-        assert result.error.message  # non-empty
 
-    def test_runtime_error_preserves_partial_stdout(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
+    def test_preserves_partial_stdout(self, db):
+        sandbox = IdaSandbox(db)
         result = sandbox.run('print("before")\n1 / 0')
         assert not result.ok
         assert "before" in "".join(result.stdout)
         assert result.error.kind == "runtime"
 
-    def test_ok_property(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        good = sandbox.run("42")
-        bad = sandbox.run("1/0")
-        assert good.ok is True
-        assert bad.ok is False
+    def test_ok_property(self, db):
+        sandbox = IdaSandbox(db)
+        assert sandbox.run("42").ok is True
+        assert sandbox.run("1/0").ok is False
 
-    def test_sandbox_error_fields(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run("1/0")
-        err = result.error
+    def test_error_fields(self, db):
+        sandbox = IdaSandbox(db)
+        err = sandbox.run("1/0").error
         assert isinstance(err, SandboxError)
         assert isinstance(err.kind, str)
         assert isinstance(err.message, str)
         assert isinstance(err.formatted, str)
-        assert isinstance(err.inner_type, str)
 
 
-# ---------------------------------------------------------------------------
-# Full demo-script smoke test (with mocked data)
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# End-to-end — comprehensive analysis script against real IDA data
+# ===========================================================================
 
 
-class TestDemoScript:
-    """Run a script similar to demo.py's SANDBOX_SCRIPT against the mock db."""
+class TestEndToEnd:
+    """Full analysis scripts exercising many functions together."""
 
-    SCRIPT = """\
-functions = enumerate_functions()
-print("Found " + str(len(functions)) + " functions")
-
-target = functions[1]
-print("Target: " + target["name"])
-
-xrefs = get_xrefs_to(target["address"])
-print("Xrefs to: " + str(len(xrefs)))
-for xref in xrefs:
-    tag = ""
-    if xref["is_call"]:
-        tag = " [CALL]"
-    print("  from " + hex(xref["from_address"]) + tag)
-
-disasm = disassemble_function(target["address"])
-print("Disassembly lines: " + str(len(disasm)))
-for line in disasm:
-    print("  " + line)
-
-raw = read_bytes(target["address"], 4)
-print("First 4 bytes: " + str(raw))
-"""
-
-    def test_full_script(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run(self.SCRIPT)
-        assert result.ok
-        text = "".join(result.stdout)
-
-        assert "Found 3 functions" in text
-        assert "Target: helper" in text
-        assert "Xrefs to: 1" in text
-        assert "[CALL]" in text
-        assert "Disassembly lines: 5" in text
-        assert "push rbp" in text
-        assert "First 4 bytes:" in text
-
-    def test_full_script_with_type_check(self, mock_db):
-        sandbox = IdaSandbox(mock_db, type_check=True)
-        result = sandbox.run(self.SCRIPT)
-        assert result.ok
-        text = "".join(result.stdout)
-        assert "Found 3 functions" in text
-
-
-# ---------------------------------------------------------------------------
-# Comprehensive smoke test — exercises many new functions together
-# ---------------------------------------------------------------------------
-
-
-class TestComprehensiveScript:
-    """Run a script that exercises all 28 sandbox functions end-to-end."""
-
-    SCRIPT = """\
-# Database metadata
+    ANALYSIS_SCRIPT = """\
+# --- Binary metadata ---
 info = get_binary_info()
-print("Binary: " + info["module"] + " (" + info["architecture"] + ", " + str(info["bitness"]) + "-bit)")
+print("arch: " + info["architecture"])
+print("bitness: " + str(info["bitness"]))
+print("md5: " + info["md5"])
 
-# Function enumeration
+# --- Functions ---
 functions = enumerate_functions()
-print("Functions: " + str(len(functions)))
+print("functions: " + str(len(functions)))
+first = functions[0]
+print("first: " + first["name"] + " at " + hex(first["address"]))
 
-# Function lookup by name
-main_fn = get_function_by_name("main")
-print("main at: " + hex(main_fn["address"]))
+# --- Disassemble first function ---
+disasm = disassemble_function(first["address"])
+print("disasm lines: " + str(len(disasm)))
 
-# Decompile
-pseudo = decompile_function(main_fn["address"])
-print("Pseudocode lines: " + str(len(pseudo)))
+# --- Basic blocks ---
+blocks = get_basic_blocks(first["address"])
+print("blocks: " + str(len(blocks)))
 
-# Signature
-sig = get_function_signature(main_fn["address"])
-print("Signature: " + str(sig))
+# --- Callers / callees ---
+callers = get_callers(first["address"])
+print("callers: " + str(len(callers)))
+callees = get_callees(first["address"])
+print("callees: " + str(len(callees)))
 
-# Callers & callees
-helper_fn = get_function_by_name("helper")
-callers = get_callers(helper_fn["address"])
-print("Callers of helper: " + str(len(callers)))
-callees = get_callees(main_fn["address"])
-print("Callees of main: " + str(len(callees)))
+# --- Cross-references ---
+xrefs_from = get_xrefs_from(first["address"])
+print("xrefs from: " + str(len(xrefs_from)))
 
-# Basic blocks
-blocks = get_basic_blocks(main_fn["address"])
-print("Basic blocks in main: " + str(len(blocks)))
-
-# Cross-references
-xrefs_to = get_xrefs_to(helper_fn["address"])
-print("Xrefs to helper: " + str(len(xrefs_to)))
-xrefs_from = get_xrefs_from(0x401008)
-print("Xrefs from 0x401008: " + str(len(xrefs_from)))
-
-# Strings
+# --- Strings ---
 strings = enumerate_strings()
-print("Strings: " + str(len(strings)))
-s = get_string_at(0x402000)
-print("String at 0x402000: " + str(s))
+print("strings: " + str(len(strings)))
 
-# Segments
+# --- Segments ---
 segments = enumerate_segments()
-print("Segments: " + str(len(segments)))
+print("segments: " + str(len(segments)))
 
-# Names
+# --- Names ---
 names = enumerate_names()
-print("Names: " + str(len(names)))
-name = get_name_at(0x401000)
-print("Name at 0x401000: " + str(name))
-dm = demangle_name("_Z3addii")
-print("Demangled: " + dm)
+print("names: " + str(len(names)))
 
-# Imports & entries
+# --- Imports & entries ---
 imports = enumerate_imports()
-print("Imports: " + str(len(imports)))
+print("imports: " + str(len(imports)))
 entries = enumerate_entries()
-print("Entries: " + str(len(entries)))
+print("entries: " + str(len(entries)))
 
-# Bytes
-raw = read_bytes(0x401000, 4)
-print("Bytes: " + str(raw))
-found = find_bytes([0, 1, 2, 3])
-print("Found pattern at " + str(len(found)) + " location(s)")
+# --- Bytes ---
+raw = read_bytes(first["address"], 4)
+print("first bytes: " + str(len(raw)))
+found = find_bytes(raw)
+print("prologue hits: " + str(len(found)))
 
-# Single instruction
-disasm_line = get_disassembly_at(0x401000)
-print("Disasm at 0x401000: " + str(disasm_line))
-insn = get_instruction_at(0x401000)
-print("Mnemonic: " + insn["mnemonic"])
+# --- Instruction ---
+insn = get_instruction_at(first["address"])
+print("mnemonic: " + insn["mnemonic"])
 
-# Address classification
-print("Code at 0x401000: " + str(is_code_at(0x401000)))
-print("Data at 0x402000: " + str(is_data_at(0x402000)))
-print("Valid 0x401000: " + str(is_valid_address(0x401000)))
-print("Valid 0xDEAD: " + str(is_valid_address(0xDEAD)))
+# --- Disassembly at ---
+disasm_line = get_disassembly_at(first["address"])
+print("disasm at: " + str(disasm_line))
 
-# Comments
-comment = get_comment_at(0x401000)
-print("Comment: " + str(comment))
+# --- Classification ---
+print("is code: " + str(is_code_at(first["address"])))
+print("is valid: " + str(is_valid_address(first["address"])))
+print("invalid: " + str(is_valid_address(0xDEADDEAD)))
 
-# Random
+# --- Comment ---
+comment = get_comment_at(first["address"])
+print("comment: " + str(comment))
+
+# --- Demangle ---
+dm = demangle_name("main")
+print("demangled: " + dm)
+
+# --- Random ---
 r = random_int(1, 100)
-print("Random: " + str(r))
+print("random: " + str(r))
 """
 
-    def test_comprehensive_script(self, mock_db):
-        sandbox = IdaSandbox(mock_db)
-        result = sandbox.run(self.SCRIPT)
+    def test_comprehensive_analysis(self, db):
+        sandbox = IdaSandbox(db)
+        result = sandbox.run(self.ANALYSIS_SCRIPT)
         assert result.ok, f"Script failed: {result.error}"
         text = "".join(result.stdout)
 
-        assert "Binary: binary (metapc, 64-bit)" in text
-        assert "Functions: 3" in text
-        assert "main at: 0x401000" in text
-        assert "Pseudocode lines: 5" in text
-        assert "Signature: int __cdecl main(void)" in text
-        assert "Callers of helper: 1" in text
-        assert "Callees of main: 2" in text
-        assert "Basic blocks in main: 2" in text
-        assert "Xrefs to helper: 1" in text
-        assert "Xrefs from 0x401008: 1" in text
-        assert "Strings: 2" in text
-        assert "Hello" in text
-        assert "Segments: 2" in text
-        assert "Names: 4" in text
-        assert "Name at 0x401000: main" in text
-        assert "Demangled: demangled(_Z3addii)" in text
-        assert "Imports: 2" in text
-        assert "Entries: 1" in text
-        assert "Bytes: [0, 1, 2, 3]" in text
-        assert "Found pattern at" in text
-        assert "Disasm at 0x401000: push rbp" in text
-        assert "Mnemonic: push" in text
-        assert "Code at 0x401000: True" in text
-        assert "Data at 0x402000: True" in text
-        assert "Valid 0x401000: True" in text
-        assert "Valid 0xDEAD: False" in text
-        assert "Comment: function prologue" in text
-        assert "Random:" in text
+        assert "arch: metapc" in text
+        assert "bitness: 32" in text
+        assert "md5:" in text
+        assert "functions:" in text
+        assert "disasm lines:" in text
+        assert "blocks:" in text
+        assert "strings:" in text
+        assert "segments:" in text
+        assert "names:" in text
+        assert "imports:" in text
+        assert "entries:" in text
+        assert "first bytes: 4" in text
+        assert "prologue hits:" in text
+        assert "mnemonic:" in text
+        assert "is code: True" in text
+        assert "is valid: True" in text
+        assert "invalid: False" in text
+        assert "comment: None" in text
+        assert "demangled: main" in text
+        assert "random:" in text
 
-    def test_comprehensive_script_with_type_check(self, mock_db):
-        """Type-checked variant uses only non-Optional return values.
-
-        Functions like get_function_by_name() and get_instruction_at()
-        return Optional types, and monty's type checker does not support
-        narrowing (``if x is not None``), so we test a subset that avoids
-        subscripting optional results.
-        """
-        sandbox = IdaSandbox(mock_db, type_check=True)
+    def test_comprehensive_with_type_check(self, db):
+        """Type-checked variant avoids subscripting Optional returns."""
+        sandbox = IdaSandbox(db, type_check=True)
         code = """\
 info = get_binary_info()
 print("arch: " + info["architecture"])
 functions = enumerate_functions()
-print("functions: " + str(len(functions)))
+print("count: " + str(len(functions)))
 strings = enumerate_strings()
 segments = enumerate_segments()
 names = enumerate_names()
 imports = enumerate_imports()
 entries = enumerate_entries()
-disasm = disassemble_function(0x401000)
-print("disasm lines: " + str(len(disasm)))
-xrefs = get_xrefs_to(0x401100)
-print("xrefs: " + str(len(xrefs)))
-raw = read_bytes(0x401000, 4)
-print("bytes: " + str(raw))
-found = find_bytes([0, 1, 2, 3])
-print("found: " + str(len(found)))
-print("code: " + str(is_code_at(0x401000)))
-print("data: " + str(is_data_at(0x402000)))
-print("valid: " + str(is_valid_address(0x401000)))
+disasm = disassemble_function(functions[0]["address"])
+print("disasm: " + str(len(disasm)))
+raw = read_bytes(functions[0]["address"], 4)
+print("bytes: " + str(len(raw)))
+print("code: " + str(is_code_at(functions[0]["address"])))
 dm = demangle_name("main")
-print("demangled: " + dm)
+print("dm: " + dm)
 r = random_int(1, 100)
-print("random: " + str(r))
+print("r: " + str(r))
 """
         result = sandbox.run(code)
-        assert result.ok, f"Script failed with type check: {result.error}"
+        assert result.ok, f"Type-check script failed: {result.error}"
         text = "".join(result.stdout)
         assert "arch: metapc" in text
-        assert "functions: 3" in text

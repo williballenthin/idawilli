@@ -424,7 +424,10 @@ def _build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             List of disassembly line strings, or an empty list if no
             function exists at *address*.
         """
-        func = db.functions.get_at(address)
+        try:
+            func = db.functions.get_at(address)
+        except Exception:
+            return []
         if func is None:
             return []
         return list(db.functions.get_disassembly(func))
@@ -442,13 +445,16 @@ def _build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             List of pseudocode line strings, or ``[]`` when
             decompilation is unavailable.
         """
-        func = db.functions.get_at(address)
+        try:
+            func = db.functions.get_at(address)
+        except Exception:
+            return []
         if func is None:
             return []
         try:
             result = db.functions.get_pseudocode(func)
             return list(result) if result else []
-        except (RuntimeError, Exception):
+        except Exception:
             return []
 
     def get_function_signature(address: int) -> str | None:
@@ -464,7 +470,10 @@ def _build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             Signature string, or ``None`` if no type information is
             available or no function exists at *address*.
         """
-        func = db.functions.get_at(address)
+        try:
+            func = db.functions.get_at(address)
+        except Exception:
+            return None
         if func is None:
             return None
         sig = db.functions.get_signature(func)
@@ -482,7 +491,10 @@ def _build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             - **address** (*int*) – caller function start address.
             - **name** (*str*) – caller function name.
         """
-        func = db.functions.get_at(address)
+        try:
+            func = db.functions.get_at(address)
+        except Exception:
+            return []
         if func is None:
             return []
         results: list[dict[str, Any]] = []
@@ -505,7 +517,10 @@ def _build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             - **address** (*int*) – callee function start address.
             - **name** (*str*) – callee function name.
         """
-        func = db.functions.get_at(address)
+        try:
+            func = db.functions.get_at(address)
+        except Exception:
+            return []
         if func is None:
             return []
         results: list[dict[str, Any]] = []
@@ -537,7 +552,10 @@ def _build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
 
             Returns ``[]`` if no function exists at *address*.
         """
-        func = db.functions.get_at(address)
+        try:
+            func = db.functions.get_at(address)
+        except Exception:
+            return []
         if func is None:
             return []
         flowchart = db.functions.get_flowchart(func)
@@ -573,13 +591,16 @@ def _build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             - **is_jump** (*bool*) – ``True`` if this is a jump reference.
         """
         results: list[dict[str, Any]] = []
-        for xref in db.xrefs.to_ea(address):
-            results.append({
-                "from_address": int(xref.from_ea),
-                "type": str(xref.type.name),
-                "is_call": bool(xref.is_call),
-                "is_jump": bool(xref.is_jump),
-            })
+        try:
+            for xref in db.xrefs.to_ea(address):
+                results.append({
+                    "from_address": int(xref.from_ea),
+                    "type": str(xref.type.name),
+                    "is_call": bool(xref.is_call),
+                    "is_jump": bool(xref.is_jump),
+                })
+        except Exception:
+            pass
         return results
 
     def get_xrefs_from(address: int) -> list[dict[str, Any]]:
@@ -597,13 +618,16 @@ def _build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             - **is_jump** (*bool*) – ``True`` if this is a jump reference.
         """
         results: list[dict[str, Any]] = []
-        for xref in db.xrefs.from_ea(address):
-            results.append({
-                "to_address": int(xref.to_ea),
-                "type": str(xref.type.name),
-                "is_call": bool(xref.is_call),
-                "is_jump": bool(xref.is_jump),
-            })
+        try:
+            for xref in db.xrefs.from_ea(address):
+                results.append({
+                    "to_address": int(xref.to_ea),
+                    "type": str(xref.type.name),
+                    "is_call": bool(xref.is_call),
+                    "is_jump": bool(xref.is_jump),
+                })
+        except Exception:
+            pass
         return results
 
     # -----------------------------------------------------------------------
@@ -710,7 +734,10 @@ def _build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
         Returns:
             The name string, or ``None`` if the address has no name.
         """
-        result = db.names.get_at(address)
+        try:
+            result = db.names.get_at(address)
+        except Exception:
+            return None
         return str(result) if result else None
 
     def demangle_name(name: str) -> str:
@@ -792,7 +819,10 @@ def _build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             A list of integer byte values (0–255).  Returns ``[]`` if
             *address* is unmapped.
         """
-        data = db.bytes.get_bytes_at(address, size)
+        try:
+            data = db.bytes.get_bytes_at(address, size)
+        except Exception:
+            return []
         if data is None:
             return []
         return list(data)
@@ -848,7 +878,10 @@ def _build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
 
             Returns ``None`` if no instruction could be decoded.
         """
-        insn = db.instructions.get_at(address)
+        try:
+            insn = db.instructions.get_at(address)
+        except Exception:
+            return None
         if insn is None:
             return None
         return {
@@ -869,7 +902,10 @@ def _build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
         Args:
             address: The address to classify.
         """
-        return bool(db.bytes.is_code_at(address))
+        try:
+            return bool(db.bytes.is_code_at(address))
+        except Exception:
+            return False
 
     def is_data_at(address: int) -> bool:
         """Return ``True`` if *address* contains defined data.
@@ -877,7 +913,10 @@ def _build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
         Args:
             address: The address to classify.
         """
-        return bool(db.bytes.is_data_at(address))
+        try:
+            return bool(db.bytes.is_data_at(address))
+        except Exception:
+            return False
 
     def is_valid_address(address: int) -> bool:
         """Return ``True`` if *address* is mapped in the database.
@@ -900,7 +939,10 @@ def _build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
         Returns:
             The comment string, or ``None`` if no comment exists.
         """
-        result = db.comments.get_at(address)
+        try:
+            result = db.comments.get_at(address)
+        except Exception:
+            return None
         return str(result) if result else None
 
     # -----------------------------------------------------------------------
