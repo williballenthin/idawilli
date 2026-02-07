@@ -52,9 +52,12 @@ from __future__ import annotations
 
 import random as _random
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable
 
 import pydantic_monty
+
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 
 # ---------------------------------------------------------------------------
@@ -1132,3 +1135,43 @@ class IdaSandbox:
             )
 
         return SandboxResult(output=output, stdout=stdout, stderr=stderr)
+
+    def execute(self, code: str) -> str:
+        """Execute *code* and return output as a plain string.
+
+        This matches the ``(code: str) -> str`` executor interface expected
+        by ida-chat-plugin's ``script_executor`` parameter, making it a
+        drop-in replacement for the default ``exec()``-based executor::
+
+            sandbox = IdaSandbox(db)
+            core = IDAChatCore(db=db, callback=cb, script_executor=sandbox.execute)
+
+        On success the captured stdout is returned.  On error a
+        human-readable error description is returned so the LLM can
+        self-correct.
+        """
+        result = self.run(code)
+        if result.ok:
+            return "".join(result.stdout)
+        return f"Script error ({result.error.kind}): {result.error.formatted}"
+
+    @staticmethod
+    def system_prompt() -> str:
+        """Return the full system-prompt fragment for LLM integrations.
+
+        Includes the language subset description, data model, example
+        patterns, complete function reference, tips, and resource limits.
+        Suitable for appending to an LLM system prompt so the model knows
+        how to write sandbox-compatible analysis scripts.
+        """
+        return (_PROMPTS_DIR / "system_prompt.md").read_text()
+
+    @staticmethod
+    def api_reference() -> str:
+        """Return the function-reference tables only.
+
+        A smaller prompt fragment listing every sandbox function, its
+        return type, and a short description.  Use this when you want to
+        build a custom system prompt and only need the API docs.
+        """
+        return (_PROMPTS_DIR / "api_reference.md").read_text()

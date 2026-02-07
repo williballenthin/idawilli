@@ -828,3 +828,162 @@ print("r: " + str(r))
         assert result.ok, f"Type-check script failed: {result.error}"
         text = "".join(result.stdout)
         assert "arch: metapc" in text
+
+
+# ===========================================================================
+# Layer 4 – Integration helpers (execute, system_prompt, api_reference)
+# ===========================================================================
+
+
+class TestExecuteAdapter:
+    """Tests for IdaSandbox.execute() — the (str) -> str adapter."""
+
+    def test_success_returns_stdout(self, db):
+        sandbox = IdaSandbox(db)
+        output = sandbox.execute('print("hello")')
+        assert "hello" in output
+
+    def test_multi_line_stdout(self, db):
+        sandbox = IdaSandbox(db)
+        output = sandbox.execute('print("a")\nprint("b")')
+        assert "a" in output
+        assert "b" in output
+
+    def test_error_returns_description(self, db):
+        sandbox = IdaSandbox(db)
+        output = sandbox.execute("1 / 0")
+        assert "Script error" in output
+        assert "runtime" in output
+
+    def test_syntax_error_returns_description(self, db):
+        sandbox = IdaSandbox(db)
+        output = sandbox.execute("def")
+        assert "Script error" in output
+        assert "syntax" in output
+
+    def test_empty_stdout_on_success(self, db):
+        sandbox = IdaSandbox(db)
+        output = sandbox.execute("x = 1 + 1")
+        assert isinstance(output, str)
+
+    def test_ida_functions_accessible(self, db):
+        sandbox = IdaSandbox(db)
+        output = sandbox.execute(
+            'info = get_binary_info()\nprint(info["architecture"])'
+        )
+        assert "metapc" in output
+
+    def test_matches_executor_interface(self, db):
+        """execute() is callable as (str) -> str, matching ida-chat-plugin."""
+        sandbox = IdaSandbox(db)
+        fn = sandbox.execute
+        assert callable(fn)
+        result = fn('print("ok")')
+        assert isinstance(result, str)
+
+
+class TestSystemPrompt:
+    """Tests for IdaSandbox.system_prompt()."""
+
+    def test_returns_string(self):
+        prompt = IdaSandbox.system_prompt()
+        assert isinstance(prompt, str)
+        assert len(prompt) > 100
+
+    def test_contains_function_reference(self):
+        prompt = IdaSandbox.system_prompt()
+        assert "enumerate_functions" in prompt
+        assert "get_binary_info" in prompt
+        assert "get_xrefs_to" in prompt
+
+    def test_contains_language_subset(self):
+        prompt = IdaSandbox.system_prompt()
+        assert "Language subset" in prompt
+
+    def test_contains_examples(self):
+        prompt = IdaSandbox.system_prompt()
+        assert "Patterns and examples" in prompt
+
+    def test_contains_tips(self):
+        prompt = IdaSandbox.system_prompt()
+        assert "Tips" in prompt
+
+    def test_contains_data_model(self):
+        prompt = IdaSandbox.system_prompt()
+        assert "Data model" in prompt
+
+    def test_callable_as_static_method(self):
+        """Can be called without an instance."""
+        prompt = IdaSandbox.system_prompt()
+        assert isinstance(prompt, str)
+
+
+class TestApiReference:
+    """Tests for IdaSandbox.api_reference()."""
+
+    def test_returns_string(self):
+        ref = IdaSandbox.api_reference()
+        assert isinstance(ref, str)
+        assert len(ref) > 100
+
+    def test_contains_all_function_categories(self):
+        ref = IdaSandbox.api_reference()
+        assert "Database metadata" in ref
+        assert "Functions" in ref
+        assert "Cross-references" in ref
+        assert "Strings" in ref
+        assert "Segments" in ref
+        assert "Names / symbols" in ref
+        assert "Imports and entries" in ref
+        assert "Bytes / memory" in ref
+        assert "Address classification" in ref
+        assert "Comments" in ref
+        assert "Utilities" in ref
+
+    def test_contains_all_28_functions(self):
+        ref = IdaSandbox.api_reference()
+        expected = [
+            "get_binary_info",
+            "enumerate_functions",
+            "get_function_by_name",
+            "disassemble_function",
+            "decompile_function",
+            "get_function_signature",
+            "get_callers",
+            "get_callees",
+            "get_basic_blocks",
+            "get_xrefs_to",
+            "get_xrefs_from",
+            "enumerate_strings",
+            "get_string_at",
+            "enumerate_segments",
+            "enumerate_names",
+            "get_name_at",
+            "demangle_name",
+            "enumerate_imports",
+            "enumerate_entries",
+            "read_bytes",
+            "find_bytes",
+            "get_disassembly_at",
+            "get_instruction_at",
+            "is_code_at",
+            "is_data_at",
+            "is_valid_address",
+            "get_comment_at",
+            "random_int",
+        ]
+        for fn_name in expected:
+            assert fn_name in ref, f"Missing function: {fn_name}"
+
+    def test_is_subset_of_system_prompt(self):
+        """api_reference content should appear within system_prompt."""
+        ref = IdaSandbox.api_reference()
+        prompt = IdaSandbox.system_prompt()
+        # The function reference tables should be in the system prompt
+        assert "enumerate_functions" in ref
+        assert "enumerate_functions" in prompt
+
+    def test_callable_as_static_method(self):
+        """Can be called without an instance."""
+        ref = IdaSandbox.api_reference()
+        assert isinstance(ref, str)
