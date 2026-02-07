@@ -99,18 +99,24 @@ def main():
 
     with Database.open(binary_path, ida_options, save_on_close=False) as db:
         logger.info("Analysis complete.  Creating sandbox...")
-        sandbox = IdaSandbox(db)
-
-        output_lines = []
-
-        def print_callback(_stream, text):
-            output_lines.append(text)
+        sandbox = IdaSandbox(db, type_check=True)
 
         logger.info("Evaluating sandbox script...")
-        sandbox.run(SANDBOX_SCRIPT, print_callback=print_callback)
+        result = sandbox.run(SANDBOX_SCRIPT)
 
-        # Emit everything the sandbox printed.
-        print("".join(output_lines))
+        if result.ok:
+            print("".join(result.stdout), end="")
+        else:
+            print(
+                f"Sandbox error ({result.error.kind}):\n"
+                f"{result.error.formatted}",
+                file=sys.stderr,
+            )
+            # Still emit any partial output produced before the error.
+            if result.stdout:
+                print("--- partial output ---")
+                print("".join(result.stdout), end="")
+            return 1
 
     return 0
 
