@@ -1,3 +1,6 @@
 [submodule "plugins/plugin-manager/examples/native-ida-plugin/src/deps/zig-cross"]
 	path = plugins/plugin-manager/examples/native-ida-plugin/src/deps/zig-cross
 	url = git@github.com:mrexodia/zig-cross.git
+[submodule "ida-sandbox/deps/monty"]
+	path = ida-sandbox/deps/monty
+	url = https://github.com/pydantic/monty
