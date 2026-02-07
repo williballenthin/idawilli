@@ -8,7 +8,7 @@ Three layers tested against a real IDA Pro database
     and handles print callbacks.
 
   Layer 2 — IDA wrapper functions (direct calls):
-    Verify each wrapper function in _build_ida_functions() returns
+    Verify each wrapper function in build_ida_functions() returns
     correctly shaped data from real IDA analysis.
 
   Layer 3 — Sandbox integration:
@@ -18,16 +18,15 @@ Three layers tested against a real IDA Pro database
 """
 
 import pydantic_monty
-import pytest
 
-from ida_sandbox.sandbox import (
-    DEFAULT_LIMITS,
+from ida_codemode_api import (
+    FUNCTION_NAMES,
     TYPE_STUBS,
+)
+from ida_sandbox.sandbox import (
     IdaSandbox,
     SandboxError,
     SandboxResult,
-    SANDBOX_FUNCTION_NAMES,
-    _build_ida_functions,
 )
 
 
@@ -510,7 +509,7 @@ class TestSandboxIntegration:
     def test_create(self, db):
         sandbox = IdaSandbox(db)
         assert sandbox.db is db
-        assert set(SANDBOX_FUNCTION_NAMES).issubset(sandbox._fn_impls.keys())
+        assert set(FUNCTION_NAMES).issubset(sandbox._fn_impls.keys())
 
     def test_run_returns_sandbox_result(self, db):
         sandbox = IdaSandbox(db)
@@ -615,7 +614,7 @@ class TestTypeChecking:
         assert result.error.kind == "typing"
 
     def test_stubs_cover_all_functions(self):
-        for name in SANDBOX_FUNCTION_NAMES:
+        for name in FUNCTION_NAMES:
             assert f"def {name}(" in TYPE_STUBS, f"stub missing for {name}"
 
     def test_valid_sandbox_calls_pass(self, db):

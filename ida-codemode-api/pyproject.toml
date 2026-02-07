@@ -1,16 +1,14 @@
 [project]
-name = "ida-monty-sandbox"
+name = "ida-codemode-api"
 authors = [
   {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
 ]
-description = "A secure Monty sandbox exposing IDA Pro analysis routines for safe execution of AI-generated scripts"
+description = "Portable 28-function analysis API for IDA Pro, backed by ida-domain"
 version = "0.1.0"
-readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
 dependencies = [
-    "ida-codemode-api",
-    "pydantic-monty",
+    "ida-domain",
 ]
 
 [project.optional-dependencies]
@@ -20,7 +18,7 @@ test = [
 ]
 
 [project.urls]
-source = "https://github.com/williballenthin/idawilli/tree/master/ida-sandbox"
+source = "https://github.com/williballenthin/idawilli/tree/master/ida-codemode-api"
 repository = "https://github.com/williballenthin/idawilli"
 
 [build-system]
@@ -28,7 +26,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["ida_sandbox*"]
+include = ["ida_codemode_api*"]
 
 [tool.setuptools.package-data]
-ida_sandbox = ["prompts/*.md"]
+ida_codemode_api = ["prompts/*.md"]

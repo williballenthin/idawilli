@@ -1,7 +1,6 @@
-"""Shared fixtures for ida-sandbox tests.
+"""Shared fixtures for ida-codemode-api tests.
 
 Opens the shared test binary with real IDA Pro analysis.
-No mocks — every test exercises real IDA.
 """
 
 import shutil
@@ -15,15 +14,10 @@ TESTS_DIR = Path(__file__).resolve().parent
 TEST_BINARY = TESTS_DIR / "data" / "Practical Malware Analysis Lab 01-01.exe_"
 
 
-# ---------------------------------------------------------------------------
-# Session-scoped fixtures — IDA analysis is expensive, shared across tests
-# ---------------------------------------------------------------------------
-
-
 @pytest.fixture(scope="session")
 def test_binary(tmp_path_factory) -> Path:
     """Copy the shared test binary to a temp dir to avoid IDB conflicts."""
-    work = tmp_path_factory.mktemp("ida_sandbox")
+    work = tmp_path_factory.mktemp("ida_codemode_api")
     dest = work / TEST_BINARY.name
     shutil.copy(TEST_BINARY, dest)
     return dest
@@ -41,14 +35,14 @@ def db(test_binary):
 
 
 @pytest.fixture(scope="session")
-def ida_fns(db):
-    """The dict of IDA wrapper callables for direct-call testing."""
+def fns(db):
+    """The dict of API callables for direct-call testing."""
     return build_ida_functions(db)
 
 
 @pytest.fixture(scope="session")
-def first_func(ida_fns):
-    """Address of the first function IDA found (for generic tests)."""
-    functions = ida_fns["enumerate_functions"]()
+def first_func(fns):
+    """Address of the first function IDA found."""
+    functions = fns["enumerate_functions"]()
     assert len(functions) > 0, "IDA found no functions in the test binary"
     return functions[0]
