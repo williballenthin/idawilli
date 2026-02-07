@@ -1,6 +1,6 @@
 """Shared fixtures for ida-sandbox tests.
 
-Opens the repository's shared test binary with real IDA Pro analysis.
+Opens the shared test binary with real IDA Pro analysis.
 No mocks — every test exercises real IDA.
 """
 
@@ -11,8 +11,8 @@ import pytest
 
 from ida_sandbox.sandbox import _build_ida_functions
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-TEST_BINARY = REPO_ROOT / "tests" / "data" / "Practical Malware Analysis Lab 01-01.exe_"
+TESTS_DIR = Path(__file__).resolve().parent
+TEST_BINARY = TESTS_DIR / "data" / "Practical Malware Analysis Lab 01-01.exe_"
 
 
 # ---------------------------------------------------------------------------
