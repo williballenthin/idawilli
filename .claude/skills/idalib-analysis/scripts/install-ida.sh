@@ -49,7 +49,7 @@ echo "Installing IDA Pro (this may take a few minutes)..."
 # Install IDA Pro using HCLI via uv run
 set +e
 uv run --with ida-hcli hcli ida install \
-    --download-id "ida-pro:latest" \
+    --download-id "ida-pro:9.1" \
     --license-id "${IDA_LICENSE_ID}" \
     --set-default \
     --accept-eula \
@@ -75,7 +75,7 @@ set +e
 python3 -c "
 import idapro
 import ida_registry
-ida_registry.reg_write_int('EULA 90', 1)
+ida_registry.reg_write_int('EULA 91', 1)
 ida_registry.reg_write_int('AutoUseLumina', 0)
 ida_registry.reg_write_int('AutoCheckUpdates', 0)
 print('Registry settings configured')

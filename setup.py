@@ -3,7 +3,7 @@
 
 import setuptools
 
-setup(name='idawilli',
+setuptools.setup(name='idawilli',
       version='0.1',
       description='IDA Pro resources, scripts, and configurations.',
       author='Willi Ballenthin',
