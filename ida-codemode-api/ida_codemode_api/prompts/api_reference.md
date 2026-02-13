@@ -1,30 +1,35 @@
 ## Function reference
 
+All functions return either the success payload shown below or `{error: str}`.
+Callers should check for the presence of the `error` key to detect failures.
+
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `get_binary_info()` | `{path, module, architecture, bitness, format, base_address, entry_point, minimum_ea, maximum_ea, filesize, md5, sha256, crc32}` | Return global metadata about the analyzed binary. |
-| `get_functions()` | `list[{address, name, size}]` | Return every discovered function descriptor. |
-| `get_function_by_name(name)` | `{address, name, size} | None` | Look up a function by exact symbolic name. |
-| `get_function_at(address)` | `{address, name, size} | None` | Look up the function that starts at the given address. |
-| `get_function_disassembly_at(address)` | `list[str]` | Return disassembly lines for the function at address. |
-| `decompile_function_at(address)` | `list[str]` | Return Hex-Rays pseudocode lines for the function at address. |
-| `get_function_signature_at(address)` | `str | None` | Return the C-like function signature at address. |
-| `get_callers_at(address)` | `list[{address, name}]` | Return callers of the function at address. |
-| `get_callees_at(address)` | `list[{address, name}]` | Return callees of the function at address. |
-| `get_basic_blocks_at(address)` | `list[{start, end, successors, predecessors}]` | Return CFG basic blocks for the function at address. |
-| `get_xrefs_to_at(address)` | `list[{from_address, type, is_call, is_jump}]` | Return all cross-references that target address. |
-| `get_xrefs_from_at(address)` | `list[{to_address, type, is_call, is_jump}]` | Return all cross-references that originate at address. |
-| `get_strings()` | `list[{address, length, type, value}]` | Return every string recognized by IDA. |
-| `get_string_at(address)` | `str | None` | Return a null-terminated C string at address. |
-| `get_segments()` | `list[{name, start, end, size, permissions, class, bitness}]` | Return all memory segment descriptors. |
-| `get_names()` | `list[{address, name}]` | Return all named addresses. |
-| `get_name_at(address)` | `str | None` | Return the symbol name at address. |
-| `demangle_name(name)` | `str` | Demangle a C++ symbol name. |
-| `get_imports()` | `list[{address, name, module, ordinal}]` | Return imported symbols. |
-| `get_entries()` | `list[{ordinal, address, name, forwarder}]` | Return entry points and exported symbols. |
-| `get_bytes_at(address, size)` | `list[int]` | Return raw bytes at address. |
-| `find_bytes(pattern)` | `list[int]` | Return addresses matching a byte pattern. |
-| `get_disassembly_at(address)` | `str | None` | Return disassembly text for one instruction. |
-| `get_instruction_at(address)` | `{address, size, mnemonic, disassembly, is_call} | None` | Return structured instruction data at address. |
-| `get_address_type(address)` | `AddressType` | Classify address as code, data, unknown, or invalid. |
-| `get_comment_at(address)` | `str | None` | Return the comment attached to address. |
+| `get_binary_info()` | `{path: str, module: str, architecture: str, bitness: int, format: str, base_address: int, entry_point: int, minimum_ea: int, maximum_ea: int, filesize: int, md5: str, sha256: str, crc32: int}` | Binary-wide metadata for the currently opened database. |
+| `get_functions()` | `{functions: list[{address: int, name: str, size: int}]}` | All discovered function descriptors. |
+| `get_function_by_name(name)` | `{address: int, name: str, size: int}` | Function descriptor resolved by exact symbol name. |
+| `get_function_at(address)` | `{address: int, name: str, size: int}` | Function descriptor for a function start address. |
+| `get_function_disassembly_at(address)` | `{disassembly: list[str]}` | Linear-disassembly lines for the containing function. |
+| `decompile_function_at(address)` | `{pseudocode: list[str]}` | Hex-Rays pseudocode lines for the containing function. |
+| `get_function_signature_at(address)` | `{signature: str}` | Type signature string for the containing function. |
+| `get_callers_at(address)` | `{callers: list[{address: int, name: str}]}` | Functions that call the containing function. |
+| `get_callees_at(address)` | `{callees: list[{address: int, name: str}]}` | Functions called by the containing function. |
+| `get_basic_blocks_at(address)` | `{basic_blocks: list[{start: int, end: int, successors: list[int], predecessors: list[int]}]}` | Control-flow graph basic blocks for the containing function. |
+| `get_xrefs_to_at(address)` | `{xrefs: list[{from_address: int, type: str, is_call: bool, is_jump: bool}]}` | Cross-references that target an address. |
+| `get_xrefs_from_at(address)` | `{xrefs: list[{to_address: int, type: str, is_call: bool, is_jump: bool}]}` | Cross-references that originate at an address. |
+| `get_strings()` | `{strings: list[{address: int, length: int, type: str, value: str}]}` | All strings recognized by IDA analysis. |
+| `get_string_at(address)` | `{string: str}` | Null-terminated C string decoded at an address. |
+| `get_segments()` | `{segments: list[{name: str, start: int, end: int, size: int, permissions: int, class: str, bitness: int}]}` | Memory-segment descriptors for the loaded database. |
+| `get_names()` | `{names: list[{address: int, name: str}]}` | All named addresses known to IDA. |
+| `get_name_at(address)` | `{name: str}` | Symbol name at an exact address. |
+| `demangle_name(name)` | `{demangled_name: str}` | Demangled form of a mangled symbol string. |
+| `get_imports()` | `{imports: list[{address: int, name: str, module: str, ordinal: int}]}` | Imported symbols referenced by the binary. |
+| `get_entries()` | `{entries: list[{ordinal: int, address: int, name: str, forwarder: str | None}]}` | Entry points and exported entry records. |
+| `get_bytes_at(address, size)` | `{bytes: list[int]}` | Raw byte values from a contiguous address range. |
+| `find_bytes(pattern)` | `{addresses: list[int]}` | Addresses where an exact byte pattern occurs. |
+| `get_disassembly_at(address)` | `{disassembly: str}` | Disassembly text for one instruction address. |
+| `get_instruction_at(address)` | `{address: int, size: int, mnemonic: str, disassembly: str, is_call: bool}` | Structured instruction fields for one address. |
+| `get_address_type(address)` | `{address_type: Literal['code', 'data', 'unknown', 'invalid']}` | Address classification as code, data, unknown, or invalid. |
+| `get_comment_at(address)` | `{comment: str}` | Comment text attached to an exact address. |
+
+<!--- (autogenerated file: do not edit) -->

@@ -3,339 +3,30 @@
 Portable analysis APIs for IDA Pro suitable for sandboxed code execution,
 JSON-RPC exposure, and LLM tool use.
 
-All APIs use JSON-safe primitives (dicts, lists, ints, strings, bools,
-None). Use :func:`create_api_from_database` to build concrete callables
-bound to an open ``ida_domain.Database``.
+For fallible operations, return values are ``SuccessPayload | ApiError``:
+
+- success payloads do **not** include a status discriminator
+- failures use ``{"error": "..."}``
+
+Use :func:`create_api_from_database` to build concrete callables bound to an
+open ``ida_domain.Database``.
 """
 
 from __future__ import annotations
 
-import ast
-import re
-from typing import Any, Callable, Literal, TypedDict
+import inspect
+from pathlib import Path
+from types import NoneType, UnionType
+from typing import Any, Callable, Literal, Union, get_args, get_origin, get_type_hints
 
+from . import api_types
 
-class BinaryInfo(TypedDict):
-    path: str
-    module: str
-    architecture: str
-    bitness: int
-    format: str
-    base_address: int
-    entry_point: int
-    minimum_ea: int
-    maximum_ea: int
-    filesize: int
-    md5: str
-    sha256: str
-    crc32: int
 
+TYPE_STUBS_PATH = Path(api_types.__file__ or "").resolve()
+"""Filesystem path of the authoritative stub module."""
 
-class FunctionInfo(TypedDict):
-    address: int
-    name: str
-    size: int
-
-
-class NamedAddress(TypedDict):
-    address: int
-    name: str
-
-
-class BasicBlockInfo(TypedDict):
-    start: int
-    end: int
-    successors: list[int]
-    predecessors: list[int]
-
-
-class XrefToInfo(TypedDict):
-    from_address: int
-    type: str
-    is_call: bool
-    is_jump: bool
-
-
-class XrefFromInfo(TypedDict):
-    to_address: int
-    type: str
-    is_call: bool
-    is_jump: bool
-
-
-class StringInfo(TypedDict):
-    address: int
-    length: int
-    type: str
-    value: str
-
-
-SegmentInfo = TypedDict(
-    "SegmentInfo",
-    {
-        "name": str,
-        "start": int,
-        "end": int,
-        "size": int,
-        "permissions": int,
-        "class": str,
-        "bitness": int,
-    },
-)
-
-
-class ImportInfo(TypedDict):
-    address: int
-    name: str
-    module: str
-    ordinal: int
-
-
-class EntryPointInfo(TypedDict):
-    ordinal: int
-    address: int
-    name: str
-    forwarder: str | None
-
-
-class InstructionInfo(TypedDict):
-    address: int
-    size: int
-    mnemonic: str
-    disassembly: str
-    is_call: bool
-
-
-AddressType = Literal["code", "data", "unknown", "invalid"]
-
-
-TYPE_STUBS = '''\
-from typing import Literal, TypedDict
-
-
-class BinaryInfo(TypedDict):
-    path: str
-    module: str
-    architecture: str
-    bitness: int
-    format: str
-    base_address: int
-    entry_point: int
-    minimum_ea: int
-    maximum_ea: int
-    filesize: int
-    md5: str
-    sha256: str
-    crc32: int
-
-
-class FunctionInfo(TypedDict):
-    address: int
-    name: str
-    size: int
-
-
-class NamedAddress(TypedDict):
-    address: int
-    name: str
-
-
-class BasicBlockInfo(TypedDict):
-    start: int
-    end: int
-    successors: list[int]
-    predecessors: list[int]
-
-
-class XrefToInfo(TypedDict):
-    from_address: int
-    type: str
-    is_call: bool
-    is_jump: bool
-
-
-class XrefFromInfo(TypedDict):
-    to_address: int
-    type: str
-    is_call: bool
-    is_jump: bool
-
-
-class StringInfo(TypedDict):
-    address: int
-    length: int
-    type: str
-    value: str
-
-
-SegmentInfo = TypedDict(
-    "SegmentInfo",
-    {
-        "name": str,
-        "start": int,
-        "end": int,
-        "size": int,
-        "permissions": int,
-        "class": str,
-        "bitness": int,
-    },
-)
-
-
-class ImportInfo(TypedDict):
-    address: int
-    name: str
-    module: str
-    ordinal: int
-
-
-class EntryPointInfo(TypedDict):
-    ordinal: int
-    address: int
-    name: str
-    forwarder: str | None
-
-
-class InstructionInfo(TypedDict):
-    address: int
-    size: int
-    mnemonic: str
-    disassembly: str
-    is_call: bool
-
-
-AddressType = Literal["code", "data", "unknown", "invalid"]
-
-
-def get_binary_info() -> BinaryInfo:
-    """Return global metadata about the analyzed binary."""
-    ...
-
-
-def get_functions() -> list[FunctionInfo]:
-    """Return every discovered function descriptor."""
-    ...
-
-
-def get_function_by_name(name: str) -> FunctionInfo | None:
-    """Look up a function by exact symbolic name."""
-    ...
-
-
-def get_function_at(address: int) -> FunctionInfo | None:
-    """Look up the function that starts at the given address."""
-    ...
-
-
-def get_function_disassembly_at(address: int) -> list[str]:
-    """Return disassembly lines for the function at address."""
-    ...
-
-
-def decompile_function_at(address: int) -> list[str]:
-    """Return Hex-Rays pseudocode lines for the function at address."""
-    ...
-
-
-def get_function_signature_at(address: int) -> str | None:
-    """Return the C-like function signature at address."""
-    ...
-
-
-def get_callers_at(address: int) -> list[NamedAddress]:
-    """Return callers of the function at address."""
-    ...
-
-
-def get_callees_at(address: int) -> list[NamedAddress]:
-    """Return callees of the function at address."""
-    ...
-
-
-def get_basic_blocks_at(address: int) -> list[BasicBlockInfo]:
-    """Return CFG basic blocks for the function at address."""
-    ...
-
-
-def get_xrefs_to_at(address: int) -> list[XrefToInfo]:
-    """Return all cross-references that target address."""
-    ...
-
-
-def get_xrefs_from_at(address: int) -> list[XrefFromInfo]:
-    """Return all cross-references that originate at address."""
-    ...
-
-
-def get_strings() -> list[StringInfo]:
-    """Return every string recognized by IDA."""
-    ...
-
-
-def get_string_at(address: int) -> str | None:
-    """Return a null-terminated C string at address."""
-    ...
-
-
-def get_segments() -> list[SegmentInfo]:
-    """Return all memory segment descriptors."""
-    ...
-
-
-def get_names() -> list[NamedAddress]:
-    """Return all named addresses."""
-    ...
-
-
-def get_name_at(address: int) -> str | None:
-    """Return the symbol name at address."""
-    ...
-
-
-def demangle_name(name: str) -> str:
-    """Demangle a C++ symbol name."""
-    ...
-
-
-def get_imports() -> list[ImportInfo]:
-    """Return imported symbols."""
-    ...
-
-
-def get_entries() -> list[EntryPointInfo]:
-    """Return entry points and exported symbols."""
-    ...
-
-
-def get_bytes_at(address: int, size: int) -> list[int]:
-    """Return raw bytes at address."""
-    ...
-
-
-def find_bytes(pattern: list[int]) -> list[int]:
-    """Return addresses matching a byte pattern."""
-    ...
-
-
-def get_disassembly_at(address: int) -> str | None:
-    """Return disassembly text for one instruction."""
-    ...
-
-
-def get_instruction_at(address: int) -> InstructionInfo | None:
-    """Return structured instruction data at address."""
-    ...
-
-
-def get_address_type(address: int) -> AddressType:
-    """Classify address as code, data, unknown, or invalid."""
-    ...
-
-
-def get_comment_at(address: int) -> str | None:
-    """Return the comment attached to address."""
-    ...
-'''
+TYPE_STUBS = TYPE_STUBS_PATH.read_text(encoding="utf-8")
+"""Authoritative API stubs consumed by Monty type checking."""
 
 
 FUNCTION_NAMES: list[str] = [
@@ -367,51 +58,104 @@ FUNCTION_NAMES: list[str] = [
     "get_comment_at",
 ]
 
-
-_TYPED_DICTS: dict[str, Any] = {
-    "BinaryInfo": BinaryInfo,
-    "FunctionInfo": FunctionInfo,
-    "NamedAddress": NamedAddress,
-    "BasicBlockInfo": BasicBlockInfo,
-    "XrefToInfo": XrefToInfo,
-    "XrefFromInfo": XrefFromInfo,
-    "StringInfo": StringInfo,
-    "SegmentInfo": SegmentInfo,
-    "ImportInfo": ImportInfo,
-    "EntryPointInfo": EntryPointInfo,
-    "InstructionInfo": InstructionInfo,
-}
+def _collect_typed_dicts(module: Any) -> dict[str, Any]:
+    typed_dicts: dict[str, Any] = {}
+    for name, value in vars(module).items():
+        if not isinstance(value, type):
+            continue
+        if not issubclass(value, dict):
+            continue
+        if not hasattr(value, "__total__"):
+            continue
+        typed_dicts[name] = value
+    return typed_dicts
 
 
-def _typed_dict_shape(name: str) -> str:
-    cls = _TYPED_DICTS[name]
-    keys = ", ".join(cls.__annotations__.keys())
-    return "{" + keys + "}"
+_TYPED_DICTS: dict[str, Any] = _collect_typed_dicts(api_types)
 
 
-def _render_return_annotation(annotation: str) -> str:
-    rendered = annotation
-    for name in sorted(_TYPED_DICTS.keys(), key=len, reverse=True):
-        rendered = re.sub(rf"\b{name}\b", _typed_dict_shape(name), rendered)
-    return rendered
+def _render_type(annotation: Any) -> str:
+    origin = get_origin(annotation)
+
+    if origin in (Union, UnionType):
+        parts = [_render_type(arg) for arg in get_args(annotation) if arg is not api_types.ApiError]
+        if len(parts) == 1:
+            return parts[0]
+        return " | ".join(parts)
+
+    if isinstance(annotation, type) and annotation in _TYPED_DICTS.values():
+        hints = get_type_hints(annotation, include_extras=True)
+        fields: list[str] = []
+        for key in annotation.__annotations__.keys():
+            fields.append(f"{key}: {_render_type(hints[key])}")
+        return "{" + ", ".join(fields) + "}"
+
+    if origin is list:
+        args = get_args(annotation)
+        if len(args) == 1:
+            return f"list[{_render_type(args[0])}]"
+        return "list[Any]"
+
+    if origin is Literal:
+        values = ", ".join(repr(v) for v in get_args(annotation))
+        return f"Literal[{values}]"
+
+    if annotation is NoneType:
+        return "None"
+
+    if annotation is Any:
+        return "Any"
+
+    if isinstance(annotation, type):
+        return annotation.__name__
+
+    return str(annotation)
 
 
-def _api_rows_from_type_stubs() -> list[tuple[str, str, str, str]]:
-    module = ast.parse(TYPE_STUBS)
-    rows: dict[str, tuple[str, str, str, str]] = {}
+def _implementation_functions_for_reference() -> dict[str, Callable[..., Any]]:
+    """Return implementation callables used for API-reference introspection."""
+    return create_api_from_database(object())
 
-    for node in module.body:
-        if not isinstance(node, ast.FunctionDef):
+
+def _function_success_return_shape(
+    function_name: str,
+    implementation_functions: dict[str, Callable[..., Any]],
+) -> str:
+    implementation = implementation_functions.get(function_name)
+    if implementation is not None:
+        try:
+            hints = get_type_hints(implementation, include_extras=True)
+        except Exception:
+            hints = {}
+
+        return_annotation = hints.get("return")
+        if return_annotation is not None:
+            return _render_type(return_annotation)
+
+    function = getattr(api_types, function_name)
+    hints = get_type_hints(function, include_extras=True)
+    return_annotation = hints.get("return", Any)
+    return _render_type(return_annotation)
+
+
+def _api_rows_from_implementation(
+    implementation_functions: dict[str, Callable[..., Any]],
+) -> list[tuple[str, str, str]]:
+    rows: dict[str, tuple[str, str, str]] = {}
+
+    for function_name in FUNCTION_NAMES:
+        implementation = implementation_functions.get(function_name)
+        if implementation is None:
             continue
 
-        arg_names = [arg.arg for arg in node.args.args]
-        signature = f"{node.name}({', '.join(arg_names)})"
-        returns = ast.unparse(node.returns) if node.returns is not None else "Any"
+        signature = f"{function_name}{inspect.signature(implementation)}"
 
-        doc = ast.get_docstring(node) or ""
+        declaration = getattr(api_types, function_name, None)
+        declaration_doc = inspect.getdoc(declaration) if declaration else None
+        doc = declaration_doc or inspect.getdoc(implementation) or ""
         description = doc.strip().splitlines()[0] if doc.strip() else ""
 
-        rows[node.name] = (node.name, signature, returns, description)
+        rows[function_name] = (function_name, signature, description)
 
     return [rows[name] for name in FUNCTION_NAMES if name in rows]
 
@@ -424,361 +168,347 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
 
     Returns:
         Mapping from API name to callable implementation.
-
-    Example:
-        Build the API and inspect function docstrings.
-
-    Example::
-
-        from ida_domain import Database
-        from ida_codemode_api import create_api_from_database
-
-        with Database.open(path, options) as db:
-            api = create_api_from_database(db)
-            print(api["get_binary_info"]()["module"])
-            print(api["get_binary_info"].__doc__.splitlines()[0])
     """
 
-    def _serialize_function(func: Any) -> FunctionInfo:
+    def _serialize_function(func: Any) -> api_types.FunctionInfo:
         return {
             "address": int(func.start_ea),
             "name": str(db.functions.get_name(func)),
             "size": int(func.size() if callable(func.size) else func.size),
         }
 
-    def get_binary_info() -> BinaryInfo:
-        """Return global metadata about the analyzed binary.
-
-        Example result::
-
-            {
-                "path": "/tmp/sample.exe",
-                "module": "sample.exe",
-                "architecture": "metapc",
-                "bitness": 32,
-                "format": "PE",
-                "base_address": 4194304,
-                "entry_point": 4198400,
-                "minimum_ea": 4194304,
-                "maximum_ea": 4259840,
-                "filesize": 123456,
-                "md5": "...",
-                "sha256": "...",
-                "crc32": 123456789,
-            }
-        """
+    def _error(message: str) -> api_types.ApiError:
         return {
-            "path": str(db.path),
-            "module": str(db.module),
-            "architecture": str(db.architecture),
-            "bitness": int(db.bitness),
-            "format": str(db.format),
-            "base_address": int(db.base_address),
-            "entry_point": int(db.start_ip),
-            "minimum_ea": int(db.minimum_ea),
-            "maximum_ea": int(db.maximum_ea),
-            "filesize": int(db.filesize),
-            "md5": str(db.md5),
-            "sha256": str(db.sha256),
-            "crc32": int(db.crc32),
+            "error": str(message),
         }
 
-    def get_functions() -> list[FunctionInfo]:
-        """Return every discovered function descriptor.
+    def _error_from_exc(context: str, exc: Exception) -> api_types.ApiError:
+        return _error(f"{context}: {type(exc).__name__}: {exc}")
 
-        See also: ``get_function_at``, ``get_function_by_name``,
-        ``get_function_signature_at``, ``get_function_disassembly_at``,
-        ``get_callers_at``, ``get_callees_at``, ``get_basic_blocks_at``.
-
-        Example result::
-
-            [{"address": 4198400, "name": "main", "size": 1337}]
-        """
-        return [_serialize_function(func) for func in db.functions]
-
-    def get_function_by_name(name: str) -> FunctionInfo | None:
-        """Look up a function by exact symbolic name.
-
-        Example result::
-
-            {"address": 4198400, "name": "main", "size": 1337}
-        """
-        func = db.functions.get_function_by_name(name)
-        if func is None:
-            return None
-        return _serialize_function(func)
-
-    def get_function_at(address: int) -> FunctionInfo | None:
-        """Look up the function that starts at the given address.
-
-        Example result::
-
-            {"address": 4198400, "name": "main", "size": 1337}
-        """
+    def _lookup_function_containing(address: int, *, context: str) -> tuple[Any | None, api_types.ApiError | None]:
         try:
             func = db.functions.get_at(address)
-        except Exception:
-            return None
+        except Exception as exc:
+            return None, _error_from_exc(f"{context}: failed to resolve function at {address:#x}", exc)
+
         if func is None:
-            return None
+            return None, _error(f"{context}: no function contains address {address:#x}")
+
+        return func, None
+
+    def _lookup_function_start(address: int, *, context: str) -> tuple[Any | None, api_types.ApiError | None]:
+        func, err = _lookup_function_containing(address, context=context)
+        if err is not None:
+            return None, err
+
+        if func is None:
+            return None, _error(f"{context}: no function contains address {address:#x}")
+
         if int(func.start_ea) != int(address):
-            return None
+            return None, _error(f"{context}: address {address:#x} is not a function start")
+
+        return func, None
+
+    def get_binary_info():
+        try:
+            return {
+                "path": str(db.path),
+                "module": str(db.module),
+                "architecture": str(db.architecture),
+                "bitness": int(db.bitness),
+                "format": str(db.format),
+                "base_address": int(db.base_address),
+                "entry_point": int(db.start_ip),
+                "minimum_ea": int(db.minimum_ea),
+                "maximum_ea": int(db.maximum_ea),
+                "filesize": int(db.filesize),
+                "md5": str(db.md5),
+                "sha256": str(db.sha256),
+                "crc32": int(db.crc32),
+            }
+        except Exception as exc:
+            return _error_from_exc("failed to read binary metadata", exc)
+
+    def get_functions():
+        try:
+            return {
+                "functions": [_serialize_function(func) for func in db.functions],
+            }
+        except Exception as exc:
+            return _error_from_exc("failed to enumerate functions", exc)
+
+    def get_function_by_name(name):
+        try:
+            func = db.functions.get_function_by_name(name)
+        except Exception as exc:
+            return _error_from_exc(f"failed to look up function named {name!r}", exc)
+
+        if func is None:
+            return _error(f"no function named {name!r}")
+
         return _serialize_function(func)
 
-    def get_function_disassembly_at(address: int) -> list[str]:
-        """Return disassembly lines for the function at address.
+    def get_function_at(address):
+        func, err = _lookup_function_start(address, context="function lookup")
+        if err is not None:
+            return err
 
-        Example result::
+        return _serialize_function(func)
 
-            ["push ebp", "mov ebp, esp", "..."]
-        """
+    def get_function_disassembly_at(address):
+        func, err = _lookup_function_containing(address, context="function disassembly")
+        if err is not None:
+            return err
+
         try:
-            func = db.functions.get_at(address)
-        except Exception:
-            return []
-        if func is None:
-            return []
-        return list(db.functions.get_disassembly(func))
+            disassembly = db.functions.get_disassembly(func)
+        except Exception as exc:
+            return _error_from_exc(f"failed to disassemble function at {address:#x}", exc)
 
-    def decompile_function_at(address: int) -> list[str]:
-        """Return Hex-Rays pseudocode lines for the function at address.
+        if disassembly is None:
+            return _error(f"no disassembly available for function at {address:#x}")
 
-        Example result::
+        return {
+            "disassembly": [str(line) for line in disassembly],
+        }
 
-            ["int __cdecl main(int argc, const char **argv)", "{", "  return 0;", "}"]
-        """
-        try:
-            func = db.functions.get_at(address)
-        except Exception:
-            return []
-        if func is None:
-            return []
+    def decompile_function_at(address):
+        func, err = _lookup_function_containing(address, context="function decompilation")
+        if err is not None:
+            return err
+
         try:
             result = db.functions.get_pseudocode(func)
-            return list(result) if result else []
-        except Exception:
-            return []
+        except Exception as exc:
+            return _error_from_exc(
+                f"failed to decompile function at {address:#x} (decompiler unavailable or failed)",
+                exc,
+            )
 
-    def get_function_signature_at(address: int) -> str | None:
-        """Return the C-like function signature at address.
+        if result is None:
+            return _error(f"no pseudocode available for function at {address:#x}")
 
-        Example result::
+        return {
+            "pseudocode": [str(line) for line in result],
+        }
 
-            "int __cdecl main(int argc, const char **argv)"
-        """
+    def get_function_signature_at(address):
+        func, err = _lookup_function_containing(address, context="function signature")
+        if err is not None:
+            return err
+
         try:
-            func = db.functions.get_at(address)
-        except Exception:
-            return None
-        if func is None:
-            return None
-        sig = db.functions.get_signature(func)
-        return str(sig) if sig is not None else None
+            sig = db.functions.get_signature(func)
+        except Exception as exc:
+            return _error_from_exc(f"failed to read function signature at {address:#x}", exc)
 
-    def get_callers_at(address: int) -> list[NamedAddress]:
-        """Return callers of the function at address.
+        if sig is None:
+            return _error(f"function at {address:#x} has no signature")
 
-        Example result::
+        return {
+            "signature": str(sig),
+        }
 
-            [{"address": 4202496, "name": "sub_402000"}]
-        """
+    def get_callers_at(address):
+        func, err = _lookup_function_containing(address, context="caller analysis")
+        if err is not None:
+            return err
+
         try:
-            func = db.functions.get_at(address)
-        except Exception:
-            return []
-        if func is None:
-            return []
-        return [
-            {
-                "address": int(caller.start_ea),
-                "name": str(db.functions.get_name(caller)),
-            }
-            for caller in db.functions.get_callers(func)
-        ]
+            callers = db.functions.get_callers(func)
+            items = [
+                {
+                    "address": int(caller.start_ea),
+                    "name": str(db.functions.get_name(caller)),
+                }
+                for caller in callers
+            ]
+        except Exception as exc:
+            return _error_from_exc(f"failed to enumerate callers for function at {address:#x}", exc)
 
-    def get_callees_at(address: int) -> list[NamedAddress]:
-        """Return callees of the function at address.
+        return {
+            "callers": items,
+        }
 
-        Example result::
+    def get_callees_at(address):
+        func, err = _lookup_function_containing(address, context="callee analysis")
+        if err is not None:
+            return err
 
-            [{"address": 4206592, "name": "CreateFileA"}]
-        """
         try:
-            func = db.functions.get_at(address)
-        except Exception:
-            return []
-        if func is None:
-            return []
-        return [
-            {
-                "address": int(callee.start_ea),
-                "name": str(db.functions.get_name(callee)),
-            }
-            for callee in db.functions.get_callees(func)
-        ]
+            callees = db.functions.get_callees(func)
+            items = [
+                {
+                    "address": int(callee.start_ea),
+                    "name": str(db.functions.get_name(callee)),
+                }
+                for callee in callees
+            ]
+        except Exception as exc:
+            return _error_from_exc(f"failed to enumerate callees for function at {address:#x}", exc)
 
-    def get_basic_blocks_at(address: int) -> list[BasicBlockInfo]:
-        """Return CFG basic blocks for the function at address.
+        return {
+            "callees": items,
+        }
 
-        Example result::
+    def get_basic_blocks_at(address):
+        func, err = _lookup_function_containing(address, context="basic-block analysis")
+        if err is not None:
+            return err
 
-            [{"start": 4198400, "end": 4198410, "successors": [4198420], "predecessors": []}]
-        """
         try:
-            func = db.functions.get_at(address)
-        except Exception:
-            return []
-        if func is None:
-            return []
-        flowchart = db.functions.get_flowchart(func)
+            flowchart = db.functions.get_flowchart(func)
+        except Exception as exc:
+            return _error_from_exc(f"failed to build CFG for function at {address:#x}", exc)
+
         if flowchart is None:
-            return []
+            return _error(f"no control-flow graph available for function at {address:#x}")
 
-        results: list[BasicBlockInfo] = []
-        for block in flowchart:
-            results.append({
-                "start": int(block.start_ea),
-                "end": int(block.end_ea),
-                "successors": [int(s.start_ea) for s in block.succs()],
-                "predecessors": [int(p.start_ea) for p in block.preds()],
-            })
-        return results
-
-    def get_xrefs_to_at(address: int) -> list[XrefToInfo]:
-        """Return all cross-references that target address.
-
-        Example result::
-
-            [{"from_address": 4202496, "type": "CALL_NEAR", "is_call": True, "is_jump": False}]
-        """
-        results: list[XrefToInfo] = []
         try:
+            items = []
+            for block in flowchart:
+                items.append({
+                    "start": int(block.start_ea),
+                    "end": int(block.end_ea),
+                    "successors": [int(s.start_ea) for s in block.succs()],
+                    "predecessors": [int(p.start_ea) for p in block.preds()],
+                })
+        except Exception as exc:
+            return _error_from_exc(f"failed while serializing CFG for function at {address:#x}", exc)
+
+        return {
+            "basic_blocks": items,
+        }
+
+    def get_xrefs_to_at(address):
+        try:
+            items = []
             for xref in db.xrefs.to_ea(address):
-                results.append({
+                items.append({
                     "from_address": int(xref.from_ea),
                     "type": str(xref.type.name),
                     "is_call": bool(xref.is_call),
                     "is_jump": bool(xref.is_jump),
                 })
-        except Exception:
-            pass
-        return results
+        except Exception as exc:
+            return _error_from_exc(f"failed to enumerate xrefs to {address:#x}", exc)
 
-    def get_xrefs_from_at(address: int) -> list[XrefFromInfo]:
-        """Return all cross-references that originate at address.
+        return {
+            "xrefs": items,
+        }
 
-        Example result::
-
-            [{"to_address": 4206592, "type": "CALL_NEAR", "is_call": True, "is_jump": False}]
-        """
-        results: list[XrefFromInfo] = []
+    def get_xrefs_from_at(address):
         try:
+            items = []
             for xref in db.xrefs.from_ea(address):
-                results.append({
+                items.append({
                     "to_address": int(xref.to_ea),
                     "type": str(xref.type.name),
                     "is_call": bool(xref.is_call),
                     "is_jump": bool(xref.is_jump),
                 })
-        except Exception:
-            pass
-        return results
+        except Exception as exc:
+            return _error_from_exc(f"failed to enumerate xrefs from {address:#x}", exc)
 
-    def get_strings() -> list[StringInfo]:
-        """Return every string recognized by IDA.
+        return {
+            "xrefs": items,
+        }
 
-        Example result::
+    def get_strings():
+        try:
+            items = []
+            for s in db.strings:
+                value = s.contents
+                if isinstance(value, (bytes, bytearray)):
+                    value = value.decode("utf-8", errors="replace")
+                items.append({
+                    "address": int(s.address),
+                    "length": int(s.length),
+                    "type": str(s.type.name) if hasattr(s.type, "name") else str(s.type),
+                    "value": str(value),
+                })
+        except Exception as exc:
+            return _error_from_exc("failed to enumerate strings", exc)
 
-            [{"address": 4214784, "length": 12, "type": "C", "value": "Hello world"}]
-        """
-        results: list[StringInfo] = []
-        for s in db.strings:
-            value = s.contents
-            if isinstance(value, (bytes, bytearray)):
-                value = value.decode("utf-8", errors="replace")
-            results.append({
-                "address": int(s.address),
-                "length": int(s.length),
-                "type": str(s.type.name) if hasattr(s.type, "name") else str(s.type),
-                "value": str(value),
-            })
-        return results
+        return {
+            "strings": items,
+        }
 
-    def get_string_at(address: int) -> str | None:
-        """Return a null-terminated C string at address.
-
-        Example result::
-
-            "kernel32.dll"
-        """
+    def get_string_at(address):
         try:
             result = db.bytes.get_cstring_at(address)
-            return str(result) if result is not None else None
-        except Exception:
-            return None
+        except Exception as exc:
+            return _error_from_exc(f"failed to read C string at {address:#x}", exc)
 
-    def get_segments() -> list[SegmentInfo]:
-        """Return all memory segment descriptors.
+        if result is None:
+            return _error(f"no C string available at {address:#x}")
 
-        Example result::
+        if isinstance(result, (bytes, bytearray)):
+            value = result.decode("utf-8", errors="replace")
+        else:
+            value = str(result)
 
-            [{"name": ".text", "start": 4194304, "end": 4202496, "size": 8192, "permissions": 5, "class": "CODE", "bitness": 32}]
-        """
-        results: list[SegmentInfo] = []
-        for seg in db.segments:
-            results.append({
-                "name": str(db.segments.get_name(seg)),
-                "start": int(seg.start_ea),
-                "end": int(seg.end_ea),
-                "size": int(db.segments.get_size(seg)),
-                "permissions": int(seg.perm),
-                "class": str(db.segments.get_class(seg)),
-                "bitness": int(db.segments.get_bitness(seg)),
-            })
-        return results
+        return {
+            "string": value,
+        }
 
-    def get_names() -> list[NamedAddress]:
-        """Return all named addresses.
+    def get_segments():
+        try:
+            items = []
+            for seg in db.segments:
+                items.append({
+                    "name": str(db.segments.get_name(seg)),
+                    "start": int(seg.start_ea),
+                    "end": int(seg.end_ea),
+                    "size": int(db.segments.get_size(seg)),
+                    "permissions": int(seg.perm),
+                    "class": str(db.segments.get_class(seg)),
+                    "bitness": int(db.segments.get_bitness(seg)),
+                })
+        except Exception as exc:
+            return _error_from_exc("failed to enumerate segments", exc)
 
-        Example result::
+        return {
+            "segments": items,
+        }
 
-            [{"address": 4198400, "name": "main"}]
-        """
-        return [{"address": int(ea), "name": str(name)} for ea, name in db.names]
+    def get_names():
+        try:
+            items = [{"address": int(ea), "name": str(name)} for ea, name in db.names]
+        except Exception as exc:
+            return _error_from_exc("failed to enumerate names", exc)
 
-    def get_name_at(address: int) -> str | None:
-        """Return the symbol name at address.
+        return {
+            "names": items,
+        }
 
-        Example result::
-
-            "main"
-        """
+    def get_name_at(address):
         try:
             result = db.names.get_at(address)
-        except Exception:
-            return None
-        return str(result) if result else None
+        except Exception as exc:
+            return _error_from_exc(f"failed to read symbol name at {address:#x}", exc)
 
-    def demangle_name(name: str) -> str:
-        """Demangle a C++ symbol name.
+        if not result:
+            return _error(f"no symbol name available at {address:#x}")
 
-        Example result::
+        return {
+            "name": str(result),
+        }
 
-            "std::basic_string<char>::size() const"
-        """
-        result = db.names.demangle_name(name)
-        return str(result) if result else str(name)
+    def demangle_name(name):
+        try:
+            result = db.names.demangle_name(name)
+        except Exception as exc:
+            return _error_from_exc(f"failed to demangle name {name!r}", exc)
 
-    def get_imports() -> list[ImportInfo]:
-        """Return imported symbols.
+        return {
+            "demangled_name": str(result) if result else str(name),
+        }
 
-        Example result::
+    def get_imports():
+        results = []
+        db_imports_error = None
 
-            [{"address": 4206592, "name": "CreateFileA", "module": "KERNEL32", "ordinal": 0}]
-        """
-        results: list[ImportInfo] = []
-
-        # Preferred path: ida_domain may expose db.imports.
         if hasattr(db, "imports"):
             try:
                 for imp in db.imports.get_all_imports():
@@ -788,30 +518,44 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
                         "module": str(imp.module_name),
                         "ordinal": int(imp.ordinal),
                     })
-                return results
-            except Exception:
+                return {
+                    "imports": results,
+                }
+            except Exception as exc:
+                db_imports_error = exc
                 results = []
 
-        # Fallback path: use IDA's import-enumeration APIs directly.
         try:
             import ida_nalt  # type: ignore
-        except Exception:
-            return results
+        except Exception as exc:
+            if db_imports_error is not None:
+                return _error(
+                    "failed to enumerate imports via db.imports "
+                    f"({type(db_imports_error).__name__}: {db_imports_error}) and ida_nalt fallback "
+                    f"is unavailable ({type(exc).__name__}: {exc})"
+                )
+            return _error_from_exc("failed to import ida_nalt for import enumeration", exc)
 
         try:
             module_count = int(ida_nalt.get_import_module_qty())
-        except Exception:
-            return results
+        except Exception as exc:
+            if db_imports_error is not None:
+                return _error(
+                    "failed to enumerate imports via db.imports "
+                    f"({type(db_imports_error).__name__}: {db_imports_error}) and could not read "
+                    f"ida_nalt import module count ({type(exc).__name__}: {exc})"
+                )
+            return _error_from_exc("failed to read import module count", exc)
 
         for module_index in range(module_count):
             module_name = ida_nalt.get_import_module_name(module_index)
             module_name_str = str(module_name) if module_name else ""
 
-            def _collect(ea: int, name: str | None, ordinal: int, _m: str = module_name_str) -> bool:
+            def _collect(ea, name, ordinal, _module=module_name_str):
                 results.append({
                     "address": int(ea),
                     "name": str(name) if name is not None else "",
-                    "module": _m,
+                    "module": _module,
                     "ordinal": int(ordinal),
                 })
                 return True
@@ -821,132 +565,159 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             except Exception:
                 continue
 
-        return results
-
-    def get_entries() -> list[EntryPointInfo]:
-        """Return entry points and exported symbols.
-
-        Example result::
-
-            [{"ordinal": 1, "address": 4198400, "name": "_DllMain@12", "forwarder": None}]
-        """
-        results: list[EntryPointInfo] = []
-        for entry in db.entries:
-            forwarder: str | None = None
-            has_forwarder = getattr(entry, "has_forwarder", None)
-            if callable(has_forwarder):
-                if bool(has_forwarder()):
-                    forwarder = str(entry.forwarder_name)
-            elif bool(has_forwarder):
-                forwarder = str(entry.forwarder_name)
-            results.append({
-                "ordinal": int(entry.ordinal),
-                "address": int(entry.address),
-                "name": str(entry.name),
-                "forwarder": forwarder,
-            })
-        return results
-
-    def get_bytes_at(address: int, size: int) -> list[int]:
-        """Return raw bytes at address.
-
-        Example result::
-
-            [85, 139, 236, 131, 236, 8]
-        """
-        try:
-            data = db.bytes.get_bytes_at(address, size)
-        except Exception:
-            return []
-        if data is None:
-            return []
-        return list(data)
-
-    def find_bytes(pattern: list[int]) -> list[int]:
-        """Return addresses matching a byte pattern.
-
-        Example result::
-
-            [4198400, 4202496]
-        """
-        return [int(ea) for ea in db.bytes.find_binary_sequence(bytes(pattern))]
-
-    def get_disassembly_at(address: int) -> str | None:
-        """Return disassembly text for one instruction.
-
-        Example result::
-
-            "push    ebp"
-        """
-        try:
-            result = db.bytes.get_disassembly_at(address)
-            return str(result) if result is not None else None
-        except Exception:
-            return None
-
-    def get_instruction_at(address: int) -> InstructionInfo | None:
-        """Return structured instruction data at address.
-
-        Example result::
-
-            {"address": 4198400, "size": 1, "mnemonic": "push", "disassembly": "push ebp", "is_call": False}
-        """
-        try:
-            insn = db.instructions.get_at(address)
-        except Exception:
-            return None
-        if insn is None:
-            return None
         return {
-            "address": int(insn.ea),
-            "size": int(insn.size),
-            "mnemonic": str(db.instructions.get_mnemonic(insn)),
-            "disassembly": str(db.instructions.get_disassembly(insn)),
-            "is_call": bool(db.instructions.is_call_instruction(insn)),
+            "imports": results,
         }
 
-    def get_address_type(address: int) -> AddressType:
-        """Classify address as code, data, unknown, or invalid.
+    def get_entries():
+        try:
+            items = []
+            for entry in db.entries:
+                forwarder = None
+                has_forwarder = getattr(entry, "has_forwarder", None)
+                if callable(has_forwarder):
+                    if bool(has_forwarder()):
+                        forwarder = str(entry.forwarder_name)
+                elif bool(has_forwarder):
+                    forwarder = str(entry.forwarder_name)
 
-        Example result::
+                items.append({
+                    "ordinal": int(entry.ordinal),
+                    "address": int(entry.address),
+                    "name": str(entry.name),
+                    "forwarder": forwarder,
+                })
+        except Exception as exc:
+            return _error_from_exc("failed to enumerate entries", exc)
 
-            "code"
-        """
-        if not bool(db.is_valid_ea(address)):
-            return "invalid"
+        return {
+            "entries": items,
+        }
+
+    def get_bytes_at(address, size):
+        if size < 0:
+            return _error(f"size must be non-negative (got {size})")
+
+        if size == 0:
+            return {
+                "bytes": [],
+            }
+
+        try:
+            data = db.bytes.get_bytes_at(address, size)
+        except Exception as exc:
+            return _error_from_exc(f"failed to read {size} bytes at {address:#x}", exc)
+
+        if data is None:
+            return _error(f"unable to read {size} bytes at {address:#x}")
+
+        return {
+            "bytes": [int(b) for b in data],
+        }
+
+    def find_bytes(pattern):
+        if not pattern:
+            return _error("pattern must contain at least one byte")
+
+        for i, byte in enumerate(pattern):
+            if not isinstance(byte, int):
+                return _error(f"pattern[{i}] must be int, got {type(byte).__name__}")
+            if byte < 0 or byte > 255:
+                return _error(f"pattern[{i}] must be in range 0..255, got {byte}")
+
+        try:
+            hits = db.bytes.find_binary_sequence(bytes(pattern))
+        except Exception as exc:
+            return _error_from_exc("byte-pattern search failed", exc)
+
+        return {
+            "addresses": [int(ea) for ea in hits],
+        }
+
+    def get_disassembly_at(address):
+        try:
+            result = db.bytes.get_disassembly_at(address)
+        except Exception as exc:
+            return _error_from_exc(f"failed to fetch disassembly at {address:#x}", exc)
+
+        if result is None:
+            return _error(f"no disassembly available at {address:#x}")
+
+        return {
+            "disassembly": str(result),
+        }
+
+    def get_instruction_at(address):
+        try:
+            insn = db.instructions.get_at(address)
+        except Exception as exc:
+            return _error_from_exc(f"failed to fetch instruction at {address:#x}", exc)
+
+        if insn is None:
+            return _error(f"no instruction available at {address:#x}")
+
+        try:
+            item = {
+                "address": int(insn.ea),
+                "size": int(insn.size),
+                "mnemonic": str(db.instructions.get_mnemonic(insn)),
+                "disassembly": str(db.instructions.get_disassembly(insn)),
+                "is_call": bool(db.instructions.is_call_instruction(insn)),
+            }
+        except Exception as exc:
+            return _error_from_exc(f"failed to serialize instruction at {address:#x}", exc)
+
+        return item
+
+    def get_address_type(address):
+        try:
+            if not bool(db.is_valid_ea(address)):
+                return {
+                    "address_type": "invalid",
+                }
+        except Exception as exc:
+            return _error_from_exc(f"failed to validate address {address:#x}", exc)
 
         try:
             if bool(db.bytes.is_code_at(address)):
-                return "code"
+                return {
+                    "address_type": "code",
+                }
         except Exception:
             pass
 
         try:
             if bool(db.bytes.is_data_at(address)):
-                return "data"
+                return {
+                    "address_type": "data",
+                }
         except Exception:
             pass
 
         try:
             if bool(db.bytes.is_unknown_at(address)):
-                return "unknown"
+                return {
+                    "address_type": "unknown",
+                }
         except Exception:
             pass
 
-        return "unknown"
+        return {
+            "address_type": "unknown",
+        }
 
-    def get_comment_at(address: int) -> str | None:
-        """Return the comment attached to address.
-
-        Example result::
-
-            "decrypts config"
-        """
+    def get_comment_at(address):
         try:
             result = db.comments.get_at(address)
-        except Exception:
-            return None
-        return str(result) if result else None
+        except Exception as exc:
+            return _error_from_exc(f"failed to read comment at {address:#x}", exc)
+
+        if not result:
+            return _error(f"no comment available at {address:#x}")
+
+        return {
+            "comment": str(result),
+        }
 
     api: dict[str, Callable[..., Any]] = {
         "get_binary_info": get_binary_info,
@@ -981,18 +752,23 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
 
 
 def api_reference() -> str:
-    """Return a Markdown function table generated from stubs/docstrings."""
-    rows = _api_rows_from_type_stubs()
+    """Return a Markdown function table generated from API implementations and type aliases."""
+    implementation_functions = _implementation_functions_for_reference()
+    rows = _api_rows_from_implementation(implementation_functions)
 
     lines = [
         "## Function reference",
+        "",
+        "All functions return either the success payload shown below or `{error: str}`.",
+        "Callers should check for the presence of the `error` key to detect failures.",
         "",
         "| Function | Returns | Description |",
         "|----------|---------|-------------|",
     ]
 
-    for _, signature, returns, description in rows:
-        rendered_return = _render_return_annotation(returns)
+    for function_name, signature, description in rows:
+        rendered_return = _function_success_return_shape(function_name, implementation_functions)
         lines.append(f"| `{signature}` | `{rendered_return}` | {description} |")
 
     return "\n".join(lines)
+

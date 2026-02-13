@@ -1,7 +1,7 @@
 [project]
 name = "ida-codemode-sandbox"
 authors = [
-  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+  {name = "Willi Ballenthin", email = "wballenthin@hex-rays.com"},
 ]
 description = "A secure Monty sandbox exposing IDA Pro analysis routines for safe execution of AI-generated scripts"
 version = "0.1.0"

@@ -1,10 +1,29 @@
 """Tests for the ida-codemode-api package."""
 
+import inspect
+import re
+
+import pytest
+
 from ida_codemode_api import (
     FUNCTION_NAMES,
     TYPE_STUBS,
     api_reference,
+    create_api_from_database,
 )
+from ida_codemode_api import api_types
+from ida_codemode_api.api import TYPE_STUBS_PATH
+
+
+def assert_ok(result):
+    assert isinstance(result, dict)
+    if "error" in result:
+        pytest.fail(f"expected success result, got error: {result['error']}")
+    return result
+
+
+def assert_keys_exact(result: dict[str, object], expected_keys: set[str]):
+    assert set(result.keys()) == expected_keys
 
 
 class TestFunctionNames:
@@ -29,24 +48,27 @@ class TestTypeStubs:
         for name in FUNCTION_NAMES:
             assert f"def {name}(" in TYPE_STUBS, f"stub missing for {name}"
 
-    def test_contains_typed_dicts(self):
+    def test_contains_core_typed_dicts(self):
         for typed_dict in [
             "class BinaryInfo(TypedDict)",
             "class FunctionInfo(TypedDict)",
             "class NamedAddress(TypedDict)",
-            "class BasicBlockInfo(TypedDict)",
-            "class XrefToInfo(TypedDict)",
-            "class XrefFromInfo(TypedDict)",
-            "class StringInfo(TypedDict)",
-            "SegmentInfo = TypedDict(",
-            "class ImportInfo(TypedDict)",
-            "class EntryPointInfo(TypedDict)",
-            "class InstructionInfo(TypedDict)",
+            "class ApiError(TypedDict)",
+            "class GetFunctionsOk(TypedDict)",
+            "class GetAddressTypeOk(TypedDict)",
         ]:
             assert typed_dict in TYPE_STUBS
 
+    def test_contains_error_key_contract(self):
+        assert "error: str" in TYPE_STUBS
+        assert 'Status: Literal["okay"]' not in TYPE_STUBS
+        assert 'Status: Literal["error"]' not in TYPE_STUBS
+
     def test_parseable_python(self):
         compile(TYPE_STUBS, "<stubs>", "exec")
+
+    def test_matches_authoritative_file(self):
+        assert TYPE_STUBS == TYPE_STUBS_PATH.read_text(encoding="utf-8")
 
 
 class TestApiReference:
@@ -63,8 +85,196 @@ class TestApiReference:
     def test_single_table_layout(self):
         ref = api_reference()
         assert "| Function | Returns | Description |" in ref
-        # One table header only.
         assert ref.count("| Function | Returns | Description |") == 1
+
+    def test_mentions_global_error_contract(self):
+        ref = api_reference()
+        assert "{error: str}" in ref
+        assert "presence of the `error` key" in ref
+
+
+
+class TestApiDocstrings:
+    def test_api_types_docstrings_have_required_sections(self):
+        for name in FUNCTION_NAMES:
+            declaration = getattr(api_types, name)
+            doc = inspect.getdoc(declaration)
+            assert doc, f"missing docstring for api_types.{name}"
+
+            first_line = doc.splitlines()[0].strip()
+            assert first_line
+            assert first_line[0].isupper()
+            assert first_line.endswith(".")
+
+            assert re.search(r"See\s+also", doc), (
+                f"api_types.{name} docstring missing 'See also'"
+            )
+            assert "Returns:" in doc, f"api_types.{name} docstring missing 'Returns:'"
+            assert "Errors:" in doc, f"api_types.{name} docstring missing 'Errors:'"
+            assert (
+                "Example success payload:" in doc
+            ), f"api_types.{name} docstring missing example payload"
+
+            if inspect.signature(declaration).parameters:
+                assert "Args:" in doc, f"api_types.{name} docstring missing 'Args:'"
+
+    def test_runtime_docstrings_removed_for_exported_api(self):
+        runtime_api = create_api_from_database(object())
+        for name in FUNCTION_NAMES:
+            runtime_fn = runtime_api[name]
+            assert inspect.getdoc(runtime_fn) is None
+
+    def test_api_reference_prefers_api_types_docstrings(self):
+        ref = api_reference()
+
+        rows: dict[str, str] = {}
+        row_pattern = re.compile(r"^\| `([^`]*)` \| `([^`]*)` \| (.*) \|$")
+
+        for line in ref.splitlines():
+            match = row_pattern.match(line)
+            if not match:
+                continue
+
+            signature = match.group(1)
+            description = match.group(3)
+            function_name = signature.split("(", 1)[0]
+            rows[function_name] = description
+
+        for name in FUNCTION_NAMES:
+            declaration = getattr(api_types, name)
+            declaration_doc = inspect.getdoc(declaration)
+            assert declaration_doc, f"missing declaration docstring for {name}"
+
+            first_line = declaration_doc.splitlines()[0].strip()
+            assert rows.get(name) == first_line
+
+
+class TestPayloadContracts:
+    def test_success_payload_top_level_keys(self, fns, first_func):
+        functions_result = assert_ok(fns["get_functions"]())
+        functions = functions_result["functions"]
+        first = first_func
+        strings_result = assert_ok(fns["get_strings"]())
+        strings = strings_result["strings"]
+        string_address = strings[0]["address"] if strings else first["address"]
+
+        raw_bytes = assert_ok(fns["get_bytes_at"](first["address"], 4))["bytes"]
+
+        payloads = {
+            "get_binary_info": assert_ok(fns["get_binary_info"]()),
+            "get_functions": functions_result,
+            "get_function_by_name": assert_ok(fns["get_function_by_name"](first["name"])),
+            "get_function_at": assert_ok(fns["get_function_at"](first["address"])),
+            "get_function_disassembly_at": assert_ok(fns["get_function_disassembly_at"](first["address"])),
+            "get_callers_at": assert_ok(fns["get_callers_at"](first["address"])),
+            "get_callees_at": assert_ok(fns["get_callees_at"](first["address"])),
+            "get_basic_blocks_at": assert_ok(fns["get_basic_blocks_at"](first["address"])),
+            "get_xrefs_to_at": assert_ok(fns["get_xrefs_to_at"](first["address"])),
+            "get_xrefs_from_at": assert_ok(fns["get_xrefs_from_at"](first["address"])),
+            "get_strings": strings_result,
+            "get_segments": assert_ok(fns["get_segments"]()),
+            "get_names": assert_ok(fns["get_names"]()),
+            "demangle_name": assert_ok(fns["demangle_name"]("main")),
+            "get_imports": assert_ok(fns["get_imports"]()),
+            "get_entries": assert_ok(fns["get_entries"]()),
+            "get_bytes_at": {"bytes": raw_bytes},
+            "find_bytes": assert_ok(fns["find_bytes"](raw_bytes)),
+            "get_disassembly_at": assert_ok(fns["get_disassembly_at"](first["address"])),
+            "get_instruction_at": assert_ok(fns["get_instruction_at"](first["address"])),
+            "get_address_type": assert_ok(fns["get_address_type"](first["address"])),
+        }
+
+        expected_keys = {
+            "get_binary_info": {
+                "path",
+                "module",
+                "architecture",
+                "bitness",
+                "format",
+                "base_address",
+                "entry_point",
+                "minimum_ea",
+                "maximum_ea",
+                "filesize",
+                "md5",
+                "sha256",
+                "crc32",
+            },
+            "get_functions": {"functions"},
+            "get_function_by_name": {"address", "name", "size"},
+            "get_function_at": {"address", "name", "size"},
+            "get_function_disassembly_at": {"disassembly"},
+            "get_callers_at": {"callers"},
+            "get_callees_at": {"callees"},
+            "get_basic_blocks_at": {"basic_blocks"},
+            "get_xrefs_to_at": {"xrefs"},
+            "get_xrefs_from_at": {"xrefs"},
+            "get_strings": {"strings"},
+            "get_segments": {"segments"},
+            "get_names": {"names"},
+            "demangle_name": {"demangled_name"},
+            "get_imports": {"imports"},
+            "get_entries": {"entries"},
+            "get_bytes_at": {"bytes"},
+            "find_bytes": {"addresses"},
+            "get_disassembly_at": {"disassembly"},
+            "get_instruction_at": {
+                "address",
+                "size",
+                "mnemonic",
+                "disassembly",
+                "is_call",
+            },
+            "get_address_type": {"address_type"},
+        }
+
+        for function_name, payload in payloads.items():
+            assert_keys_exact(payload, expected_keys[function_name])
+
+        if functions:
+            assert_keys_exact(functions[0], {"address", "name", "size"})
+
+        if payloads["get_callers_at"]["callers"]:
+            assert_keys_exact(payloads["get_callers_at"]["callers"][0], {"address", "name"})
+
+        if payloads["get_callees_at"]["callees"]:
+            assert_keys_exact(payloads["get_callees_at"]["callees"][0], {"address", "name"})
+
+        if payloads["get_xrefs_to_at"]["xrefs"]:
+            assert_keys_exact(
+                payloads["get_xrefs_to_at"]["xrefs"][0],
+                {"from_address", "type", "is_call", "is_jump"},
+            )
+
+        if payloads["get_xrefs_from_at"]["xrefs"]:
+            assert_keys_exact(
+                payloads["get_xrefs_from_at"]["xrefs"][0],
+                {"to_address", "type", "is_call", "is_jump"},
+            )
+
+        if strings:
+            assert_keys_exact(strings[0], {"address", "length", "type", "value"})
+
+        optional_calls = {
+            "decompile_function_at": fns["decompile_function_at"](first["address"]),
+            "get_function_signature_at": fns["get_function_signature_at"](first["address"]),
+            "get_string_at": fns["get_string_at"](string_address),
+            "get_name_at": fns["get_name_at"](first["address"]),
+            "get_comment_at": fns["get_comment_at"](first["address"]),
+        }
+        optional_expected_keys = {
+            "decompile_function_at": {"pseudocode"},
+            "get_function_signature_at": {"signature"},
+            "get_string_at": {"string"},
+            "get_name_at": {"name"},
+            "get_comment_at": {"comment"},
+        }
+
+        for function_name, result in optional_calls.items():
+            if "error" in result:
+                assert isinstance(result["error"], str)
+            else:
+                assert_keys_exact(result, optional_expected_keys[function_name])
 
 
 class TestBuildIdaFunctions:
@@ -81,12 +291,12 @@ class TestBuildIdaFunctions:
 
 
 class TestBinaryInfo:
-    def test_returns_dict(self, fns):
+    def test_returns_success_shape(self, fns):
         info = fns["get_binary_info"]()
-        assert isinstance(info, dict)
+        assert_ok(info)
 
     def test_has_required_keys(self, fns):
-        info = fns["get_binary_info"]()
+        info = assert_ok(fns["get_binary_info"]())
         for key in [
             "path",
             "module",
@@ -107,11 +317,11 @@ class TestBinaryInfo:
 
 class TestFunctionDiscovery:
     def test_get_functions_non_empty(self, fns):
-        functions = fns["get_functions"]()
+        functions = assert_ok(fns["get_functions"]())["functions"]
         assert len(functions) >= 1
 
     def test_function_dict_shape(self, fns):
-        functions = fns["get_functions"]()
+        functions = assert_ok(fns["get_functions"]())["functions"]
         for f in functions:
             assert "address" in f
             assert "name" in f
@@ -121,56 +331,60 @@ class TestFunctionDiscovery:
             assert isinstance(f["size"], int)
 
     def test_lookup_by_name(self, fns):
-        functions = fns["get_functions"]()
+        functions = assert_ok(fns["get_functions"]())["functions"]
         name = functions[0]["name"]
-        result = fns["get_function_by_name"](name)
-        assert result is not None
+        result = assert_ok(fns["get_function_by_name"](name))
         assert result["name"] == name
 
     def test_lookup_by_address(self, fns):
-        functions = fns["get_functions"]()
+        functions = assert_ok(fns["get_functions"]())["functions"]
         address = functions[0]["address"]
-        result = fns["get_function_at"](address)
-        assert result is not None
+        result = assert_ok(fns["get_function_at"](address))
         assert result["address"] == address
 
 
 class TestFunctionAnalysis:
     def test_disassembly(self, fns, first_func):
-        lines = fns["get_function_disassembly_at"](first_func["address"])
+        lines = assert_ok(fns["get_function_disassembly_at"](first_func["address"]))["disassembly"]
         assert isinstance(lines, list)
         assert len(lines) >= 1
         assert all(isinstance(line, str) for line in lines)
 
     def test_disassembly_bad_address(self, fns):
-        lines = fns["get_function_disassembly_at"](0xDEADDEAD)
-        assert lines == []
+        result = fns["get_function_disassembly_at"](0xDEADDEAD)
+        assert "error" in result
+        assert isinstance(result["error"], str)
 
     def test_decompile_no_crash(self, fns, first_func):
-        lines = fns["decompile_function_at"](first_func["address"])
-        assert isinstance(lines, list)
-        assert all(isinstance(line, str) for line in lines)
+        result = fns["decompile_function_at"](first_func["address"])
+        if "error" in result:
+            assert isinstance(result["error"], str)
+        else:
+            assert all(isinstance(line, str) for line in result["pseudocode"])
 
     def test_signature(self, fns, first_func):
         sig = fns["get_function_signature_at"](first_func["address"])
-        assert sig is None or isinstance(sig, str)
+        if "error" in sig:
+            assert isinstance(sig["error"], str)
+        else:
+            assert isinstance(sig["signature"], str)
 
     def test_callers_shape(self, fns, first_func):
-        callers = fns["get_callers_at"](first_func["address"])
+        callers = assert_ok(fns["get_callers_at"](first_func["address"]))["callers"]
         assert isinstance(callers, list)
         for c in callers:
             assert "address" in c
             assert "name" in c
 
     def test_callees_shape(self, fns, first_func):
-        callees = fns["get_callees_at"](first_func["address"])
+        callees = assert_ok(fns["get_callees_at"](first_func["address"]))["callees"]
         assert isinstance(callees, list)
         for c in callees:
             assert "address" in c
             assert "name" in c
 
     def test_basic_blocks_shape(self, fns, first_func):
-        blocks = fns["get_basic_blocks_at"](first_func["address"])
+        blocks = assert_ok(fns["get_basic_blocks_at"](first_func["address"]))["basic_blocks"]
         assert isinstance(blocks, list)
         for b in blocks:
             assert "start" in b
@@ -181,7 +395,7 @@ class TestFunctionAnalysis:
 
 class TestXrefs:
     def test_xrefs_to_shape(self, fns, first_func):
-        xrefs = fns["get_xrefs_to_at"](first_func["address"])
+        xrefs = assert_ok(fns["get_xrefs_to_at"](first_func["address"]))["xrefs"]
         assert isinstance(xrefs, list)
         for x in xrefs:
             assert "from_address" in x
@@ -190,7 +404,7 @@ class TestXrefs:
             assert "is_jump" in x
 
     def test_xrefs_from_shape(self, fns, first_func):
-        xrefs = fns["get_xrefs_from_at"](first_func["address"])
+        xrefs = assert_ok(fns["get_xrefs_from_at"](first_func["address"]))["xrefs"]
         assert isinstance(xrefs, list)
         for x in xrefs:
             assert "to_address" in x
@@ -201,22 +415,22 @@ class TestXrefs:
 
 class TestStrings:
     def test_get_strings_non_empty(self, fns):
-        strings = fns["get_strings"]()
+        strings = assert_ok(fns["get_strings"]())["strings"]
         assert len(strings) >= 1
 
     def test_get_string_at_no_crash(self, fns):
-        strings = fns["get_strings"]()
+        strings = assert_ok(fns["get_strings"]())["strings"]
         result = fns["get_string_at"](strings[0]["address"])
-        assert result is None or isinstance(result, str)
+        assert "error" in result or "string" in result
 
 
 class TestSegments:
     def test_get_segments_non_empty(self, fns):
-        segs = fns["get_segments"]()
+        segs = assert_ok(fns["get_segments"]())["segments"]
         assert len(segs) >= 1
 
     def test_segment_shape(self, fns):
-        segs = fns["get_segments"]()
+        segs = assert_ok(fns["get_segments"]())["segments"]
         for s in segs:
             assert "name" in s
             assert "start" in s
@@ -229,20 +443,21 @@ class TestSegments:
 
 class TestNames:
     def test_get_names_non_empty(self, fns):
-        names = fns["get_names"]()
+        names = assert_ok(fns["get_names"]())["names"]
         assert len(names) >= 1
 
     def test_get_name_at(self, fns, first_func):
-        name = fns["get_name_at"](first_func["address"])
-        assert name is None or isinstance(name, str)
+        result = fns["get_name_at"](first_func["address"])
+        assert "error" in result or "name" in result
 
     def test_demangle_passthrough(self, fns):
-        assert fns["demangle_name"]("main") == "main"
+        result = assert_ok(fns["demangle_name"]("main"))
+        assert result["demangled_name"] == "main"
 
 
 class TestImportsAndEntries:
     def test_imports_shape(self, fns):
-        imports = fns["get_imports"]()
+        imports = assert_ok(fns["get_imports"]())["imports"]
         assert isinstance(imports, list)
         for imp in imports:
             assert "address" in imp
@@ -251,7 +466,7 @@ class TestImportsAndEntries:
             assert "ordinal" in imp
 
     def test_entries_shape(self, fns):
-        entries = fns["get_entries"]()
+        entries = assert_ok(fns["get_entries"]())["entries"]
         assert isinstance(entries, list)
         for e in entries:
             assert "ordinal" in e
@@ -262,19 +477,18 @@ class TestImportsAndEntries:
 
 class TestBytesAndMemory:
     def test_get_bytes_at(self, fns, first_func):
-        raw = fns["get_bytes_at"](first_func["address"], 4)
+        raw = assert_ok(fns["get_bytes_at"](first_func["address"], 4))["bytes"]
         assert isinstance(raw, list)
         assert len(raw) == 4
         assert all(isinstance(b, int) and 0 <= b <= 255 for b in raw)
 
     def test_find_bytes(self, fns, first_func):
-        raw = fns["get_bytes_at"](first_func["address"], 3)
-        hits = fns["find_bytes"](raw)
+        raw = assert_ok(fns["get_bytes_at"](first_func["address"], 3))["bytes"]
+        hits = assert_ok(fns["find_bytes"](raw))["addresses"]
         assert isinstance(hits, list)
 
     def test_get_instruction_at(self, fns, first_func):
-        insn = fns["get_instruction_at"](first_func["address"])
-        assert insn is not None
+        insn = assert_ok(fns["get_instruction_at"](first_func["address"]))
         assert "address" in insn
         assert "size" in insn
         assert "mnemonic" in insn
@@ -282,13 +496,14 @@ class TestBytesAndMemory:
         assert "is_call" in insn
 
     def test_get_disassembly_at(self, fns, first_func):
-        text = fns["get_disassembly_at"](first_func["address"])
-        assert text is None or isinstance(text, str)
+        text = assert_ok(fns["get_disassembly_at"](first_func["address"]))["disassembly"]
+        assert isinstance(text, str)
 
 
 class TestAddressType:
     def test_code_address(self, fns, first_func):
-        assert fns["get_address_type"](first_func["address"]) in {
+        result = assert_ok(fns["get_address_type"](first_func["address"]))
+        assert result["address_type"] in {
             "code",
             "data",
             "unknown",
@@ -296,10 +511,11 @@ class TestAddressType:
         }
 
     def test_invalid_address(self, fns):
-        assert fns["get_address_type"](0xDEADDEAD) == "invalid"
+        result = assert_ok(fns["get_address_type"](0xDEADDEAD))
+        assert result["address_type"] == "invalid"
 
 
 class TestComments:
     def test_get_comment_no_crash(self, fns, first_func):
         result = fns["get_comment_at"](first_func["address"])
-        assert result is None or isinstance(result, str)
+        assert "error" in result or "comment" in result

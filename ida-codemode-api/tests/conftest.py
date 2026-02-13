@@ -43,6 +43,8 @@ def fns(db):
 @pytest.fixture(scope="session")
 def first_func(fns):
     """Address of the first function IDA found."""
-    functions = fns["get_functions"]()
+    result = fns["get_functions"]()
+    assert "error" not in result, result.get("error", "unknown error")
+    functions = result["functions"]
     assert len(functions) > 0, "IDA found no functions in the test binary"
     return functions[0]

@@ -1,7 +1,7 @@
 [project]
 name = "ida-codemode-api"
 authors = [
-  {name = "Willi Ballenthin", email = "willi.ballenthin@gmail.com"},
+  {name = "Willi Ballenthin", email = "wballenthin@hex-rays.com"},
 ]
 description = "Portable analysis API for IDA Pro"
 version = "0.1.0"
@@ -30,3 +30,10 @@ include = ["ida_codemode_api*"]
 
 [tool.setuptools.package-data]
 ida_codemode_api = ["prompts/*.md"]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:builtin type SwigPyPacked has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type SwigPyObject has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type swigvarlink has no __module__ attribute:DeprecationWarning",
+]
