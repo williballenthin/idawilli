@@ -167,8 +167,8 @@ class TestPayloadContracts:
             "get_function_by_name": assert_ok(fns["get_function_by_name"](first["name"])),
             "get_function_at": assert_ok(fns["get_function_at"](first["address"])),
             "get_function_disassembly_at": assert_ok(fns["get_function_disassembly_at"](first["address"])),
-            "get_callers_at": assert_ok(fns["get_callers_at"](first["address"])),
-            "get_callees_at": assert_ok(fns["get_callees_at"](first["address"])),
+            "get_function_callers": assert_ok(fns["get_function_callers"](first["address"])),
+            "get_function_callees": assert_ok(fns["get_function_callees"](first["address"])),
             "get_basic_blocks_at": assert_ok(fns["get_basic_blocks_at"](first["address"])),
             "get_xrefs_to_at": assert_ok(fns["get_xrefs_to_at"](first["address"])),
             "get_xrefs_from_at": assert_ok(fns["get_xrefs_from_at"](first["address"])),
@@ -205,8 +205,8 @@ class TestPayloadContracts:
             "get_function_by_name": {"address", "name", "size", "signature", "flags", "comment", "repeatable_comment"},
             "get_function_at": {"address", "name", "size", "signature", "flags", "comment", "repeatable_comment"},
             "get_function_disassembly_at": {"disassembly"},
-            "get_callers_at": {"callers"},
-            "get_callees_at": {"callees"},
+            "get_function_callers": {"callers"},
+            "get_function_callees": {"callees"},
             "get_basic_blocks_at": {"basic_blocks"},
             "get_xrefs_to_at": {"xrefs"},
             "get_xrefs_from_at": {"xrefs"},
@@ -235,11 +235,11 @@ class TestPayloadContracts:
         if functions:
             assert_keys_exact(functions[0], {"address", "name", "size", "signature", "flags", "comment", "repeatable_comment"})
 
-        if payloads["get_callers_at"]["callers"]:
-            assert_keys_exact(payloads["get_callers_at"]["callers"][0], {"address", "name"})
+        if payloads["get_function_callers"]["callers"]:
+            assert_keys_exact(payloads["get_function_callers"]["callers"][0], {"address", "name", "size", "signature", "flags", "comment", "repeatable_comment"})
 
-        if payloads["get_callees_at"]["callees"]:
-            assert_keys_exact(payloads["get_callees_at"]["callees"][0], {"address", "name"})
+        if payloads["get_function_callees"]["callees"]:
+            assert_keys_exact(payloads["get_function_callees"]["callees"][0], {"address", "name", "size", "signature", "flags", "comment", "repeatable_comment"})
 
         if payloads["get_xrefs_to_at"]["xrefs"]:
             assert_keys_exact(
@@ -372,18 +372,28 @@ class TestFunctionAnalysis:
             assert all(isinstance(line, str) for line in result["pseudocode"])
 
     def test_callers_shape(self, fns, first_func):
-        callers = assert_ok(fns["get_callers_at"](first_func["address"]))["callers"]
+        callers = assert_ok(fns["get_function_callers"](first_func["address"]))["callers"]
         assert isinstance(callers, list)
         for c in callers:
             assert "address" in c
             assert "name" in c
+            assert "size" in c
+            assert "signature" in c
+            assert "flags" in c
+            assert "comment" in c
+            assert "repeatable_comment" in c
 
     def test_callees_shape(self, fns, first_func):
-        callees = assert_ok(fns["get_callees_at"](first_func["address"]))["callees"]
+        callees = assert_ok(fns["get_function_callees"](first_func["address"]))["callees"]
         assert isinstance(callees, list)
         for c in callees:
             assert "address" in c
             assert "name" in c
+            assert "size" in c
+            assert "signature" in c
+            assert "flags" in c
+            assert "comment" in c
+            assert "repeatable_comment" in c
 
     def test_basic_blocks_shape(self, fns, first_func):
         blocks = assert_ok(fns["get_basic_blocks_at"](first_func["address"]))["basic_blocks"]

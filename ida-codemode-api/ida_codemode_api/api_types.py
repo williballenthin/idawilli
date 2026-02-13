@@ -134,12 +134,12 @@ class DecompileFunctionAtOk(TypedDict):
     pseudocode: list[str]
 
 
-class GetCallersAtOk(TypedDict):
-    callers: list[NamedAddress]
+class GetFunctionCallersOk(TypedDict):
+    callers: list[FunctionInfo]
 
 
-class GetCalleesAtOk(TypedDict):
-    callees: list[NamedAddress]
+class GetFunctionCalleesOk(TypedDict):
+    callees: list[FunctionInfo]
 
 
 class GetBasicBlocksAtOk(TypedDict):
@@ -217,8 +217,8 @@ GetFunctionByNameResult = FunctionInfo | ApiError
 GetFunctionAtResult = FunctionInfo | ApiError
 GetFunctionDisassemblyAtResult = GetFunctionDisassemblyAtOk | ApiError
 DecompileFunctionAtResult = DecompileFunctionAtOk | ApiError
-GetCallersAtResult = GetCallersAtOk | ApiError
-GetCalleesAtResult = GetCalleesAtOk | ApiError
+GetFunctionCallersResult = GetFunctionCallersOk | ApiError
+GetFunctionCalleesResult = GetFunctionCalleesOk | ApiError
 GetBasicBlocksAtResult = GetBasicBlocksAtOk | ApiError
 GetXrefsToAtResult = GetXrefsToAtOk | ApiError
 GetXrefsFromAtResult = GetXrefsFromAtOk | ApiError
@@ -305,7 +305,7 @@ def get_functions() -> GetFunctionsResult:
     """All discovered function descriptors.
 
     Use this to enumerate function entry points before calling per-function APIs.
-    See also `get_function_by_name`, `get_function_at`, and `get_callers_at`.
+    See also `get_function_by_name`, `get_function_at`, and `get_function_callers`.
 
     Args:
         None.
@@ -457,18 +457,19 @@ def decompile_function_at(address: int) -> DecompileFunctionAtResult:
     raise NotImplementedError
 
 
-def get_callers_at(address: int) -> GetCallersAtResult:
+def get_function_callers(address: int) -> GetFunctionCallersResult:
     """Functions that call the containing function.
 
     Use this for inbound call-graph analysis, impact assessment, and reachability
-    queries. See also `get_callees_at`, `get_xrefs_to_at`, and `get_function_at`.
+    queries. See also `get_function_callees`, `get_xrefs_to_at`, and `get_function_at`.
 
     Args:
         address: Effective address anywhere inside the target function.
 
     Returns:
-        Success payload `{callers: list[{address: int, name: str}]}` or
-        `{"error": str}`.
+        Success payload `{callers: list[{address: int, name: str, size: int, signature: str,
+        flags: {noreturn: bool, library: bool, thunk: bool}, comment: str,
+        repeatable_comment: str}]}` or `{"error": str}`.
 
     Errors:
         - Address does not resolve to a function.
@@ -477,25 +478,33 @@ def get_callers_at(address: int) -> GetCallersAtResult:
     Example success payload:
         {
             "callers": [
-                {"address": 4199000, "name": "sub_4013A8"},
-                {"address": 4200100, "name": "start"},
+                {
+                    "address": 4199000,
+                    "name": "sub_4013A8",
+                    "size": 64,
+                    "signature": "void __cdecl sub_4013A8()",
+                    "flags": {"noreturn": False, "library": False, "thunk": False},
+                    "comment": "",
+                    "repeatable_comment": "",
+                },
             ],
         }"""
     raise NotImplementedError
 
 
-def get_callees_at(address: int) -> GetCalleesAtResult:
+def get_function_callees(address: int) -> GetFunctionCalleesResult:
     """Functions called by the containing function.
 
     Use this for outbound call-graph traversal and dependency discovery. See also
-    `get_callers_at`, `get_xrefs_from_at`, and `get_function_at`.
+    `get_function_callers`, `get_xrefs_from_at`, and `get_function_at`.
 
     Args:
         address: Effective address anywhere inside the target function.
 
     Returns:
-        Success payload `{callees: list[{address: int, name: str}]}` or
-        `{"error": str}`.
+        Success payload `{callees: list[{address: int, name: str, size: int, signature: str,
+        flags: {noreturn: bool, library: bool, thunk: bool}, comment: str,
+        repeatable_comment: str}]}` or `{"error": str}`.
 
     Errors:
         - Address does not resolve to a function.
@@ -504,8 +513,15 @@ def get_callees_at(address: int) -> GetCalleesAtResult:
     Example success payload:
         {
             "callees": [
-                {"address": 4198608, "name": "_printf"},
-                {"address": 4198700, "name": "sub_40124C"},
+                {
+                    "address": 4198608,
+                    "name": "_printf",
+                    "size": 128,
+                    "signature": "int __cdecl printf(const char *format, ...)",
+                    "flags": {"noreturn": False, "library": True, "thunk": False},
+                    "comment": "",
+                    "repeatable_comment": "",
+                },
             ],
         }"""
     raise NotImplementedError
@@ -515,8 +531,8 @@ def get_basic_blocks_at(address: int) -> GetBasicBlocksAtResult:
     """Control-flow graph basic blocks for the containing function.
 
     Use this to build custom CFG analyses, detect branch structure, or map
-    execution regions. See also `get_function_disassembly_at`, `get_callers_at`,
-    and `get_callees_at`.
+    execution regions. See also `get_function_disassembly_at`, `get_function_callers`,
+    and `get_function_callees`.
 
     Args:
         address: Effective address anywhere inside the target function.
@@ -554,7 +570,7 @@ def get_xrefs_to_at(address: int) -> GetXrefsToAtResult:
     """Cross-references that target an address.
 
     Use this for incoming reference analysis at instruction, data, or function
-    granularity. See also `get_xrefs_from_at`, `get_callers_at`, and
+    granularity. See also `get_xrefs_from_at`, `get_function_callers`, and
     `get_address_type`.
 
     Args:
@@ -586,7 +602,7 @@ def get_xrefs_from_at(address: int) -> GetXrefsFromAtResult:
     """Cross-references that originate at an address.
 
     Use this to inspect where a specific instruction or data item points to. See
-    also `get_xrefs_to_at`, `get_callees_at`, and `get_disassembly_at`.
+    also `get_xrefs_to_at`, `get_function_callees`, and `get_disassembly_at`.
 
     Args:
         address: Effective address that is the xref source.

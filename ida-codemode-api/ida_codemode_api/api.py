@@ -37,8 +37,8 @@ FUNCTION_NAMES: list[str] = [
     "get_function_at",
     "get_function_disassembly_at",
     "decompile_function_at",
-    "get_callers_at",
-    "get_callees_at",
+    "get_function_callers",
+    "get_function_callees",
     "get_basic_blocks_at",
     "get_xrefs_to_at",
     "get_xrefs_from_at",
@@ -385,20 +385,14 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             "pseudocode": [str(line) for line in result],
         }
 
-    def get_callers_at(address):
+    def get_function_callers(address):
         func, err = _lookup_function_containing(address, context="caller analysis")
         if err is not None:
             return err
 
         try:
             callers = db.functions.get_callers(func)
-            items = [
-                {
-                    "address": int(caller.start_ea),
-                    "name": str(db.functions.get_name(caller)),
-                }
-                for caller in callers
-            ]
+            items = [_serialize_function(caller) for caller in callers]
         except Exception as exc:
             return _error_from_exc(f"failed to enumerate callers for function at {address:#x}", exc)
 
@@ -406,20 +400,14 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             "callers": items,
         }
 
-    def get_callees_at(address):
+    def get_function_callees(address):
         func, err = _lookup_function_containing(address, context="callee analysis")
         if err is not None:
             return err
 
         try:
             callees = db.functions.get_callees(func)
-            items = [
-                {
-                    "address": int(callee.start_ea),
-                    "name": str(db.functions.get_name(callee)),
-                }
-                for callee in callees
-            ]
+            items = [_serialize_function(callee) for callee in callees]
         except Exception as exc:
             return _error_from_exc(f"failed to enumerate callees for function at {address:#x}", exc)
 
@@ -807,8 +795,8 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         "get_function_at": get_function_at,
         "get_function_disassembly_at": get_function_disassembly_at,
         "decompile_function_at": decompile_function_at,
-        "get_callers_at": get_callers_at,
-        "get_callees_at": get_callees_at,
+        "get_function_callers": get_function_callers,
+        "get_function_callees": get_function_callees,
         "get_basic_blocks_at": get_basic_blocks_at,
         "get_xrefs_to_at": get_xrefs_to_at,
         "get_xrefs_from_at": get_xrefs_from_at,
