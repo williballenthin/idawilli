@@ -363,7 +363,30 @@ def get_functions() -> GetFunctionsResult:
                     "repeatable_comment": "",
                 },
             ],
-        }"""
+        }
+
+    Examples:
+        Filter functions by name pattern:
+            result = fns["get_functions"]()
+            if "error" not in result:
+                crypto_funcs = [
+                    fn for fn in result["functions"]
+                    if "crypt" in fn["name"].lower()
+                ]
+
+        Find all callers of a specific function:
+            result = fns["get_functions"]()
+            if "error" not in result:
+                target = next(
+                    (fn for fn in result["functions"] if fn["name"] == "_encrypt"),
+                    None
+                )
+                if target:
+                    callers_result = fns["get_function_callers"](target["address"])
+                    if "error" not in callers_result:
+                        for caller in callers_result["callers"]:
+                            print(f"{caller['name']} calls _encrypt")
+    """
     raise NotImplementedError
 
 
@@ -823,7 +846,21 @@ def get_names() -> GetNamesResult:
                 {"address": 4198400, "name": "_main"},
                 {"address": 4198608, "name": "_printf"},
             ],
-        }"""
+        }
+
+    Examples:
+        Filter out functions to find global variables:
+            names_result = fns["get_names"]()
+            funcs_result = fns["get_functions"]()
+            if "error" not in names_result and "error" not in funcs_result:
+                func_addrs = {fn["address"] for fn in funcs_result["functions"]}
+                global_vars = [
+                    name for name in names_result["names"]
+                    if name["address"] not in func_addrs
+                ]
+                for var in global_vars:
+                    print(f"Global variable: {var['name']} at {hex(var['address'])}")
+    """
     raise NotImplementedError
 
 
