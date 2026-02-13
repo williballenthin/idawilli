@@ -40,6 +40,7 @@ FUNCTION_NAMES: list[str] = [
     "get_function_callers",
     "get_function_callees",
     "get_function_data_xrefs",
+    "get_function_string_xrefs",
     "get_basic_blocks_at",
     "get_xrefs_to_at",
     "get_xrefs_from_at",
@@ -461,6 +462,62 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             "xrefs": items,
         }
 
+    def get_function_string_xrefs(function_start):
+        func, err = _lookup_function_start(function_start, context="function string xref analysis")
+        if err is not None:
+            return err
+
+        try:
+            items = []
+            flowchart = db.functions.get_flowchart(func)
+            if flowchart is None:
+                return {"xrefs": []}
+
+            visited = set()
+            for block in flowchart:
+                ea = int(block.start_ea)
+                end_ea = int(block.end_ea)
+
+                while ea < end_ea:
+                    if ea not in visited:
+                        visited.add(ea)
+                        try:
+                            for xref in db.xrefs.from_ea(ea):
+                                if not xref.is_call and not xref.is_jump:
+                                    target_ea = int(xref.to_ea)
+                                    try:
+                                        string_value = db.bytes.get_cstring_at(target_ea)
+                                        if string_value is not None:
+                                            if isinstance(string_value, (bytes, bytearray)):
+                                                string_value = string_value.decode("utf-8", errors="replace")
+                                            else:
+                                                string_value = str(string_value)
+
+                                            items.append({
+                                                "from_address": int(ea),
+                                                "string_address": target_ea,
+                                                "string": string_value,
+                                            })
+                                    except Exception:
+                                        pass
+                        except Exception:
+                            pass
+
+                    try:
+                        insn = db.instructions.get_at(ea)
+                        if insn is not None:
+                            ea += int(insn.size)
+                        else:
+                            ea += 1
+                    except Exception:
+                        ea += 1
+        except Exception as exc:
+            return _error_from_exc(f"failed to enumerate string xrefs for function at {function_start:#x}", exc)
+
+        return {
+            "xrefs": items,
+        }
+
     def get_basic_blocks_at(address):
         func, err = _lookup_function_containing(address, context="basic-block analysis")
         if err is not None:
@@ -844,6 +901,7 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         "get_function_callers": get_function_callers,
         "get_function_callees": get_function_callees,
         "get_function_data_xrefs": get_function_data_xrefs,
+        "get_function_string_xrefs": get_function_string_xrefs,
         "get_basic_blocks_at": get_basic_blocks_at,
         "get_xrefs_to_at": get_xrefs_to_at,
         "get_xrefs_from_at": get_xrefs_from_at,

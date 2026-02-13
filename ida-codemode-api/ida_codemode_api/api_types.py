@@ -78,6 +78,12 @@ class DataXrefInfo(TypedDict):
     type: str
 
 
+class StringXrefInfo(TypedDict):
+    from_address: int
+    string_address: int
+    string: str
+
+
 class StringInfo(TypedDict):
     address: int
     length: int
@@ -164,6 +170,10 @@ class GetFunctionDataXrefsOk(TypedDict):
     xrefs: list[DataXrefInfo]
 
 
+class GetFunctionStringXrefsOk(TypedDict):
+    xrefs: list[StringXrefInfo]
+
+
 class GetStringsOk(TypedDict):
     strings: list[StringInfo]
 
@@ -233,6 +243,7 @@ GetBasicBlocksAtResult = GetBasicBlocksAtOk | ApiError
 GetXrefsToAtResult = GetXrefsToAtOk | ApiError
 GetXrefsFromAtResult = GetXrefsFromAtOk | ApiError
 GetFunctionDataXrefsResult = GetFunctionDataXrefsOk | ApiError
+GetFunctionStringXrefsResult = GetFunctionStringXrefsOk | ApiError
 GetStringsResult = GetStringsOk | ApiError
 GetStringAtResult = GetStringAtOk | ApiError
 GetSegmentsResult = GetSegmentsOk | ApiError
@@ -667,6 +678,38 @@ def get_function_data_xrefs(function_start: int) -> GetFunctionDataXrefsResult:
                     "from_address": 4198404,
                     "to_address": 4220000,
                     "type": "dr_O",
+                }
+            ],
+        }"""
+    raise NotImplementedError
+
+
+def get_function_string_xrefs(function_start: int) -> GetFunctionStringXrefsResult:
+    """String cross-references originating from all instructions in a function.
+
+    Use this to discover string literals referenced within a function. See also
+    `get_function_data_xrefs`, `get_strings`, and `get_string_at`.
+
+    Args:
+        function_start: Effective address that must be exactly a function start.
+
+    Returns:
+        Success payload
+        `{xrefs: list[{from_address: int, string_address: int, string: str}]}` or
+        `{"error": str}`.
+
+    Errors:
+        - Address does not resolve to any function.
+        - Address resolves inside a function but is not the function start.
+        - String xref enumeration failed.
+
+    Example success payload:
+        {
+            "xrefs": [
+                {
+                    "from_address": 4198404,
+                    "string_address": 4220000,
+                    "string": "Hello world",
                 }
             ],
         }"""

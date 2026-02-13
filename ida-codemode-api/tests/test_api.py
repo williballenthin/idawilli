@@ -30,8 +30,8 @@ class TestFunctionNames:
     def test_is_list(self):
         assert isinstance(FUNCTION_NAMES, list)
 
-    def test_has_27_functions(self):
-        assert len(FUNCTION_NAMES) == 27
+    def test_has_28_functions(self):
+        assert len(FUNCTION_NAMES) == 28
 
     def test_no_duplicates(self):
         assert len(FUNCTION_NAMES) == len(set(FUNCTION_NAMES))
@@ -170,6 +170,7 @@ class TestPayloadContracts:
             "get_function_callers": assert_ok(fns["get_function_callers"](first["address"])),
             "get_function_callees": assert_ok(fns["get_function_callees"](first["address"])),
             "get_function_data_xrefs": assert_ok(fns["get_function_data_xrefs"](first["address"])),
+            "get_function_string_xrefs": assert_ok(fns["get_function_string_xrefs"](first["address"])),
             "get_basic_blocks_at": assert_ok(fns["get_basic_blocks_at"](first["address"])),
             "get_xrefs_to_at": assert_ok(fns["get_xrefs_to_at"](first["address"])),
             "get_xrefs_from_at": assert_ok(fns["get_xrefs_from_at"](first["address"])),
@@ -209,6 +210,7 @@ class TestPayloadContracts:
             "get_function_callers": {"callers"},
             "get_function_callees": {"callees"},
             "get_function_data_xrefs": {"xrefs"},
+            "get_function_string_xrefs": {"xrefs"},
             "get_basic_blocks_at": {"basic_blocks"},
             "get_xrefs_to_at": {"xrefs"},
             "get_xrefs_from_at": {"xrefs"},
@@ -259,6 +261,12 @@ class TestPayloadContracts:
             assert_keys_exact(
                 payloads["get_function_data_xrefs"]["xrefs"][0],
                 {"from_address", "to_address", "type"},
+            )
+
+        if payloads["get_function_string_xrefs"]["xrefs"]:
+            assert_keys_exact(
+                payloads["get_function_string_xrefs"]["xrefs"][0],
+                {"from_address", "string_address", "string"},
             )
 
         if strings:
@@ -453,6 +461,31 @@ class TestFunctionDataXrefs:
     def test_data_xrefs_not_function_start(self, fns, first_func):
         non_start = first_func["address"] + 1
         result = fns["get_function_data_xrefs"](non_start)
+        assert "error" in result
+        assert isinstance(result["error"], str)
+        assert "not a function start" in result["error"]
+
+
+class TestFunctionStringXrefs:
+    def test_string_xrefs_shape(self, fns, first_func):
+        xrefs = assert_ok(fns["get_function_string_xrefs"](first_func["address"]))["xrefs"]
+        assert isinstance(xrefs, list)
+        for x in xrefs:
+            assert "from_address" in x
+            assert "string_address" in x
+            assert "string" in x
+            assert isinstance(x["from_address"], int)
+            assert isinstance(x["string_address"], int)
+            assert isinstance(x["string"], str)
+
+    def test_string_xrefs_bad_address(self, fns):
+        result = fns["get_function_string_xrefs"](0xDEADDEAD)
+        assert "error" in result
+        assert isinstance(result["error"], str)
+
+    def test_string_xrefs_not_function_start(self, fns, first_func):
+        non_start = first_func["address"] + 1
+        result = fns["get_function_string_xrefs"](non_start)
         assert "error" in result
         assert isinstance(result["error"], str)
         assert "not a function start" in result["error"]
