@@ -8,8 +8,9 @@ import json
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import cache
 from pathlib import Path
-from typing import Any, Callable, cast
+from typing import Any, Callable, cast, get_args
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -42,6 +43,75 @@ def _resolve_model_name(model: str, provider: str) -> str:
     if ":" in model:
         return model
     return f"{provider}:{model}"
+
+
+@cache
+def _openrouter_model_ids() -> tuple[str, ...]:
+    """Fetch model IDs from OpenRouter's public models endpoint."""
+    import httpx
+
+    headers: dict[str, str] = {}
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    response = httpx.get("https://openrouter.ai/api/v1/models", headers=headers, timeout=15.0)
+    response.raise_for_status()
+
+    payload = response.json()
+    data = payload.get("data", [])
+    if not isinstance(data, list):
+        return tuple()
+
+    models: set[str] = set()
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        model_id = item.get("id")
+        if isinstance(model_id, str) and model_id:
+            models.add(f"openrouter:{model_id}")
+
+    return tuple(sorted(models))
+
+
+def _available_models() -> list[str]:
+    """Return known model identifiers (plus OpenRouter models when available)."""
+    from pydantic_ai.models import KnownModelName
+
+    literal = getattr(KnownModelName, "__value__", KnownModelName)
+    models = {name for name in get_args(literal) if isinstance(name, str)}
+
+    # Keep the configured default visible even when provider catalogs are dynamic.
+    models.add(_resolve_model_name(DEFAULT_MODEL, DEFAULT_PROVIDER))
+
+    try:
+        models.update(_openrouter_model_ids())
+    except Exception:
+        # Network access can fail/offline; keep the static model list available.
+        pass
+
+    return sorted(models)
+
+
+def _validate_model_name(model: str) -> None:
+    """Validate that the given provider:model reference can be instantiated."""
+    from pydantic_ai.models import infer_model
+
+    infer_model(model)
+
+    if not model.startswith("openrouter:"):
+        return
+
+    try:
+        openrouter_models = set(_openrouter_model_ids())
+    except Exception as exc:
+        raise ValueError(f"failed to verify OpenRouter model catalog: {exc}") from exc
+
+    if model not in openrouter_models:
+        raise ValueError(
+            f"unknown OpenRouter model '{model}'. "
+            "Use --list-models to inspect available OpenRouter model IDs."
+        )
 
 
 def _truncate(text: str, max_chars: int) -> str:
@@ -386,6 +456,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "idb_path",
         type=Path,
+        nargs="?",
         help="Path to IDA database (.idb/.i64) or input binary to open",
     )
     parser.add_argument(
@@ -403,6 +474,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Provider used when --model has no provider prefix. "
             "Default from $IDA_CODEMODE_AGENT_PROVIDER or openrouter"
         ),
+    )
+    parser.add_argument(
+        "--list-models",
+        action="store_true",
+        help="List known model identifiers (and OpenRouter catalog when reachable) and exit",
     )
     parser.add_argument(
         "--auto-analysis",
@@ -487,10 +563,36 @@ def main(argv: list[str] | None = None) -> int:
     console = Console()
     error_console = Console(stderr=True)
 
+    if args.list_models:
+        try:
+            models = _available_models()
+        except Exception as exc:  # pragma: no cover
+            error_console.print(
+                f"[red]error:[/red] failed to enumerate models: {type(exc).__name__}: {exc}"
+            )
+            return 2
+
+        console.print(f"[bold]Available models ({len(models)}):[/bold]")
+        for model_name in models:
+            console.print(model_name)
+        return 0
+
+    if args.idb_path is None:
+        error_console.print("[red]error:[/red] missing input path (idb_path)")
+        return 2
+
     model = _resolve_model_name(args.model, args.provider)
 
     try:
-        plan = resolve_database_plan(args.idb_path)
+        _validate_model_name(model)
+    except Exception as exc:
+        error_console.print(f"[red]error:[/red] invalid model '{model}': {type(exc).__name__}: {exc}")
+        return 2
+
+    idb_path = args.idb_path
+
+    try:
+        plan = resolve_database_plan(idb_path)
     except FileNotFoundError as exc:
         error_console.print(f"[red]error:[/red] {exc}")
         return 2
@@ -514,7 +616,7 @@ def main(argv: list[str] | None = None) -> int:
     session_logger = SessionLogger.create_default()
     session_logger.log(
         "session_start",
-        input_path=str(args.idb_path.expanduser()),
+        input_path=str(idb_path.expanduser()),
         open_path=str(plan.open_path),
         output_database=plan.output_database,
         creates_database=plan.creates_database,

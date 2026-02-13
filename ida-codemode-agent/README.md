@@ -29,6 +29,12 @@ pip install -e .
 ida-codemode-agent /path/to/sample.exe
 ```
 
+List known models:
+
+```bash
+ida-codemode-agent --list-models
+```
+
 Behavior for input paths:
 
 - If you pass an existing `.i64`/`.idb`, it opens that database.
@@ -90,7 +96,8 @@ Commands:
 
 ## CLI options
 
-- positional: `idb_path` (path to IDA database or binary)
+- positional: `idb_path` (path to IDA database or binary; not needed with `--list-models`)
+- `--list-models` print known model identifiers and exit (includes OpenRouter catalog entries when reachable)
 - `--model` model name (or `provider:model`)
 - `--provider` provider prefix for unqualified `--model`
 - `--[no-]auto-analysis` toggle IDA auto analysis (default: on)

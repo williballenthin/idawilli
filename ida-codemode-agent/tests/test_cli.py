@@ -8,12 +8,16 @@ from pathlib import Path
 
 import pytest
 
+import ida_codemode_agent.cli as cli
 from ida_codemode_agent.cli import (
     DEFAULT_MODEL,
     DEFAULT_PROVIDER,
     SessionLogger,
     ScriptEvaluator,
+    _available_models,
     _resolve_model_name,
+    _validate_model_name,
+    main,
     parse_args,
     resolve_database_plan,
 )
@@ -24,6 +28,49 @@ def test_default_model_and_provider_resolution() -> None:
     assert args.model == DEFAULT_MODEL
     assert args.provider == DEFAULT_PROVIDER
     assert _resolve_model_name(args.model, args.provider) == "openrouter:google/gemini-3-flash-preview"
+
+
+def test_parse_args_accepts_list_models_without_path() -> None:
+    args = parse_args(["--list-models"])
+    assert args.list_models is True
+    assert args.idb_path is None
+
+
+def test_available_models_contains_test_model() -> None:
+    models = _available_models()
+    assert "test" in models
+
+
+def test_available_models_contains_openrouter_default_model() -> None:
+    models = _available_models()
+    assert _resolve_model_name(DEFAULT_MODEL, DEFAULT_PROVIDER) in models
+
+
+def test_validate_model_name_rejects_unknown_provider() -> None:
+    with pytest.raises(Exception):
+        _validate_model_name("not-a-provider:some-model")
+
+
+def test_validate_model_name_rejects_unknown_openrouter_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-token")
+    monkeypatch.setattr(cli, "_openrouter_model_ids", lambda: ("openrouter:google/gemini-3-flash-preview",))
+
+    with pytest.raises(ValueError):
+        _validate_model_name("openrouter:google/not-a-real-model")
+
+
+def test_main_list_models_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
+    rc = main(["--list-models"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Available models" in out
+
+
+def test_main_validates_model_before_database_resolution(capsys: pytest.CaptureFixture[str]) -> None:
+    rc = main(["/definitely/missing/file.i64", "--provider", "not-a-provider", "--model", "x"])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "invalid model" in err
 
 
 class TestDatabasePlanResolution:
