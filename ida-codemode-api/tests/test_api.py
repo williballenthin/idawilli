@@ -696,21 +696,112 @@ class TestMutatorConvention:
 
 
 class TestDatabaseMutators:
-    def test_set_name_at_exists(self, fns):
-        assert "set_name_at" in fns
-        assert callable(fns["set_name_at"])
+    def test_set_comment_at_success(self, fns, first_func):
+        address = first_func["address"]
+        test_comment = "Test comment from API integration test"
 
-    def test_set_type_at_exists(self, fns):
-        assert "set_type_at" in fns
-        assert callable(fns["set_type_at"])
+        original_comment_result = fns["get_comment_at"](address)
+        original_comment = original_comment_result.get("comment") if "error" not in original_comment_result else None
 
-    def test_set_comment_at_exists(self, fns):
-        assert "set_comment_at" in fns
-        assert callable(fns["set_comment_at"])
+        result = fns["set_comment_at"](address, test_comment)
+        assert_mutator_success(result)
 
-    def test_set_repeatable_comment_at_exists(self, fns):
-        assert "set_repeatable_comment_at" in fns
-        assert callable(fns["set_repeatable_comment_at"])
+        verify_result = fns["get_comment_at"](address)
+        assert_ok(verify_result)
+        assert verify_result["comment"] == test_comment
+
+        if original_comment:
+            fns["set_comment_at"](address, original_comment)
+        else:
+            fns["set_comment_at"](address, "")
+
+    def test_set_comment_at_bad_address(self, fns):
+        result = fns["set_comment_at"](0xDEADDEAD, "should fail")
+        assert "error" in result
+        assert isinstance(result["error"], str)
+
+    def test_set_repeatable_comment_at_success(self, fns, first_func):
+        address = first_func["address"]
+        test_comment = "Test repeatable comment from API"
+
+        original_func = assert_ok(fns["get_function_at"](address))
+        original_repeatable = original_func["repeatable_comment"]
+
+        result = fns["set_repeatable_comment_at"](address, test_comment)
+        assert_mutator_success(result)
+
+        verify_func = assert_ok(fns["get_function_at"](address))
+        assert verify_func["repeatable_comment"] == test_comment
+
+        fns["set_repeatable_comment_at"](address, original_repeatable)
+
+    def test_set_repeatable_comment_at_bad_address(self, fns):
+        result = fns["set_repeatable_comment_at"](0xDEADDEAD, "should fail")
+        assert "error" in result
+        assert isinstance(result["error"], str)
+
+    def test_set_name_at_success(self, fns, first_func):
+        address = first_func["address"]
+        test_name = "test_renamed_function"
+
+        original_name_result = fns["get_name_at"](address)
+        original_name = original_name_result.get("name") if "error" not in original_name_result else first_func["name"]
+
+        result = fns["set_name_at"](address, test_name)
+        assert_mutator_success(result)
+
+        verify_result = fns["get_name_at"](address)
+        assert_ok(verify_result)
+        assert verify_result["name"] == test_name
+
+        restore_result = fns["set_name_at"](address, original_name)
+        assert_mutator_success(restore_result)
+
+        final_result = fns["get_name_at"](address)
+        assert_ok(final_result)
+        assert final_result["name"] == original_name
+
+    def test_set_name_at_bad_address(self, fns):
+        result = fns["set_name_at"](0xDEADDEAD, "should_fail")
+        assert "error" in result
+        assert isinstance(result["error"], str)
+
+    def test_set_type_at_success(self, fns, first_func):
+        address = first_func["address"]
+        test_type = "int __cdecl(void)"
+
+        original_func = assert_ok(fns["get_function_at"](address))
+        original_signature = original_func["signature"]
+
+        result = fns["set_type_at"](address, test_type)
+        assert_mutator_success(result)
+
+        verify_func = assert_ok(fns["get_function_at"](address))
+        assert verify_func["signature"] != original_signature
+        assert "int" in verify_func["signature"]
+
+        if original_signature:
+            restore_result = fns["set_type_at"](address, original_signature)
+            assert_mutator_success(restore_result)
+
+            final_func = assert_ok(fns["get_function_at"](address))
+            assert final_func["signature"] == original_signature
+        else:
+            result2 = fns["set_type_at"](address, "void __cdecl(void)")
+            assert_mutator_success(result2)
+
+            verify_func2 = assert_ok(fns["get_function_at"](address))
+            assert "void" in verify_func2["signature"]
+
+    def test_set_type_at_bad_address(self, fns):
+        result = fns["set_type_at"](0xDEADDEAD, "int (void)")
+        assert "error" in result
+        assert isinstance(result["error"], str)
+
+    def test_set_type_at_invalid_type_string(self, fns, first_func):
+        result = fns["set_type_at"](first_func["address"], "not a valid type")
+        assert "error" in result
+        assert isinstance(result["error"], str)
 
 
 class TestBookmarks:

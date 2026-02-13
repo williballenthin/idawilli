@@ -196,13 +196,14 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
 
         try:
             comment = db.comments.get_at(func.start_ea)
-            comment_str = str(comment) if comment else ""
+            comment_str = comment.comment if comment else ""
         except Exception:
             comment_str = ""
 
         try:
-            repeatable = db.comments.get_repeatable_at(func.start_ea)
-            repeatable_str = str(repeatable) if repeatable else ""
+            from ida_domain.comments import CommentKind
+            repeatable = db.comments.get_at(func.start_ea, CommentKind.REPEATABLE)
+            repeatable_str = repeatable.comment if repeatable else ""
         except Exception:
             repeatable_str = ""
 
@@ -868,7 +869,7 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             return _error(f"no comment available at {address:#x}")
 
         return {
-            "comment": str(result),
+            "comment": result.comment,
         }
 
     def read_pointer(address):
@@ -982,14 +983,33 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
 
     def set_name_at(address, name):
         try:
-            db.names.set_at(address, name)
+            db.names.set_name(address, name)
         except Exception as exc:
             return _error_from_exc(f"failed to set name at {address:#x}", exc)
         return None
 
     def set_type_at(address, type_str):
         try:
-            db.types.apply_type(address, type_str)
+            import ida_typeinf
+
+            name = db.names.get_at(address)
+            if not name:
+                name = f"sub_{address:X}"
+
+            if not type_str.rstrip().endswith(';'):
+                type_str = type_str + ';'
+
+            if '(' in type_str and name not in type_str:
+                type_str = type_str.replace('(', f' {name}(', 1)
+
+            tif = ida_typeinf.tinfo_t()
+            parse_result = ida_typeinf.parse_decl(tif, None, type_str, 0)
+            if not parse_result:
+                return _error(f"failed to parse type declaration: {type_str}")
+
+            apply_result = ida_typeinf.apply_tinfo(address, tif, ida_typeinf.TINFO_DEFINITE)
+            if not apply_result:
+                return _error(f"failed to apply type at {address:#x}")
         except Exception as exc:
             return _error_from_exc(f"failed to set type at {address:#x}", exc)
         return None
@@ -1003,7 +1023,8 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
 
     def set_repeatable_comment_at(address, comment):
         try:
-            db.comments.set_repeatable_at(address, comment)
+            from ida_domain.comments import CommentKind
+            db.comments.set_at(address, comment, CommentKind.REPEATABLE)
         except Exception as exc:
             return _error_from_exc(f"failed to set repeatable comment at {address:#x}", exc)
         return None
