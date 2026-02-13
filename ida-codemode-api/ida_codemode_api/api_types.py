@@ -15,8 +15,8 @@ from __future__ import annotations
 from typing import Literal, TypedDict
 
 
-class BinaryInfo(TypedDict):
-    path: str
+class DatabaseMetadata(TypedDict):
+    input_file_path: str
     module: str
     architecture: str
     bitness: int
@@ -25,10 +25,9 @@ class BinaryInfo(TypedDict):
     entry_point: int
     minimum_ea: int
     maximum_ea: int
-    filesize: int
-    md5: str
-    sha256: str
-    crc32: int
+    input_file_size: int
+    input_file_md5: str
+    input_file_sha256: str
 
 
 class FunctionInfo(TypedDict):
@@ -206,7 +205,7 @@ class HelpOk(TypedDict):
 
 
 HelpResult = HelpOk | ApiError
-GetBinaryInfoResult = BinaryInfo | ApiError
+GetDatabaseMetadataResult = DatabaseMetadata | ApiError
 GetFunctionsResult = GetFunctionsOk | ApiError
 GetFunctionByNameResult = FunctionInfo | ApiError
 GetFunctionAtResult = FunctionInfo | ApiError
@@ -260,8 +259,8 @@ def help(api: str) -> HelpResult:
     raise NotImplementedError
 
 
-def get_binary_info() -> GetBinaryInfoResult:
-    """Binary-wide metadata for the currently opened database.
+def get_database_metadata() -> GetDatabaseMetadataResult:
+    """Database-wide metadata for the currently opened database.
 
     Call this first when you need global context such as architecture, entry
     point, and the valid address range before querying functions, bytes, or
@@ -272,16 +271,16 @@ def get_binary_info() -> GetBinaryInfoResult:
 
     Returns:
         Success payload
-        `{path: str, module: str, architecture: str, bitness: int, format: str,
+        `{input_file_path: str, module: str, architecture: str, bitness: int, format: str,
         base_address: int, entry_point: int, minimum_ea: int, maximum_ea: int,
-        filesize: int, md5: str, sha256: str, crc32: int}` or `{"error": str}`.
+        input_file_size: int, input_file_md5: str, input_file_sha256: str}` or `{"error": str}`.
 
     Errors:
-        - Binary metadata could not be read from the open database.
+        - Database metadata could not be read from the open database.
 
     Example success payload:
         {
-            "path": "/tmp/sample.exe",
+            "input_file_path": "/tmp/sample.exe",
             "module": "sample.exe",
             "architecture": "metapc",
             "bitness": 32,
@@ -290,10 +289,9 @@ def get_binary_info() -> GetBinaryInfoResult:
             "entry_point": 4198400,
             "minimum_ea": 4194304,
             "maximum_ea": 4259840,
-            "filesize": 57344,
-            "md5": "d41d8cd98f00b204e9800998ecf8427e",
-            "sha256": "4f9f...e3f1a",
-            "crc32": 305419896,
+            "input_file_size": 57344,
+            "input_file_md5": "d41d8cd98f00b204e9800998ecf8427e",
+            "input_file_sha256": "4f9f...e3f1a",
         }"""
     raise NotImplementedError
 

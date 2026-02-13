@@ -50,7 +50,7 @@ class TestTypeStubs:
 
     def test_contains_core_typed_dicts(self):
         for typed_dict in [
-            "class BinaryInfo(TypedDict)",
+            "class DatabaseMetadata(TypedDict)",
             "class FunctionInfo(TypedDict)",
             "class NamedAddress(TypedDict)",
             "class ApiError(TypedDict)",
@@ -162,7 +162,7 @@ class TestPayloadContracts:
 
         payloads = {
             "help": assert_ok(fns["help"]("get_functions")),
-            "get_binary_info": assert_ok(fns["get_binary_info"]()),
+            "get_database_metadata": assert_ok(fns["get_database_metadata"]()),
             "get_functions": functions_result,
             "get_function_by_name": assert_ok(fns["get_function_by_name"](first["name"])),
             "get_function_at": assert_ok(fns["get_function_at"](first["address"])),
@@ -187,8 +187,8 @@ class TestPayloadContracts:
 
         expected_keys = {
             "help": {"documentation"},
-            "get_binary_info": {
-                "path",
+            "get_database_metadata": {
+                "input_file_path",
                 "module",
                 "architecture",
                 "bitness",
@@ -197,10 +197,9 @@ class TestPayloadContracts:
                 "entry_point",
                 "minimum_ea",
                 "maximum_ea",
-                "filesize",
-                "md5",
-                "sha256",
-                "crc32",
+                "input_file_size",
+                "input_file_md5",
+                "input_file_sha256",
             },
             "get_functions": {"functions"},
             "get_function_by_name": {"address", "name", "size"},
@@ -292,15 +291,15 @@ class TestBuildIdaFunctions:
         assert set(fns.keys()) == set(FUNCTION_NAMES)
 
 
-class TestBinaryInfo:
+class TestDatabaseMetadata:
     def test_returns_success_shape(self, fns):
-        info = fns["get_binary_info"]()
+        info = fns["get_database_metadata"]()
         assert_ok(info)
 
     def test_has_required_keys(self, fns):
-        info = assert_ok(fns["get_binary_info"]())
+        info = assert_ok(fns["get_database_metadata"]())
         for key in [
-            "path",
+            "input_file_path",
             "module",
             "architecture",
             "bitness",
@@ -309,10 +308,9 @@ class TestBinaryInfo:
             "entry_point",
             "minimum_ea",
             "maximum_ea",
-            "filesize",
-            "md5",
-            "sha256",
-            "crc32",
+            "input_file_size",
+            "input_file_md5",
+            "input_file_sha256",
         ]:
             assert key in info, f"missing key: {key}"
 

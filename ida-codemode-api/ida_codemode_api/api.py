@@ -31,7 +31,7 @@ TYPE_STUBS = TYPE_STUBS_PATH.read_text(encoding="utf-8")
 
 FUNCTION_NAMES: list[str] = [
     "help",
-    "get_binary_info",
+    "get_database_metadata",
     "get_functions",
     "get_function_by_name",
     "get_function_at",
@@ -260,10 +260,10 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             "documentation": f"{rendered_signature} -> {rendered_return}\n\n{doc}",
         }
 
-    def get_binary_info():
+    def get_database_metadata():
         try:
             return {
-                "path": str(db.path),
+                "input_file_path": str(db.path),
                 "module": str(db.module),
                 "architecture": str(db.architecture),
                 "bitness": int(db.bitness),
@@ -272,13 +272,12 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
                 "entry_point": int(db.start_ip),
                 "minimum_ea": int(db.minimum_ea),
                 "maximum_ea": int(db.maximum_ea),
-                "filesize": int(db.filesize),
-                "md5": str(db.md5),
-                "sha256": str(db.sha256),
-                "crc32": int(db.crc32),
+                "input_file_size": int(db.filesize),
+                "input_file_md5": str(db.md5),
+                "input_file_sha256": str(db.sha256),
             }
         except Exception as exc:
-            return _error_from_exc("failed to read binary metadata", exc)
+            return _error_from_exc("failed to read database metadata", exc)
 
     def get_functions():
         try:
@@ -772,7 +771,7 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
 
     api: dict[str, Callable[..., Any]] = {
         "help": help,
-        "get_binary_info": get_binary_info,
+        "get_database_metadata": get_database_metadata,
         "get_functions": get_functions,
         "get_function_by_name": get_function_by_name,
         "get_function_at": get_function_at,
