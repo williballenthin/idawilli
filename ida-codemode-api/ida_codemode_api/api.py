@@ -1002,8 +1002,8 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             if '(' in type_str and name not in type_str:
                 type_str = type_str.replace('(', f' {name}(', 1)
 
-            tif = ida_typeinf.tinfo_t()
-            parse_result = ida_typeinf.parse_decl(tif, None, type_str, 0)
+            tif = ida_typeinf.tinfo_t()  # ty: ignore[missing-argument]
+            parse_result = ida_typeinf.parse_decl(tif, None, type_str, 0)  # ty: ignore[invalid-argument-type]
             if not parse_result:
                 return _error(f"failed to parse type declaration: {type_str}")
 
@@ -1098,8 +1098,8 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             return _error(f"multiple local variables named {existing_name!r} in function at {function_address:#x}")
 
         try:
-            tinfo = ida_typeinf.tinfo_t()
-            if not ida_typeinf.parse_decl(tinfo, None, type_str, ida_typeinf.PT_SIL):
+            tinfo = ida_typeinf.tinfo_t()  # ty: ignore[missing-argument]
+            if not ida_typeinf.parse_decl(tinfo, None, type_str, ida_typeinf.PT_SIL):  # ty: ignore[invalid-argument-type]
                 return _error(f"failed to parse type string {type_str!r}")
 
             lvar = matching_vars[0]
