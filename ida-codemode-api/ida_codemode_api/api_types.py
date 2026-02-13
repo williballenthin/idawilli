@@ -122,14 +122,6 @@ class EntryPointInfo(TypedDict):
     forwarder: str | None
 
 
-class InstructionInfo(TypedDict):
-    address: int
-    size: int
-    mnemonic: str
-    disassembly: str
-    is_call: bool
-
-
 AddressType = Literal["code", "data", "unknown", "invalid"]
 
 
@@ -276,7 +268,6 @@ GetEntriesResult = GetEntriesOk | ApiError
 GetBytesAtResult = GetBytesAtOk | ApiError
 FindBytesResult = FindBytesOk | ApiError
 GetDisassemblyAtResult = GetDisassemblyAtOk | ApiError
-GetInstructionAtResult = InstructionInfo | ApiError
 GetAddressTypeResult = GetAddressTypeOk | ApiError
 GetCommentAtResult = GetCommentAtOk | ApiError
 ReadPointerResult = ReadPointerOk | ApiError
@@ -287,6 +278,8 @@ SetNameAtResult = MutatorResult
 SetTypeAtResult = MutatorResult
 SetCommentAtResult = MutatorResult
 SetRepeatableCommentAtResult = MutatorResult
+SetLocalVariableNameResult = MutatorResult
+SetLocalVariableTypeResult = MutatorResult
 
 
 def help(api: str) -> HelpResult:
@@ -455,8 +448,8 @@ def get_function_disassembly_at(address: int) -> GetFunctionDisassemblyAtResult:
     """Linear-disassembly lines for the containing function.
 
     Use this for text-based inspection of a full function body, including comments
-    and labels as rendered by IDA. See also `get_instruction_at`,
-    `get_disassembly_at`, and `decompile_function_at`.
+    and labels as rendered by IDA. See also `get_disassembly_at` and
+    `decompile_function_at`.
 
     Args:
         address: Effective address anywhere inside the target function.
@@ -995,8 +988,7 @@ def get_bytes_at(address: int, size: int) -> GetBytesAtResult:
     """Raw byte values from a contiguous address range.
 
     Use this for opcode extraction, signature generation, and binary patch
-    preparation. See also `find_bytes`, `get_instruction_at`, and
-    `get_address_type`.
+    preparation. See also `find_bytes` and `get_address_type`.
 
     Args:
         address: Effective address where reading should start.
@@ -1041,9 +1033,8 @@ def find_bytes(pattern: list[int]) -> FindBytesResult:
 def get_disassembly_at(address: int) -> GetDisassemblyAtResult:
     """Disassembly text for one instruction address.
 
-    Use this for compact instruction rendering without fetching the full structured
-    instruction object. See also `get_instruction_at`,
-    `get_function_disassembly_at`, and `get_bytes_at`.
+    Use this for compact instruction rendering at a single address. See also
+    `get_function_disassembly_at` and `get_bytes_at`.
 
     Args:
         address: Effective address expected to decode as an instruction.
@@ -1060,41 +1051,11 @@ def get_disassembly_at(address: int) -> GetDisassemblyAtResult:
     raise NotImplementedError
 
 
-def get_instruction_at(address: int) -> GetInstructionAtResult:
-    """Structured instruction fields for one address.
-
-    Use this when downstream tooling needs machine-readable mnemonic, size, and
-    call classification. See also `get_disassembly_at`, `get_bytes_at`, and
-    `get_function_disassembly_at`.
-
-    Args:
-        address: Effective address expected to decode as an instruction.
-
-    Returns:
-        Success payload
-        `{address: int, size: int, mnemonic: str, disassembly: str, is_call: bool}`
-        or `{"error": str}`.
-
-    Errors:
-        - Address does not decode to an instruction.
-        - Instruction retrieval or serialization failed.
-
-    Example success payload:
-        {
-            "address": 4198400,
-            "size": 5,
-            "mnemonic": "call",
-            "disassembly": "call sub_401200",
-            "is_call": True,
-        }"""
-    raise NotImplementedError
-
-
 def get_address_type(address: int) -> GetAddressTypeResult:
     """Address classification as code, data, unknown, or invalid.
 
     Use this before decoding bytes or interpreting symbols at arbitrary locations.
-    See also `get_bytes_at`, `get_instruction_at`, and `get_disassembly_at`.
+    See also `get_bytes_at` and `get_disassembly_at`.
 
     Args:
         address: Effective address to classify.
@@ -1116,8 +1077,7 @@ def get_comment_at(address: int) -> GetCommentAtResult:
     """Comment text attached to an exact address.
 
     Use this to collect analyst annotations and inline notes for reporting or
-    agent context. See also `get_disassembly_at`, `get_name_at`, and
-    `get_instruction_at`.
+    agent context. See also `get_disassembly_at` and `get_name_at`.
 
     Args:
         address: Effective address whose comment should be retrieved.
@@ -1234,6 +1194,55 @@ def set_repeatable_comment_at(address: int, comment: str) -> SetRepeatableCommen
     Errors:
         - Address is invalid.
         - Comment assignment failed due to IDA backend error."""
+    raise NotImplementedError
+
+
+def set_local_variable_name(function_address: int, existing_name: str, new_name: str) -> SetLocalVariableNameResult:
+    """Set the name of a local variable within a function.
+
+    Use this to rename local variables during annotation workflows. Requires
+    Hex-Rays decompiler. See also `decompile_function_at`, `get_function_at`, and
+    `set_local_variable_type`.
+
+    Args:
+        function_address: Effective address that must be exactly a function start.
+        existing_name: Current name of the local variable to rename.
+        new_name: New name to assign to the local variable.
+
+    Returns:
+        `None` on success or `{"error": str}` on failure.
+
+    Errors:
+        - Address is not a function start.
+        - Function decompilation failed.
+        - No local variable with the existing name found.
+        - Multiple local variables match the existing name.
+        - Name assignment failed due to IDA backend error."""
+    raise NotImplementedError
+
+
+def set_local_variable_type(function_address: int, existing_name: str, type: str) -> SetLocalVariableTypeResult:
+    """Set the type of a local variable within a function.
+
+    Use this to apply type information to local variables during annotation
+    workflows. Requires Hex-Rays decompiler. See also `decompile_function_at`,
+    `get_function_at`, and `set_local_variable_name`.
+
+    Args:
+        function_address: Effective address that must be exactly a function start.
+        existing_name: Current name of the local variable to retype.
+        type: Type declaration string in IDA type syntax.
+
+    Returns:
+        `None` on success or `{"error": str}` on failure.
+
+    Errors:
+        - Address is not a function start.
+        - Function decompilation failed.
+        - No local variable with the existing name found.
+        - Multiple local variables match the existing name.
+        - Type string is malformed or unparseable.
+        - Type assignment failed due to IDA backend error."""
     raise NotImplementedError
 
 

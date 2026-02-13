@@ -40,8 +40,8 @@ class TestFunctionNames:
     def test_is_list(self):
         assert isinstance(FUNCTION_NAMES, list)
 
-    def test_has_37_functions(self):
-        assert len(FUNCTION_NAMES) == 37
+    def test_has_38_functions(self):
+        assert len(FUNCTION_NAMES) == 38
 
     def test_no_duplicates(self):
         assert len(FUNCTION_NAMES) == len(set(FUNCTION_NAMES))
@@ -122,7 +122,7 @@ class TestApiReference:
 
 class TestApiDocstrings:
     def test_api_types_docstrings_have_required_sections(self):
-        mutator_functions = {"set_name_at", "set_type_at", "set_comment_at", "set_repeatable_comment_at", "add_bookmark", "delete_bookmark"}
+        mutator_functions = {"set_name_at", "set_type_at", "set_comment_at", "set_repeatable_comment_at", "add_bookmark", "delete_bookmark", "set_local_variable_name", "set_local_variable_type"}
 
         for name in FUNCTION_NAMES:
             declaration = getattr(api_types, name)
@@ -214,7 +214,6 @@ class TestPayloadContracts:
             "get_bytes_at": {"bytes": raw_bytes},
             "find_bytes": assert_ok(fns["find_bytes"](raw_bytes)),
             "get_disassembly_at": assert_ok(fns["get_disassembly_at"](first["address"])),
-            "get_instruction_at": assert_ok(fns["get_instruction_at"](first["address"])),
             "get_address_type": assert_ok(fns["get_address_type"](first["address"])),
             "read_pointer": assert_ok(fns["read_pointer"](first["address"])),
             "get_bookmarks": assert_ok(fns["get_bookmarks"]()),
@@ -257,13 +256,6 @@ class TestPayloadContracts:
             "get_bytes_at": {"bytes"},
             "find_bytes": {"addresses"},
             "get_disassembly_at": {"disassembly"},
-            "get_instruction_at": {
-                "address",
-                "size",
-                "mnemonic",
-                "disassembly",
-                "is_call",
-            },
             "get_address_type": {"address_type"},
             "read_pointer": {"pointer"},
             "get_bookmarks": {"bookmarks"},
@@ -638,14 +630,6 @@ class TestBytesAndMemory:
         raw = assert_ok(fns["get_bytes_at"](first_func["address"], 3))["bytes"]
         hits = assert_ok(fns["find_bytes"](raw))["addresses"]
         assert isinstance(hits, list)
-
-    def test_get_instruction_at(self, fns, first_func):
-        insn = assert_ok(fns["get_instruction_at"](first_func["address"]))
-        assert "address" in insn
-        assert "size" in insn
-        assert "mnemonic" in insn
-        assert "disassembly" in insn
-        assert "is_call" in insn
 
     def test_get_disassembly_at(self, fns, first_func):
         text = assert_ok(fns["get_disassembly_at"](first_func["address"]))["disassembly"]

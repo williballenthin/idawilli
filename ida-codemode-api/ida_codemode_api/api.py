@@ -57,7 +57,6 @@ FUNCTION_NAMES: list[str] = [
     "get_bytes_at",
     "find_bytes",
     "get_disassembly_at",
-    "get_instruction_at",
     "get_address_type",
     "get_comment_at",
     "read_pointer",
@@ -68,6 +67,8 @@ FUNCTION_NAMES: list[str] = [
     "set_type_at",
     "set_comment_at",
     "set_repeatable_comment_at",
+    "set_local_variable_name",
+    "set_local_variable_type",
 ]
 
 def _collect_typed_dicts(module: Any) -> dict[str, Any]:
@@ -850,28 +851,6 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             "disassembly": str(result),
         }
 
-    def get_instruction_at(address):
-        try:
-            insn = db.instructions.get_at(address)
-        except Exception as exc:
-            return _error_from_exc(f"failed to fetch instruction at {address:#x}", exc)
-
-        if insn is None:
-            return _error(f"no instruction available at {address:#x}")
-
-        try:
-            item = {
-                "address": int(insn.ea),
-                "size": int(insn.size),
-                "mnemonic": str(db.instructions.get_mnemonic(insn)),
-                "disassembly": str(db.instructions.get_disassembly(insn)),
-                "is_call": bool(db.instructions.is_call_instruction(insn)),
-            }
-        except Exception as exc:
-            return _error_from_exc(f"failed to serialize instruction at {address:#x}", exc)
-
-        return item
-
     def get_address_type(address):
         try:
             if not bool(db.is_valid_ea(address)):
@@ -1059,6 +1038,87 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             return _error_from_exc(f"failed to set repeatable comment at {address:#x}", exc)
         return None
 
+    def set_local_variable_name(function_address, existing_name, new_name):
+        func, err = _lookup_function_start(function_address, context="local variable rename")
+        if err is not None:
+            return err
+
+        try:
+            import ida_hexrays
+        except Exception as exc:
+            return _error_from_exc("failed to import ida_hexrays (decompiler required)", exc)
+
+        try:
+            cfunc = ida_hexrays.decompile(function_address)
+        except Exception as exc:
+            return _error_from_exc(f"failed to decompile function at {function_address:#x}", exc)
+
+        if cfunc is None:
+            return _error(f"decompilation failed for function at {function_address:#x}")
+
+        matching_vars = []
+        for lvar in cfunc.lvars:
+            if str(lvar.name) == existing_name:
+                matching_vars.append(lvar)
+
+        if len(matching_vars) == 0:
+            return _error(f"no local variable named {existing_name!r} in function at {function_address:#x}")
+
+        if len(matching_vars) > 1:
+            return _error(f"multiple local variables named {existing_name!r} in function at {function_address:#x}")
+
+        try:
+            lvar = matching_vars[0]
+            lvar.name = new_name
+            cfunc.save_user_lvars()
+        except Exception as exc:
+            return _error_from_exc(f"failed to rename local variable {existing_name!r} at {function_address:#x}", exc)
+
+        return None
+
+    def set_local_variable_type(function_address, existing_name, type_str):
+        func, err = _lookup_function_start(function_address, context="local variable retype")
+        if err is not None:
+            return err
+
+        try:
+            import ida_hexrays
+            import ida_typeinf
+        except Exception as exc:
+            return _error_from_exc("failed to import ida_hexrays/ida_typeinf (decompiler required)", exc)
+
+        try:
+            cfunc = ida_hexrays.decompile(function_address)
+        except Exception as exc:
+            return _error_from_exc(f"failed to decompile function at {function_address:#x}", exc)
+
+        if cfunc is None:
+            return _error(f"decompilation failed for function at {function_address:#x}")
+
+        matching_vars = []
+        for lvar in cfunc.lvars:
+            if str(lvar.name) == existing_name:
+                matching_vars.append(lvar)
+
+        if len(matching_vars) == 0:
+            return _error(f"no local variable named {existing_name!r} in function at {function_address:#x}")
+
+        if len(matching_vars) > 1:
+            return _error(f"multiple local variables named {existing_name!r} in function at {function_address:#x}")
+
+        try:
+            tinfo = ida_typeinf.tinfo_t()
+            if not ida_typeinf.parse_decl(tinfo, None, type_str, ida_typeinf.PT_SIL):
+                return _error(f"failed to parse type string {type_str!r}")
+
+            lvar = matching_vars[0]
+            lvar.set_lvar_type(tinfo)
+            cfunc.save_user_lvars()
+        except Exception as exc:
+            return _error_from_exc(f"failed to set type for local variable {existing_name!r} at {function_address:#x}", exc)
+
+        return None
+
     api: dict[str, Callable[..., Any]] = {
         "help": help,
         "get_database_metadata": get_database_metadata,
@@ -1086,7 +1146,6 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         "get_bytes_at": get_bytes_at,
         "find_bytes": find_bytes,
         "get_disassembly_at": get_disassembly_at,
-        "get_instruction_at": get_instruction_at,
         "get_address_type": get_address_type,
         "get_comment_at": get_comment_at,
         "read_pointer": read_pointer,
@@ -1097,6 +1156,8 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         "set_type_at": set_type_at,
         "set_comment_at": set_comment_at,
         "set_repeatable_comment_at": set_repeatable_comment_at,
+        "set_local_variable_name": set_local_variable_name,
+        "set_local_variable_type": set_local_variable_type,
     }
 
     return api
