@@ -3,10 +3,11 @@
 Portable analysis APIs for IDA Pro suitable for sandboxed code execution,
 JSON-RPC exposure, and LLM tool use.
 
-For fallible operations, return values are ``SuccessPayload | ApiError``:
+For fallible operations, the API follows two conventions:
 
-- success payloads do **not** include a status discriminator
-- failures use ``{"error": "..."}``
+- Read APIs return ``SuccessPayload | ApiError``. Success payloads do **not**
+  include a status discriminator. Failures use ``{"error": "..."}``.
+- Mutation APIs return ``None`` on success or ``{"error": "..."}`` on failure.
 
 Use :func:`create_api_from_database` to build concrete callables bound to an
 open ``ida_domain.Database``.
@@ -986,7 +987,8 @@ def api_reference() -> str:
     lines = [
         "## Function reference",
         "",
-        "All functions return either the success payload shown below or `{error: str}`.",
+        "Read functions return the success payload shown below or `{error: str}` on failure.",
+        "Mutation functions return `None` on success or `{error: str}` on failure.",
         "Callers should check for the presence of the `error` key to detect failures.",
         "",
         "| Function | Returns | Description |",

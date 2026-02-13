@@ -6,8 +6,11 @@ signatures. It serves two consumers:
 - the runtime implementation (:mod:`ida_codemode_api.api`) via imports
 - Monty static type checking via ``TYPE_STUBS`` (the full file text)
 
-Every API function returns either a success payload or :class:`ApiError`.
-Errors are signaled by presence of the ``error`` key.
+API functions follow two conventions:
+
+- Read APIs return a success payload or :class:`ApiError`. Errors are signaled
+  by presence of the ``error`` key.
+- Mutation APIs return ``None`` on success or :class:`ApiError` on failure.
 """
 
 from __future__ import annotations
@@ -132,6 +135,9 @@ AddressType = Literal["code", "data", "unknown", "invalid"]
 
 class ApiError(TypedDict):
     error: str
+
+
+MutatorResult = None | ApiError
 
 
 class GetFunctionsOk(TypedDict):

@@ -12,7 +12,7 @@ from ida_codemode_api import (
     create_api_from_database,
 )
 from ida_codemode_api import api_types
-from ida_codemode_api.api import TYPE_STUBS_PATH
+from ida_codemode_api.api import TYPE_STUBS_PATH, _render_type
 
 
 def assert_ok(result):
@@ -20,6 +20,16 @@ def assert_ok(result):
     if "error" in result:
         pytest.fail(f"expected success result, got error: {result['error']}")
     return result
+
+
+def assert_mutator_success(result):
+    if result is None:
+        return
+    if isinstance(result, dict) and "error" not in result:
+        pytest.fail(f"mutator returned non-None success value: {result}")
+    if isinstance(result, dict) and "error" in result:
+        pytest.fail(f"expected mutator success (None), got error: {result['error']}")
+    pytest.fail(f"mutator returned unexpected value: {result}")
 
 
 def assert_keys_exact(result: dict[str, object], expected_keys: set[str]):
@@ -71,6 +81,18 @@ class TestTypeStubs:
         assert TYPE_STUBS == TYPE_STUBS_PATH.read_text(encoding="utf-8")
 
 
+class TestRenderType:
+    def test_renders_none_type(self):
+        assert _render_type(type(None)) == "None"
+
+    def test_renders_none_or_api_error_union(self):
+        result = _render_type(None | api_types.ApiError)
+        assert result == "None"
+
+    def test_renders_mutator_result_alias(self):
+        assert _render_type(api_types.MutatorResult) == "None"
+
+
 class TestApiReference:
     def test_returns_string(self):
         ref = api_reference()
@@ -91,6 +113,10 @@ class TestApiReference:
         ref = api_reference()
         assert "{error: str}" in ref
         assert "presence of the `error` key" in ref
+
+    def test_mentions_mutator_convention(self):
+        ref = api_reference()
+        assert "Mutation functions return `None` on success" in ref
 
 
 
@@ -663,3 +689,24 @@ class TestReadPointer:
         result = fns["read_pointer"](0xDEADDEAD)
         assert "error" in result
         assert isinstance(result["error"], str)
+
+
+class TestMutatorConvention:
+    def test_mutator_result_type_exists(self):
+        assert hasattr(api_types, "MutatorResult")
+        assert api_types.MutatorResult == None | api_types.ApiError
+
+    def test_assert_mutator_success_accepts_none(self):
+        assert_mutator_success(None)
+
+    def test_assert_mutator_success_rejects_success_payload(self):
+        with pytest.raises(pytest.fail.Exception, match="mutator returned non-None success value"):
+            assert_mutator_success({"result": "success"})
+
+    def test_assert_mutator_success_rejects_error(self):
+        with pytest.raises(pytest.fail.Exception, match="expected mutator success"):
+            assert_mutator_success({"error": "failed"})
+
+    def test_assert_mutator_success_rejects_other_values(self):
+        with pytest.raises(pytest.fail.Exception, match="mutator returned unexpected value"):
+            assert_mutator_success(True)
