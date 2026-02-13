@@ -18,7 +18,7 @@ from __future__ import annotations
 import inspect
 from pathlib import Path
 from types import NoneType, UnionType
-from typing import Any, Callable, Literal, Union, get_args, get_origin, get_type_hints
+from typing import Any, Callable, Literal, ParamSpec, TypeVar, Union, get_args, get_origin, get_type_hints
 
 from . import api_types
 
@@ -124,55 +124,107 @@ def _render_type(annotation: Any) -> str:
     return str(annotation)
 
 
-def _implementation_functions_for_reference() -> dict[str, Callable[..., Any]]:
-    """Return implementation callables used for API-reference introspection."""
-    return create_api_from_database(object())
+def _render_declaration_signature(function_name: str, declaration: Callable[..., Any]) -> str:
+    signature = inspect.signature(declaration)
+
+    try:
+        hints = get_type_hints(declaration, include_extras=True)
+    except Exception:
+        hints = {}
+
+    rendered_parameters: list[str] = []
+    for parameter in signature.parameters.values():
+        annotation = hints.get(parameter.name)
+        if annotation is None:
+            rendered_parameters.append(parameter.name)
+            continue
+
+        rendered_parameters.append(f"{parameter.name}: {_render_type(annotation)}")
+
+    return f"{function_name}({', '.join(rendered_parameters)})"
 
 
-def _function_success_return_shape(
-    function_name: str,
-    implementation_functions: dict[str, Callable[..., Any]],
-) -> str:
-    implementation = implementation_functions.get(function_name)
-    if implementation is not None:
-        try:
-            hints = get_type_hints(implementation, include_extras=True)
-        except Exception:
-            hints = {}
-
-        return_annotation = hints.get("return")
-        if return_annotation is not None:
-            return _render_type(return_annotation)
-
-    function = getattr(api_types, function_name)
-    hints = get_type_hints(function, include_extras=True)
+def _function_success_return_shape(function_name: str) -> str:
+    declaration = getattr(api_types, function_name)
+    hints = get_type_hints(declaration, include_extras=True)
     return_annotation = hints.get("return", Any)
     return _render_type(return_annotation)
 
 
-def _api_rows_from_implementation(
-    implementation_functions: dict[str, Callable[..., Any]],
-) -> list[tuple[str, str, str]]:
-    rows: dict[str, tuple[str, str, str]] = {}
+def _api_rows_from_declarations() -> list[tuple[str, str, str]]:
+    rows: list[tuple[str, str, str]] = []
 
     for function_name in FUNCTION_NAMES:
-        implementation = implementation_functions.get(function_name)
-        if implementation is None:
+        declaration = getattr(api_types, function_name, None)
+        if declaration is None or not callable(declaration):
             continue
 
-        signature = f"{function_name}{inspect.signature(implementation)}"
-
-        declaration = getattr(api_types, function_name, None)
-        declaration_doc = inspect.getdoc(declaration) if declaration else None
-        doc = declaration_doc or inspect.getdoc(implementation) or ""
+        signature = _render_declaration_signature(function_name, declaration)
+        doc = inspect.getdoc(declaration) or ""
         description = doc.strip().splitlines()[0] if doc.strip() else ""
+        rows.append((function_name, signature, description))
 
-        rows[function_name] = (function_name, signature, description)
-
-    return [rows[name] for name in FUNCTION_NAMES if name in rows]
+    return rows
 
 
-def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
+ASCII_PRINTABLE = set(
+    b" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\t"
+)
+
+
+def read_ascii_string_at(buf: bytes, min_len: int = 4) -> bytes | None:
+    """Extract ASCII string starting exactly at buffer position 0."""
+    if not buf or buf[0] not in ASCII_PRINTABLE:
+        return None
+    end = 0
+    for i, b in enumerate(buf):
+        if b not in ASCII_PRINTABLE:
+            end = i
+            break
+    else:
+        end = len(buf)
+    if end >= min_len:
+        return buf[:end]
+    return None
+
+
+def read_utf16le_string_at(buf: bytes, min_len: int = 4) -> bytes | None:
+    """Extract UTF-16LE string starting exactly at buffer position 0."""
+    if len(buf) < 2:
+        return None
+    if buf[0] not in ASCII_PRINTABLE or buf[1] != 0:
+        return None
+    end = 0
+    for i in range(0, len(buf) - 1, 2):
+        if buf[i] not in ASCII_PRINTABLE or buf[i + 1] != 0:
+            end = i
+            break
+    else:
+        end = len(buf) if len(buf) % 2 == 0 else len(buf) - 1
+    char_count = end // 2
+    if char_count >= min_len:
+        return buf[:end]
+    return None
+
+
+def read_string_at(buf: bytes, min_len: int = 4) -> bytes | None:
+    """Extract string starting exactly at buffer position 0.
+
+    Tries ASCII first, then UTF-16LE.
+    """
+    result = read_ascii_string_at(buf, min_len)
+    if result is not None:
+        return result
+    return read_utf16le_string_at(buf, min_len)
+
+
+_STRING_READ_SIZE = 1024
+
+ApiParam = ParamSpec("ApiParam")
+ApiReturn = TypeVar("ApiReturn")
+
+
+def create_api_from_database(db: Any) -> api_types.ApiFunctions:
     """Build API callables backed by an open ``ida_domain.Database``.
 
     Args:
@@ -231,6 +283,18 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
     def _error_from_exc(context: str, exc: Exception) -> api_types.ApiError:
         return _error(f"{context}: {type(exc).__name__}: {exc}")
 
+    def _with_top_level_error(
+        function_name: str,
+        fn: Callable[ApiParam, ApiReturn],
+    ) -> Callable[ApiParam, ApiReturn | api_types.ApiError]:
+        def wrapped(*args: ApiParam.args, **kwargs: ApiParam.kwargs) -> ApiReturn | api_types.ApiError:
+            try:
+                return fn(*args, **kwargs)
+            except Exception as exc:
+                return _error_from_exc(f"{function_name}: unexpected error", exc)
+
+        return wrapped
+
     def _lookup_function_containing(address: int, *, context: str) -> tuple[Any | None, api_types.ApiError | None]:
         try:
             func = db.functions.get_at(address)
@@ -255,7 +319,7 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
 
         return func, None
 
-    def help(api):
+    def help(api: str) -> api_types.HelpResult:
         if not isinstance(api, str):
             return _error(f"api must be str, got {type(api).__name__}")
 
@@ -301,13 +365,14 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         if not doc:
             return _error(f"callback {callback_name!r} has no documentation")
 
-        return {
+        payload: api_types.HelpOk = {
             "documentation": f"{rendered_signature} -> {rendered_return}\n\n{doc}",
         }
+        return payload
 
-    def get_database_metadata():
+    def get_database_metadata() -> api_types.GetDatabaseMetadataResult:
         try:
-            return {
+            payload: api_types.DatabaseMetadata = {
                 "input_file_path": str(db.path),
                 "module": str(db.module),
                 "architecture": str(db.architecture),
@@ -321,18 +386,20 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
                 "input_file_md5": str(db.md5),
                 "input_file_sha256": str(db.sha256),
             }
+            return payload
         except Exception as exc:
             return _error_from_exc("failed to read database metadata", exc)
 
-    def get_functions():
+    def get_functions() -> api_types.GetFunctionsResult:
         try:
-            return {
+            payload: api_types.GetFunctionsOk = {
                 "functions": [_serialize_function(func) for func in db.functions],
             }
+            return payload
         except Exception as exc:
             return _error_from_exc("failed to enumerate functions", exc)
 
-    def get_function_by_name(name):
+    def get_function_by_name(name: str) -> api_types.GetFunctionByNameResult:
         try:
             func = db.functions.get_function_by_name(name)
         except Exception as exc:
@@ -354,14 +421,14 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
 
         return _serialize_function(func)
 
-    def get_function_at(address):
+    def get_function_at(address: int) -> api_types.GetFunctionAtResult:
         func, err = _lookup_function_start(address, context="function lookup")
         if err is not None:
             return err
 
         return _serialize_function(func)
 
-    def get_function_disassembly_at(address):
+    def get_function_disassembly_at(address: int) -> api_types.GetFunctionDisassemblyAtResult:
         func, err = _lookup_function_containing(address, context="function disassembly")
         if err is not None:
             return err
@@ -374,11 +441,12 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         if disassembly is None:
             return _error(f"no disassembly available for function at {address:#x}")
 
-        return {
+        payload: api_types.GetFunctionDisassemblyAtOk = {
             "disassembly": [str(line) for line in disassembly],
         }
+        return payload
 
-    def decompile_function_at(address):
+    def decompile_function_at(address: int) -> api_types.DecompileFunctionAtResult:
         func, err = _lookup_function_containing(address, context="function decompilation")
         if err is not None:
             return err
@@ -394,11 +462,12 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         if result is None:
             return _error(f"no pseudocode available for function at {address:#x}")
 
-        return {
+        payload: api_types.DecompileFunctionAtOk = {
             "pseudocode": [str(line) for line in result],
         }
+        return payload
 
-    def get_function_callers(address):
+    def get_function_callers(address: int) -> api_types.GetFunctionCallersResult:
         func, err = _lookup_function_containing(address, context="caller analysis")
         if err is not None:
             return err
@@ -409,11 +478,12 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         except Exception as exc:
             return _error_from_exc(f"failed to enumerate callers for function at {address:#x}", exc)
 
-        return {
+        payload: api_types.GetFunctionCallersOk = {
             "callers": items,
         }
+        return payload
 
-    def get_function_callees(address):
+    def get_function_callees(address: int) -> api_types.GetFunctionCalleesResult:
         func, err = _lookup_function_containing(address, context="callee analysis")
         if err is not None:
             return err
@@ -424,11 +494,12 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         except Exception as exc:
             return _error_from_exc(f"failed to enumerate callees for function at {address:#x}", exc)
 
-        return {
+        payload: api_types.GetFunctionCalleesOk = {
             "callees": items,
         }
+        return payload
 
-    def get_function_data_xrefs(function_start):
+    def get_function_data_xrefs(function_start: int) -> api_types.GetFunctionDataXrefsResult:
         func, err = _lookup_function_start(function_start, context="function data xref analysis")
         if err is not None:
             return err
@@ -437,7 +508,8 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             items = []
             flowchart = db.functions.get_flowchart(func)
             if flowchart is None:
-                return {"xrefs": []}
+                payload: api_types.GetFunctionDataXrefsOk = {"xrefs": []}
+                return payload
 
             visited = set()
             for block in flowchart:
@@ -469,11 +541,12 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         except Exception as exc:
             return _error_from_exc(f"failed to enumerate data xrefs for function at {function_start:#x}", exc)
 
-        return {
+        payload: api_types.GetFunctionDataXrefsOk = {
             "xrefs": items,
         }
+        return payload
 
-    def get_function_string_xrefs(function_start):
+    def get_function_string_xrefs(function_start: int) -> api_types.GetFunctionStringXrefsResult:
         func, err = _lookup_function_start(function_start, context="function string xref analysis")
         if err is not None:
             return err
@@ -482,7 +555,8 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             items = []
             flowchart = db.functions.get_flowchart(func)
             if flowchart is None:
-                return {"xrefs": []}
+                payload: api_types.GetFunctionStringXrefsOk = {"xrefs": []}
+                return payload
 
             visited = set()
             for block in flowchart:
@@ -497,18 +571,23 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
                                 if not xref.is_call and not xref.is_jump:
                                     target_ea = int(xref.to_ea)
                                     try:
-                                        string_value = db.bytes.get_cstring_at(target_ea)
-                                        if string_value is not None:
-                                            if isinstance(string_value, (bytes, bytearray)):
-                                                string_value = string_value.decode("utf-8", errors="replace")
-                                            else:
-                                                string_value = str(string_value)
+                                        data = db.bytes.get_bytes_at(target_ea, _STRING_READ_SIZE)
+                                        if data is not None:
+                                            raw = read_string_at(bytes(data))
+                                            if raw is not None:
+                                                try:
+                                                    if read_ascii_string_at(bytes(data)) is not None:
+                                                        string_value = raw.decode("ascii")
+                                                    else:
+                                                        string_value = raw.decode("utf-16-le")
+                                                except Exception:
+                                                    string_value = raw.decode("utf-8", errors="replace")
 
-                                            items.append({
-                                                "from_address": int(ea),
-                                                "string_address": target_ea,
-                                                "string": string_value,
-                                            })
+                                                items.append({
+                                                    "from_address": int(ea),
+                                                    "string_address": target_ea,
+                                                    "string": string_value,
+                                                })
                                     except Exception:
                                         pass
                         except Exception:
@@ -525,11 +604,12 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         except Exception as exc:
             return _error_from_exc(f"failed to enumerate string xrefs for function at {function_start:#x}", exc)
 
-        return {
+        payload: api_types.GetFunctionStringXrefsOk = {
             "xrefs": items,
         }
+        return payload
 
-    def get_xrefs_to_at(address):
+    def get_xrefs_to_at(address: int) -> api_types.GetXrefsToAtResult:
         try:
             items = []
             for xref in db.xrefs.to_ea(address):
@@ -542,11 +622,12 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         except Exception as exc:
             return _error_from_exc(f"failed to enumerate xrefs to {address:#x}", exc)
 
-        return {
+        payload: api_types.GetXrefsToAtOk = {
             "xrefs": items,
         }
+        return payload
 
-    def get_xrefs_from_at(address):
+    def get_xrefs_from_at(address: int) -> api_types.GetXrefsFromAtResult:
         try:
             items = []
             for xref in db.xrefs.from_ea(address):
@@ -559,11 +640,12 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         except Exception as exc:
             return _error_from_exc(f"failed to enumerate xrefs from {address:#x}", exc)
 
-        return {
+        payload: api_types.GetXrefsFromAtOk = {
             "xrefs": items,
         }
+        return payload
 
-    def get_strings():
+    def get_strings() -> api_types.GetStringsResult:
         try:
             items = []
             for s in db.strings:
@@ -579,29 +661,38 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         except Exception as exc:
             return _error_from_exc("failed to enumerate strings", exc)
 
-        return {
+        payload: api_types.GetStringsOk = {
             "strings": items,
         }
+        return payload
 
-    def get_string_at(address):
+    def get_string_at(address: int) -> api_types.GetStringAtResult:
         try:
-            result = db.bytes.get_cstring_at(address)
+            data = db.bytes.get_bytes_at(address, _STRING_READ_SIZE)
         except Exception as exc:
-            return _error_from_exc(f"failed to read C string at {address:#x}", exc)
+            return _error_from_exc(f"failed to read bytes at {address:#x}", exc)
 
-        if result is None:
-            return _error(f"no C string available at {address:#x}")
+        if data is None:
+            return _error(f"unable to read bytes at {address:#x}")
 
-        if isinstance(result, (bytes, bytearray)):
-            value = result.decode("utf-8", errors="replace")
-        else:
-            value = str(result)
+        raw = read_string_at(bytes(data))
+        if raw is None:
+            return _error(f"no string at {address:#x}")
 
-        return {
+        try:
+            if read_ascii_string_at(bytes(data)) is not None:
+                value = raw.decode("ascii")
+            else:
+                value = raw.decode("utf-16-le")
+        except Exception:
+            value = raw.decode("utf-8", errors="replace")
+
+        payload: api_types.GetStringAtOk = {
             "string": value,
         }
+        return payload
 
-    def get_segments():
+    def get_segments() -> api_types.GetSegmentsResult:
         try:
             items = []
             for seg in db.segments:
@@ -617,11 +708,12 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         except Exception as exc:
             return _error_from_exc("failed to enumerate segments", exc)
 
-        return {
+        payload: api_types.GetSegmentsOk = {
             "segments": items,
         }
+        return payload
 
-    def get_segment_containing(address):
+    def get_segment_containing(address: int) -> api_types.GetSegmentContainingResult:
         try:
             seg = db.segments.get_at(address)
         except Exception as exc:
@@ -631,7 +723,7 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             return _error(f"no segment contains address {address:#x}")
 
         try:
-            return {
+            payload: api_types.SegmentInfo = {
                 "name": str(db.segments.get_name(seg)),
                 "start": int(seg.start_ea),
                 "end": int(seg.end_ea),
@@ -640,10 +732,11 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
                 "class": str(db.segments.get_class(seg)),
                 "bitness": int(db.segments.get_bitness(seg)),
             }
+            return payload
         except Exception as exc:
             return _error_from_exc(f"failed to serialize segment at {address:#x}", exc)
 
-    def get_names():
+    def get_names() -> api_types.GetNamesResult:
         try:
             items = []
             for ea, name in db.names:
@@ -653,11 +746,12 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         except Exception as exc:
             return _error_from_exc("failed to enumerate names", exc)
 
-        return {
+        payload: api_types.GetNamesOk = {
             "names": items,
         }
+        return payload
 
-    def get_name_at(address):
+    def get_name_at(address: int) -> api_types.GetNameAtResult:
         try:
             result = db.names.get_at(address)
         except Exception as exc:
@@ -666,21 +760,23 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         if not result:
             return _error(f"no symbol name available at {address:#x}")
 
-        return {
+        payload: api_types.GetNameAtOk = {
             "name": str(result),
         }
+        return payload
 
-    def demangle_name(name):
+    def demangle_name(name: str) -> api_types.DemangleNameResult:
         try:
             result = db.names.demangle_name(name)
         except Exception as exc:
             return _error_from_exc(f"failed to demangle name {name!r}", exc)
 
-        return {
+        payload: api_types.DemangleNameOk = {
             "demangled_name": str(result) if result else str(name),
         }
+        return payload
 
-    def get_imports():
+    def get_imports() -> api_types.GetImportsResult:
         results = []
         db_imports_error = None
 
@@ -693,9 +789,10 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
                         "module": str(imp.module_name),
                         "ordinal": int(imp.ordinal),
                     })
-                return {
+                payload: api_types.GetImportsOk = {
                     "imports": results,
                 }
+                return payload
             except Exception as exc:
                 db_imports_error = exc
                 results = []
@@ -740,11 +837,12 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             except Exception:
                 continue
 
-        return {
+        payload: api_types.GetImportsOk = {
             "imports": results,
         }
+        return payload
 
-    def get_entries():
+    def get_entries() -> api_types.GetEntriesResult:
         try:
             items = []
             for entry in db.entries:
@@ -765,18 +863,20 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         except Exception as exc:
             return _error_from_exc("failed to enumerate entries", exc)
 
-        return {
+        payload: api_types.GetEntriesOk = {
             "entries": items,
         }
+        return payload
 
-    def get_bytes_at(address, size):
+    def get_bytes_at(address: int, size: int) -> api_types.GetBytesAtResult:
         if size < 0:
             return _error(f"size must be non-negative (got {size})")
 
         if size == 0:
-            return {
+            payload: api_types.GetBytesAtOk = {
                 "bytes": [],
             }
+            return payload
 
         try:
             data = db.bytes.get_bytes_at(address, size)
@@ -786,11 +886,12 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         if data is None:
             return _error(f"unable to read {size} bytes at {address:#x}")
 
-        return {
+        payload: api_types.GetBytesAtOk = {
             "bytes": [int(b) for b in data],
         }
+        return payload
 
-    def find_bytes(pattern):
+    def find_bytes(pattern: list[int]) -> api_types.FindBytesResult:
         if not pattern:
             return _error("pattern must contain at least one byte")
 
@@ -805,11 +906,12 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         except Exception as exc:
             return _error_from_exc("byte-pattern search failed", exc)
 
-        return {
+        payload: api_types.FindBytesOk = {
             "addresses": [int(ea) for ea in hits],
         }
+        return payload
 
-    def get_disassembly_at(address):
+    def get_disassembly_at(address: int) -> api_types.GetDisassemblyAtResult:
         try:
             result = db.bytes.get_disassembly_at(address)
         except Exception as exc:
@@ -818,48 +920,54 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         if result is None:
             return _error(f"no disassembly available at {address:#x}")
 
-        return {
+        payload: api_types.GetDisassemblyAtOk = {
             "disassembly": str(result),
         }
+        return payload
 
-    def get_address_type(address):
+    def get_address_type(address: int) -> api_types.GetAddressTypeResult:
         try:
             if not bool(db.is_valid_ea(address)):
-                return {
+                payload: api_types.GetAddressTypeOk = {
                     "address_type": "invalid",
                 }
+                return payload
         except Exception as exc:
             return _error_from_exc(f"failed to validate address {address:#x}", exc)
 
         try:
             if bool(db.bytes.is_code_at(address)):
-                return {
+                payload: api_types.GetAddressTypeOk = {
                     "address_type": "code",
                 }
+                return payload
         except Exception:
             pass
 
         try:
             if bool(db.bytes.is_data_at(address)):
-                return {
+                payload: api_types.GetAddressTypeOk = {
                     "address_type": "data",
                 }
+                return payload
         except Exception:
             pass
 
         try:
             if bool(db.bytes.is_unknown_at(address)):
-                return {
+                payload: api_types.GetAddressTypeOk = {
                     "address_type": "unknown",
                 }
+                return payload
         except Exception:
             pass
 
-        return {
+        payload: api_types.GetAddressTypeOk = {
             "address_type": "unknown",
         }
+        return payload
 
-    def get_comment_at(address):
+    def get_comment_at(address: int) -> api_types.GetCommentAtResult:
         try:
             result = db.comments.get_at(address)
         except Exception as exc:
@@ -868,11 +976,12 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         if not result:
             return _error(f"no comment available at {address:#x}")
 
-        return {
+        payload: api_types.GetCommentAtOk = {
             "comment": result.comment,
         }
+        return payload
 
-    def read_pointer(address):
+    def read_pointer(address: int) -> api_types.ReadPointerResult:
         try:
             bitness = int(db.bitness)
         except Exception as exc:
@@ -896,11 +1005,12 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         except Exception as exc:
             return _error_from_exc(f"failed to decode pointer at {address:#x}", exc)
 
-        return {
+        payload: api_types.ReadPointerOk = {
             "pointer": pointer,
         }
+        return payload
 
-    def get_bookmarks():
+    def get_bookmarks() -> api_types.GetBookmarksResult:
         try:
             import idc
             import ida_idaapi
@@ -930,11 +1040,12 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         except Exception as exc:
             return _error_from_exc("failed to enumerate bookmarks", exc)
 
-        return {
+        payload: api_types.GetBookmarksOk = {
             "bookmarks": items,
         }
+        return payload
 
-    def add_bookmark(address, description):
+    def add_bookmark(address: int, description: str) -> api_types.AddBookmarkResult:
         try:
             import idc
             import ida_idaapi
@@ -957,13 +1068,17 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             if free_slot is None:
                 return _error("no free bookmark slots available")
 
-            idc.put_bookmark(address, 0, 0, 0, free_slot, description)
+            put_result = idc.put_bookmark(address, 0, 0, 0, free_slot, description)
+            if isinstance(put_result, bool) and not put_result:
+                return _error(f"failed to add bookmark at {address:#x}")
+            if isinstance(put_result, int) and not isinstance(put_result, bool) and put_result == 0:
+                return _error(f"failed to add bookmark at {address:#x}")
         except Exception as exc:
             return _error_from_exc(f"failed to add bookmark at {address:#x}", exc)
 
         return None
 
-    def delete_bookmark(index):
+    def delete_bookmark(index: int) -> api_types.DeleteBookmarkResult:
         try:
             import idc
             import ida_idaapi
@@ -975,23 +1090,32 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             if ea is None or ea == ida_idaapi.BADADDR:
                 return _error(f"no bookmark exists at index {index}")
 
-            idc.put_bookmark(ida_idaapi.BADADDR, 0, 0, 0, index, "")
+            put_result = idc.put_bookmark(ida_idaapi.BADADDR, 0, 0, 0, index, "")
+            if isinstance(put_result, bool) and not put_result:
+                return _error(f"failed to delete bookmark at index {index}")
+            if isinstance(put_result, int) and not isinstance(put_result, bool) and put_result == 0:
+                return _error(f"failed to delete bookmark at index {index}")
         except Exception as exc:
             return _error_from_exc(f"failed to delete bookmark at index {index}", exc)
 
         return None
 
-    def set_name_at(address, name):
+    def set_name_at(address: int, name: str) -> api_types.SetNameAtResult:
         try:
-            db.names.set_name(address, name)
+            result = db.names.set_name(address, name)
+            if isinstance(result, bool) and not result:
+                return _error(f"failed to set name at {address:#x}")
+            if isinstance(result, int) and not isinstance(result, bool) and result == 0:
+                return _error(f"failed to set name at {address:#x}")
         except Exception as exc:
             return _error_from_exc(f"failed to set name at {address:#x}", exc)
         return None
 
-    def set_type_at(address, type_str):
+    def set_type_at(address: int, type: str) -> api_types.SetTypeAtResult:
         try:
             import ida_typeinf
 
+            type_str = type
             name = db.names.get_at(address)
             if not name:
                 name = f"sub_{address:X}"
@@ -1014,22 +1138,31 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             return _error_from_exc(f"failed to set type at {address:#x}", exc)
         return None
 
-    def set_comment_at(address, comment):
+    def set_comment_at(address: int, comment: str) -> api_types.SetCommentAtResult:
         try:
-            db.comments.set_at(address, comment)
+            result = db.comments.set_at(address, comment)
+            if isinstance(result, bool) and not result:
+                return _error(f"failed to set comment at {address:#x}")
+            if isinstance(result, int) and not isinstance(result, bool) and result == 0:
+                return _error(f"failed to set comment at {address:#x}")
         except Exception as exc:
             return _error_from_exc(f"failed to set comment at {address:#x}", exc)
         return None
 
-    def set_repeatable_comment_at(address, comment):
+    def set_repeatable_comment_at(address: int, comment: str) -> api_types.SetRepeatableCommentAtResult:
         try:
             from ida_domain.comments import CommentKind
-            db.comments.set_at(address, comment, CommentKind.REPEATABLE)
+
+            result = db.comments.set_at(address, comment, CommentKind.REPEATABLE)
+            if isinstance(result, bool) and not result:
+                return _error(f"failed to set repeatable comment at {address:#x}")
+            if isinstance(result, int) and not isinstance(result, bool) and result == 0:
+                return _error(f"failed to set repeatable comment at {address:#x}")
         except Exception as exc:
             return _error_from_exc(f"failed to set repeatable comment at {address:#x}", exc)
         return None
 
-    def set_local_variable_name(function_address, existing_name, new_name):
+    def set_local_variable_name(function_address: int, existing_name: str, new_name: str) -> api_types.SetLocalVariableNameResult:
         func, err = _lookup_function_start(function_address, context="local variable rename")
         if err is not None:
             return err
@@ -1061,13 +1194,17 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         try:
             lvar = matching_vars[0]
             lvar.name = new_name
-            cfunc.save_user_lvars()
+            save_result = cfunc.save_user_lvars()
+            if isinstance(save_result, bool) and not save_result:
+                return _error(f"failed to rename local variable {existing_name!r} at {function_address:#x}")
+            if isinstance(save_result, int) and not isinstance(save_result, bool) and save_result == 0:
+                return _error(f"failed to rename local variable {existing_name!r} at {function_address:#x}")
         except Exception as exc:
             return _error_from_exc(f"failed to rename local variable {existing_name!r} at {function_address:#x}", exc)
 
         return None
 
-    def set_local_variable_type(function_address, existing_name, type_str):
+    def set_local_variable_type(function_address: int, existing_name: str, type: str) -> api_types.SetLocalVariableTypeResult:
         func, err = _lookup_function_start(function_address, context="local variable retype")
         if err is not None:
             return err
@@ -1098,65 +1235,74 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             return _error(f"multiple local variables named {existing_name!r} in function at {function_address:#x}")
 
         try:
+            type_str = type
             tinfo = ida_typeinf.tinfo_t()  # ty: ignore[missing-argument]
             if not ida_typeinf.parse_decl(tinfo, None, type_str, ida_typeinf.PT_SIL):  # ty: ignore[invalid-argument-type]
                 return _error(f"failed to parse type string {type_str!r}")
 
             lvar = matching_vars[0]
-            lvar.set_lvar_type(tinfo)
-            cfunc.save_user_lvars()
+            set_result = lvar.set_lvar_type(tinfo)
+            if isinstance(set_result, bool) and not set_result:
+                return _error(f"failed to set type for local variable {existing_name!r} at {function_address:#x}")
+            if isinstance(set_result, int) and not isinstance(set_result, bool) and set_result == 0:
+                return _error(f"failed to set type for local variable {existing_name!r} at {function_address:#x}")
+
+            save_result = cfunc.save_user_lvars()
+            if isinstance(save_result, bool) and not save_result:
+                return _error(f"failed to persist local variable type for {existing_name!r} at {function_address:#x}")
+            if isinstance(save_result, int) and not isinstance(save_result, bool) and save_result == 0:
+                return _error(f"failed to persist local variable type for {existing_name!r} at {function_address:#x}")
         except Exception as exc:
             return _error_from_exc(f"failed to set type for local variable {existing_name!r} at {function_address:#x}", exc)
 
         return None
 
-    api: dict[str, Callable[..., Any]] = {
-        "help": help,
-        "get_database_metadata": get_database_metadata,
-        "get_functions": get_functions,
-        "get_function_by_name": get_function_by_name,
-        "get_function_at": get_function_at,
-        "get_function_disassembly_at": get_function_disassembly_at,
-        "decompile_function_at": decompile_function_at,
-        "get_function_callers": get_function_callers,
-        "get_function_callees": get_function_callees,
-        "get_function_data_xrefs": get_function_data_xrefs,
-        "get_function_string_xrefs": get_function_string_xrefs,
-        "get_xrefs_to_at": get_xrefs_to_at,
-        "get_xrefs_from_at": get_xrefs_from_at,
-        "get_strings": get_strings,
-        "get_string_at": get_string_at,
-        "get_segments": get_segments,
-        "get_segment_containing": get_segment_containing,
-        "get_names": get_names,
-        "get_name_at": get_name_at,
-        "demangle_name": demangle_name,
-        "get_imports": get_imports,
-        "get_entries": get_entries,
-        "get_bytes_at": get_bytes_at,
-        "find_bytes": find_bytes,
-        "get_disassembly_at": get_disassembly_at,
-        "get_address_type": get_address_type,
-        "get_comment_at": get_comment_at,
-        "read_pointer": read_pointer,
-        "get_bookmarks": get_bookmarks,
-        "add_bookmark": add_bookmark,
-        "delete_bookmark": delete_bookmark,
-        "set_name_at": set_name_at,
-        "set_type_at": set_type_at,
-        "set_comment_at": set_comment_at,
-        "set_repeatable_comment_at": set_repeatable_comment_at,
-        "set_local_variable_name": set_local_variable_name,
-        "set_local_variable_type": set_local_variable_type,
+    api: api_types.ApiFunctions = {
+        "help": _with_top_level_error("help", help),
+        "get_database_metadata": _with_top_level_error("get_database_metadata", get_database_metadata),
+        "get_functions": _with_top_level_error("get_functions", get_functions),
+        "get_function_by_name": _with_top_level_error("get_function_by_name", get_function_by_name),
+        "get_function_at": _with_top_level_error("get_function_at", get_function_at),
+        "get_function_disassembly_at": _with_top_level_error("get_function_disassembly_at", get_function_disassembly_at),
+        "decompile_function_at": _with_top_level_error("decompile_function_at", decompile_function_at),
+        "get_function_callers": _with_top_level_error("get_function_callers", get_function_callers),
+        "get_function_callees": _with_top_level_error("get_function_callees", get_function_callees),
+        "get_function_data_xrefs": _with_top_level_error("get_function_data_xrefs", get_function_data_xrefs),
+        "get_function_string_xrefs": _with_top_level_error("get_function_string_xrefs", get_function_string_xrefs),
+        "get_xrefs_to_at": _with_top_level_error("get_xrefs_to_at", get_xrefs_to_at),
+        "get_xrefs_from_at": _with_top_level_error("get_xrefs_from_at", get_xrefs_from_at),
+        "get_strings": _with_top_level_error("get_strings", get_strings),
+        "get_string_at": _with_top_level_error("get_string_at", get_string_at),
+        "get_segments": _with_top_level_error("get_segments", get_segments),
+        "get_segment_containing": _with_top_level_error("get_segment_containing", get_segment_containing),
+        "get_names": _with_top_level_error("get_names", get_names),
+        "get_name_at": _with_top_level_error("get_name_at", get_name_at),
+        "demangle_name": _with_top_level_error("demangle_name", demangle_name),
+        "get_imports": _with_top_level_error("get_imports", get_imports),
+        "get_entries": _with_top_level_error("get_entries", get_entries),
+        "get_bytes_at": _with_top_level_error("get_bytes_at", get_bytes_at),
+        "find_bytes": _with_top_level_error("find_bytes", find_bytes),
+        "get_disassembly_at": _with_top_level_error("get_disassembly_at", get_disassembly_at),
+        "get_address_type": _with_top_level_error("get_address_type", get_address_type),
+        "get_comment_at": _with_top_level_error("get_comment_at", get_comment_at),
+        "read_pointer": _with_top_level_error("read_pointer", read_pointer),
+        "get_bookmarks": _with_top_level_error("get_bookmarks", get_bookmarks),
+        "add_bookmark": _with_top_level_error("add_bookmark", add_bookmark),
+        "delete_bookmark": _with_top_level_error("delete_bookmark", delete_bookmark),
+        "set_name_at": _with_top_level_error("set_name_at", set_name_at),
+        "set_type_at": _with_top_level_error("set_type_at", set_type_at),
+        "set_comment_at": _with_top_level_error("set_comment_at", set_comment_at),
+        "set_repeatable_comment_at": _with_top_level_error("set_repeatable_comment_at", set_repeatable_comment_at),
+        "set_local_variable_name": _with_top_level_error("set_local_variable_name", set_local_variable_name),
+        "set_local_variable_type": _with_top_level_error("set_local_variable_type", set_local_variable_type),
     }
 
     return api
 
 
 def api_reference() -> str:
-    """Return a Markdown function table generated from API implementations and type aliases."""
-    implementation_functions = _implementation_functions_for_reference()
-    rows = _api_rows_from_implementation(implementation_functions)
+    """Return a Markdown function table generated from API declarations and type aliases."""
+    rows = _api_rows_from_declarations()
 
     lines = [
         "## Function reference",
@@ -1170,7 +1316,7 @@ def api_reference() -> str:
     ]
 
     for function_name, signature, description in rows:
-        rendered_return = _function_success_return_shape(function_name, implementation_functions)
+        rendered_return = _function_success_return_shape(function_name)
         lines.append(f"| `{signature}` | `{rendered_return}` | {description} |")
 
     return "\n".join(lines)

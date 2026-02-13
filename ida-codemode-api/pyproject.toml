@@ -4,6 +4,7 @@ authors = [
   {name = "Willi Ballenthin", email = "wballenthin@hex-rays.com"},
 ]
 description = "Portable analysis API for IDA Pro"
+readme = "README.md"
 version = "0.1.0"
 license = "Apache-2.0"
 requires-python = ">=3.10"

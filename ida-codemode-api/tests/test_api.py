@@ -2,6 +2,7 @@
 
 import inspect
 import re
+from typing import get_type_hints
 
 import pytest
 
@@ -12,7 +13,13 @@ from ida_codemode_api import (
     create_api_from_database,
 )
 from ida_codemode_api import api_types
-from ida_codemode_api.api import TYPE_STUBS_PATH, _render_type
+from ida_codemode_api.api import (
+    TYPE_STUBS_PATH,
+    _render_type,
+    read_ascii_string_at,
+    read_utf16le_string_at,
+    read_string_at,
+)
 
 
 def assert_ok(result):
@@ -69,6 +76,11 @@ class TestTypeStubs:
         ]:
             assert typed_dict in TYPE_STUBS
 
+    def test_contains_api_function_contract(self):
+        assert "class ApiFunctions(TypedDict):" in TYPE_STUBS
+        assert "SetTypeAtFn = Callable[[int, str], SetTypeAtResult]" in TYPE_STUBS
+        assert "GetFunctionsFn = Callable[[], GetFunctionsResult]" in TYPE_STUBS
+
     def test_contains_error_key_contract(self):
         assert "error: str" in TYPE_STUBS
         assert 'Status: Literal["okay"]' not in TYPE_STUBS
@@ -118,6 +130,11 @@ class TestApiReference:
         ref = api_reference()
         assert "Mutation functions return `None` on success" in ref
 
+    def test_uses_declaration_signatures(self):
+        ref = api_reference()
+        assert "`set_type_at(address: int, type: str)`" in ref
+        assert "`set_local_variable_type(function_address: int, existing_name: str, type: str)`" in ref
+        assert "type_str" not in ref
 
 
 class TestApiDocstrings:
@@ -150,8 +167,8 @@ class TestApiDocstrings:
 
     def test_runtime_docstrings_removed_for_exported_api(self):
         runtime_api = create_api_from_database(object())
-        for name in FUNCTION_NAMES:
-            runtime_fn = runtime_api[name]
+        assert set(runtime_api.keys()) == set(FUNCTION_NAMES)
+        for runtime_fn in runtime_api.values():
             assert inspect.getdoc(runtime_fn) is None
 
     def test_api_reference_prefers_api_types_docstrings(self):
@@ -325,6 +342,10 @@ class TestPayloadContracts:
 class TestBuildIdaFunctions:
     def test_returns_dict(self, fns):
         assert isinstance(fns, dict)
+
+    def test_factory_return_annotation_is_api_contract(self):
+        hints = get_type_hints(create_api_from_database, include_extras=True)
+        assert hints["return"] is api_types.ApiFunctions
 
     def test_has_all_functions(self, fns):
         for name in FUNCTION_NAMES:
@@ -790,6 +811,35 @@ class TestHelp:
         assert isinstance(result["error"], str)
 
 
+class TestNoExceptionsContract:
+    @pytest.mark.parametrize(
+        ("function_name", "args"),
+        [
+            ("help", (None,)),
+            ("get_function_at", ("abc",)),
+            ("get_xrefs_to_at", ("abc",)),
+            ("get_xrefs_from_at", ("abc",)),
+            ("get_bytes_at", ("abc", "4")),
+            ("find_bytes", (123,)),
+            ("get_disassembly_at", ("abc",)),
+            ("get_comment_at", ("abc",)),
+            ("set_name_at", ("abc", 123)),
+            ("set_type_at", ("abc", 123)),
+            ("set_comment_at", ("abc", 123)),
+            ("set_repeatable_comment_at", ("abc", 123)),
+            ("set_local_variable_name", ("abc", 123, 456)),
+            ("set_local_variable_type", ("abc", 123, 456)),
+        ],
+    )
+    def test_invalid_inputs_return_payload_instead_of_raising(self, fns, function_name, args):
+        try:
+            result = fns[function_name](*args)
+        except Exception as exc:
+            pytest.fail(f"{function_name} raised unexpectedly: {type(exc).__name__}: {exc}")
+
+        assert result is None or isinstance(result, dict)
+
+
 class TestReadPointer:
     def test_read_pointer_valid_address(self, fns, first_func):
         result = assert_ok(fns["read_pointer"](first_func["address"]))
@@ -1065,3 +1115,101 @@ class TestLocalVariableMutators:
         assert "error" in result
         assert isinstance(result["error"], str)
         assert "not a function start" in result["error"]
+
+
+class TestReadAsciiStringAt:
+    def test_simple_ascii(self):
+        buf = b"Hello\x00rest"
+        assert read_ascii_string_at(buf) == b"Hello"
+
+    def test_long_string(self):
+        buf = b"ABCDEFGHIJ\x00"
+        assert read_ascii_string_at(buf) == b"ABCDEFGHIJ"
+
+    def test_min_len_default_rejects_short(self):
+        buf = b"Hi\x00"
+        assert read_ascii_string_at(buf) is None
+
+    def test_min_len_custom(self):
+        buf = b"Hi\x00"
+        assert read_ascii_string_at(buf, min_len=2) == b"Hi"
+
+    def test_empty_buffer(self):
+        assert read_ascii_string_at(b"") is None
+
+    def test_non_printable_first_byte(self):
+        assert read_ascii_string_at(b"\x01Hello") is None
+
+    def test_tab_is_printable(self):
+        buf = b"\tHello\x00"
+        assert read_ascii_string_at(buf) == b"\tHello"
+
+    def test_no_null_terminator(self):
+        buf = b"Hello World!"
+        assert read_ascii_string_at(buf) == b"Hello World!"
+
+    def test_exactly_min_len(self):
+        buf = b"ABCD\x00"
+        assert read_ascii_string_at(buf) == b"ABCD"
+
+    def test_below_min_len(self):
+        buf = b"ABC\x00"
+        assert read_ascii_string_at(buf) is None
+
+
+class TestReadUtf16leStringAt:
+    def test_simple_utf16le(self):
+        buf = b"H\x00e\x00l\x00l\x00o\x00\x00\x00"
+        assert read_utf16le_string_at(buf) == b"H\x00e\x00l\x00l\x00o\x00"
+
+    def test_min_len_default_rejects_short(self):
+        buf = b"H\x00i\x00\x00\x00"
+        assert read_utf16le_string_at(buf) is None
+
+    def test_min_len_custom(self):
+        buf = b"H\x00i\x00\x00\x00"
+        assert read_utf16le_string_at(buf, min_len=2) == b"H\x00i\x00"
+
+    def test_empty_buffer(self):
+        assert read_utf16le_string_at(b"") is None
+
+    def test_single_byte_buffer(self):
+        assert read_utf16le_string_at(b"H") is None
+
+    def test_non_printable_first_char(self):
+        assert read_utf16le_string_at(b"\x01\x00e\x00") is None
+
+    def test_non_zero_high_byte(self):
+        assert read_utf16le_string_at(b"H\x01e\x00") is None
+
+    def test_no_null_terminator(self):
+        buf = b"H\x00e\x00l\x00l\x00o\x00"
+        assert read_utf16le_string_at(buf) == b"H\x00e\x00l\x00l\x00o\x00"
+
+    def test_odd_length_buffer(self):
+        buf = b"H\x00e\x00l\x00l\x00o\x00X"
+        assert read_utf16le_string_at(buf) == b"H\x00e\x00l\x00l\x00o\x00"
+
+
+class TestReadStringAt:
+    def test_prefers_ascii_over_utf16le(self):
+        buf = b"Hello\x00"
+        result = read_string_at(buf)
+        assert result == b"Hello"
+
+    def test_falls_back_to_utf16le(self):
+        buf = b"H\x00e\x00l\x00l\x00o\x00\x00\x00"
+        result = read_string_at(buf)
+        assert result == b"H\x00e\x00l\x00l\x00o\x00"
+
+    def test_returns_none_for_garbage(self):
+        buf = b"\x00\x01\x02\x03"
+        assert read_string_at(buf) is None
+
+    def test_empty_buffer(self):
+        assert read_string_at(b"") is None
+
+    def test_ascii_too_short_but_utf16le_long_enough(self):
+        buf = b"H\x00e\x00l\x00l\x00\x00\x00"
+        result = read_string_at(buf, min_len=4)
+        assert result == b"H\x00e\x00l\x00l\x00"

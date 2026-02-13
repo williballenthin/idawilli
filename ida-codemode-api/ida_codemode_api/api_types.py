@@ -15,7 +15,7 @@ API functions follow two conventions:
 
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import Callable, Literal, TypedDict
 
 
 class DatabaseMetadata(TypedDict):
@@ -268,6 +268,84 @@ SetCommentAtResult = MutatorResult
 SetRepeatableCommentAtResult = MutatorResult
 SetLocalVariableNameResult = MutatorResult
 SetLocalVariableTypeResult = MutatorResult
+
+HelpFn = Callable[[str], HelpResult]
+GetDatabaseMetadataFn = Callable[[], GetDatabaseMetadataResult]
+GetFunctionsFn = Callable[[], GetFunctionsResult]
+GetFunctionByNameFn = Callable[[str], GetFunctionByNameResult]
+GetFunctionAtFn = Callable[[int], GetFunctionAtResult]
+GetFunctionDisassemblyAtFn = Callable[[int], GetFunctionDisassemblyAtResult]
+DecompileFunctionAtFn = Callable[[int], DecompileFunctionAtResult]
+GetFunctionCallersFn = Callable[[int], GetFunctionCallersResult]
+GetFunctionCalleesFn = Callable[[int], GetFunctionCalleesResult]
+GetXrefsToAtFn = Callable[[int], GetXrefsToAtResult]
+GetXrefsFromAtFn = Callable[[int], GetXrefsFromAtResult]
+GetFunctionDataXrefsFn = Callable[[int], GetFunctionDataXrefsResult]
+GetFunctionStringXrefsFn = Callable[[int], GetFunctionStringXrefsResult]
+GetStringsFn = Callable[[], GetStringsResult]
+GetStringAtFn = Callable[[int], GetStringAtResult]
+GetSegmentsFn = Callable[[], GetSegmentsResult]
+GetSegmentContainingFn = Callable[[int], GetSegmentContainingResult]
+GetNamesFn = Callable[[], GetNamesResult]
+GetNameAtFn = Callable[[int], GetNameAtResult]
+DemangleNameFn = Callable[[str], DemangleNameResult]
+GetImportsFn = Callable[[], GetImportsResult]
+GetEntriesFn = Callable[[], GetEntriesResult]
+GetBytesAtFn = Callable[[int, int], GetBytesAtResult]
+FindBytesFn = Callable[[list[int]], FindBytesResult]
+GetDisassemblyAtFn = Callable[[int], GetDisassemblyAtResult]
+GetAddressTypeFn = Callable[[int], GetAddressTypeResult]
+GetCommentAtFn = Callable[[int], GetCommentAtResult]
+ReadPointerFn = Callable[[int], ReadPointerResult]
+GetBookmarksFn = Callable[[], GetBookmarksResult]
+AddBookmarkFn = Callable[[int, str], AddBookmarkResult]
+DeleteBookmarkFn = Callable[[int], DeleteBookmarkResult]
+SetNameAtFn = Callable[[int, str], SetNameAtResult]
+SetTypeAtFn = Callable[[int, str], SetTypeAtResult]
+SetCommentAtFn = Callable[[int, str], SetCommentAtResult]
+SetRepeatableCommentAtFn = Callable[[int, str], SetRepeatableCommentAtResult]
+SetLocalVariableNameFn = Callable[[int, str, str], SetLocalVariableNameResult]
+SetLocalVariableTypeFn = Callable[[int, str, str], SetLocalVariableTypeResult]
+
+
+class ApiFunctions(TypedDict):
+    help: HelpFn
+    get_database_metadata: GetDatabaseMetadataFn
+    get_functions: GetFunctionsFn
+    get_function_by_name: GetFunctionByNameFn
+    get_function_at: GetFunctionAtFn
+    get_function_disassembly_at: GetFunctionDisassemblyAtFn
+    decompile_function_at: DecompileFunctionAtFn
+    get_function_callers: GetFunctionCallersFn
+    get_function_callees: GetFunctionCalleesFn
+    get_function_data_xrefs: GetFunctionDataXrefsFn
+    get_function_string_xrefs: GetFunctionStringXrefsFn
+    get_xrefs_to_at: GetXrefsToAtFn
+    get_xrefs_from_at: GetXrefsFromAtFn
+    get_strings: GetStringsFn
+    get_string_at: GetStringAtFn
+    get_segments: GetSegmentsFn
+    get_segment_containing: GetSegmentContainingFn
+    get_names: GetNamesFn
+    get_name_at: GetNameAtFn
+    demangle_name: DemangleNameFn
+    get_imports: GetImportsFn
+    get_entries: GetEntriesFn
+    get_bytes_at: GetBytesAtFn
+    find_bytes: FindBytesFn
+    get_disassembly_at: GetDisassemblyAtFn
+    get_address_type: GetAddressTypeFn
+    get_comment_at: GetCommentAtFn
+    read_pointer: ReadPointerFn
+    get_bookmarks: GetBookmarksFn
+    add_bookmark: AddBookmarkFn
+    delete_bookmark: DeleteBookmarkFn
+    set_name_at: SetNameAtFn
+    set_type_at: SetTypeAtFn
+    set_comment_at: SetCommentAtFn
+    set_repeatable_comment_at: SetRepeatableCommentAtFn
+    set_local_variable_name: SetLocalVariableNameFn
+    set_local_variable_type: SetLocalVariableTypeFn
 
 
 def help(api: str) -> HelpResult:
@@ -736,10 +814,12 @@ def get_strings() -> GetStringsResult:
 
 
 def get_string_at(address: int) -> GetStringAtResult:
-    """Null-terminated C string decoded at an address.
+    """ASCII or UTF-16LE string decoded at an address.
 
-    Use this for point lookups when an address is known from xrefs or data-flow
-    analysis. See also `get_strings`, `get_bytes_at`, and `get_address_type`.
+    Reads raw bytes and attempts ASCII decoding first, then UTF-16LE. Requires
+    at least four printable characters. Use this for point lookups when an
+    address is known from xrefs or data-flow analysis. See also `get_strings`,
+    `get_bytes_at`, and `get_address_type`.
 
     Args:
         address: Effective address where the string is expected to start.
@@ -748,11 +828,12 @@ def get_string_at(address: int) -> GetStringAtResult:
         Success payload `{string: str}` or `{"error": str}`.
 
     Errors:
-        - Address does not contain a decodable C string.
-        - String read failed due to an IDA backend error.
+        - Address does not contain a decodable ASCII or UTF-16LE string.
+        - Byte read failed.
 
     Example success payload:
-        {"string": "kernel32.dll"}"""
+        {"string": "kernel32.dll"}
+    """
     raise NotImplementedError
 
 
@@ -760,8 +841,8 @@ def get_segments() -> GetSegmentsResult:
     """Memory-segment descriptors for the loaded database.
 
     Use this to understand memory layout, permissions, and section boundaries
-    before range-based analysis. See also `get_binary_info`, `get_bytes_at`, and
-    `get_address_type`.
+    before range-based analysis. See also `get_database_metadata`, `get_bytes_at`,
+    and `get_address_type`.
 
     Args:
         None.
@@ -942,7 +1023,8 @@ def get_entries() -> GetEntriesResult:
     """Entry points and exported entry records.
 
     Use this to identify initial execution entry points and exported APIs in the
-    loaded module. See also `get_binary_info`, `get_functions`, and `get_imports`.
+    loaded module. See also `get_database_metadata`, `get_functions`, and
+    `get_imports`.
 
     Args:
         None.
