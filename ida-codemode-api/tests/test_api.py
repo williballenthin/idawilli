@@ -802,6 +802,18 @@ class TestReadPointer:
         assert "error" in result
         assert isinstance(result["error"], str)
 
+    def test_read_pointer_consistency_with_get_bytes_at(self, fns, first_func):
+        pointer_result = assert_ok(fns["read_pointer"](first_func["address"]))
+        pointer_value = pointer_result["pointer"]
+
+        bytes_result = assert_ok(fns["get_bytes_at"](first_func["address"], 4))
+        raw_bytes = bytes_result["bytes"]
+
+        assert len(raw_bytes) == 4
+        expected_value = int.from_bytes(bytes(raw_bytes), byteorder="little", signed=False)
+
+        assert pointer_value == expected_value
+
 
 class TestMutatorConvention:
     def test_mutator_result_type_exists(self):
