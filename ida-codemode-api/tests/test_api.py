@@ -876,3 +876,51 @@ class TestBookmarks:
 
         final_bookmarks = assert_ok(fns["get_bookmarks"]())["bookmarks"]
         assert len(final_bookmarks) == initial_count
+
+
+class TestLocalVariableMutators:
+    def test_set_local_variable_name(self, fns, first_func):
+        result = fns["decompile_function_at"](first_func["address"])
+        if "error" in result:
+            pytest.skip("decompiler not available")
+
+        nonexistent_name = "this_variable_does_not_exist_xyz123"
+        result = fns["set_local_variable_name"](first_func["address"], nonexistent_name, "new_name")
+        assert "error" in result
+        assert isinstance(result["error"], str)
+        assert "not found" in result["error"].lower() or "no local variable" in result["error"].lower()
+
+    def test_set_local_variable_type(self, fns, first_func):
+        result = fns["decompile_function_at"](first_func["address"])
+        if "error" in result:
+            pytest.skip("decompiler not available")
+
+        nonexistent_name = "this_variable_does_not_exist_xyz123"
+        result = fns["set_local_variable_type"](first_func["address"], nonexistent_name, "int")
+        assert "error" in result
+        assert isinstance(result["error"], str)
+        assert "not found" in result["error"].lower() or "no local variable" in result["error"].lower()
+
+    def test_set_local_variable_name_bad_address(self, fns):
+        result = fns["set_local_variable_name"](0xDEADDEAD, "var1", "var2")
+        assert "error" in result
+        assert isinstance(result["error"], str)
+
+    def test_set_local_variable_type_bad_address(self, fns):
+        result = fns["set_local_variable_type"](0xDEADDEAD, "var1", "int")
+        assert "error" in result
+        assert isinstance(result["error"], str)
+
+    def test_set_local_variable_name_not_function_start(self, fns, first_func):
+        non_start = first_func["address"] + 1
+        result = fns["set_local_variable_name"](non_start, "var1", "var2")
+        assert "error" in result
+        assert isinstance(result["error"], str)
+        assert "not a function start" in result["error"]
+
+    def test_set_local_variable_type_not_function_start(self, fns, first_func):
+        non_start = first_func["address"] + 1
+        result = fns["set_local_variable_type"](non_start, "var1", "int")
+        assert "error" in result
+        assert isinstance(result["error"], str)
+        assert "not a function start" in result["error"]
