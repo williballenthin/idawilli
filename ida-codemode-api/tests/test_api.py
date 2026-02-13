@@ -358,6 +358,69 @@ class TestDatabaseMetadata:
         ]:
             assert key in info, f"missing key: {key}"
 
+    def test_input_file_path_is_string(self, fns):
+        info = assert_ok(fns["get_database_metadata"]())
+        assert isinstance(info["input_file_path"], str)
+        assert len(info["input_file_path"]) > 0
+
+    def test_module_is_string(self, fns):
+        info = assert_ok(fns["get_database_metadata"]())
+        assert isinstance(info["module"], str)
+
+    def test_architecture_is_string(self, fns):
+        info = assert_ok(fns["get_database_metadata"]())
+        assert isinstance(info["architecture"], str)
+        assert len(info["architecture"]) > 0
+
+    def test_bitness_is_32_or_64(self, fns):
+        info = assert_ok(fns["get_database_metadata"]())
+        assert isinstance(info["bitness"], int)
+        assert info["bitness"] in (32, 64)
+        assert info["bitness"] == 32
+
+    def test_format_is_string(self, fns):
+        info = assert_ok(fns["get_database_metadata"]())
+        assert isinstance(info["format"], str)
+        assert len(info["format"]) > 0
+
+    def test_base_address_is_positive_int(self, fns):
+        info = assert_ok(fns["get_database_metadata"]())
+        assert isinstance(info["base_address"], int)
+        assert info["base_address"] > 0
+
+    def test_entry_point_is_int(self, fns):
+        info = assert_ok(fns["get_database_metadata"]())
+        assert isinstance(info["entry_point"], int)
+
+    def test_minimum_ea_is_int(self, fns):
+        info = assert_ok(fns["get_database_metadata"]())
+        assert isinstance(info["minimum_ea"], int)
+
+    def test_maximum_ea_is_int(self, fns):
+        info = assert_ok(fns["get_database_metadata"]())
+        assert isinstance(info["maximum_ea"], int)
+
+    def test_minimum_ea_less_than_maximum_ea(self, fns):
+        info = assert_ok(fns["get_database_metadata"]())
+        assert info["minimum_ea"] < info["maximum_ea"]
+
+    def test_input_file_size_is_positive_int(self, fns):
+        info = assert_ok(fns["get_database_metadata"]())
+        assert isinstance(info["input_file_size"], int)
+        assert info["input_file_size"] > 0
+
+    def test_input_file_md5_is_32_hex_chars(self, fns):
+        info = assert_ok(fns["get_database_metadata"]())
+        assert isinstance(info["input_file_md5"], str)
+        assert len(info["input_file_md5"]) == 32
+        assert all(c in "0123456789abcdef" for c in info["input_file_md5"].lower())
+
+    def test_input_file_sha256_is_64_hex_chars(self, fns):
+        info = assert_ok(fns["get_database_metadata"]())
+        assert isinstance(info["input_file_sha256"], str)
+        assert len(info["input_file_sha256"]) == 64
+        assert all(c in "0123456789abcdef" for c in info["input_file_sha256"].lower())
+
 
 class TestFunctionDiscovery:
     def test_get_functions_non_empty(self, fns):
@@ -440,6 +503,72 @@ class TestFunctionAnalysis:
             assert "flags" in c
             assert "comment" in c
             assert "repeatable_comment" in c
+
+    def test_callers_bad_address(self, fns):
+        result = fns["get_function_callers"](0xDEADDEAD)
+        assert "error" in result
+        assert isinstance(result["error"], str)
+
+    def test_callees_bad_address(self, fns):
+        result = fns["get_function_callees"](0xDEADDEAD)
+        assert "error" in result
+        assert isinstance(result["error"], str)
+
+    def test_callers_full_function_info(self, fns, first_func):
+        result = assert_ok(fns["get_function_callers"](first_func["address"]))
+        callers = result["callers"]
+        for caller in callers:
+            assert isinstance(caller["address"], int)
+            assert isinstance(caller["name"], str)
+            assert isinstance(caller["size"], int)
+            assert isinstance(caller["signature"], str)
+            assert isinstance(caller["flags"], dict)
+            assert "noreturn" in caller["flags"]
+            assert "library" in caller["flags"]
+            assert "thunk" in caller["flags"]
+            assert isinstance(caller["flags"]["noreturn"], bool)
+            assert isinstance(caller["flags"]["library"], bool)
+            assert isinstance(caller["flags"]["thunk"], bool)
+            assert isinstance(caller["comment"], str)
+            assert isinstance(caller["repeatable_comment"], str)
+
+    def test_callees_full_function_info(self, fns, first_func):
+        result = assert_ok(fns["get_function_callees"](first_func["address"]))
+        callees = result["callees"]
+        for callee in callees:
+            assert isinstance(callee["address"], int)
+            assert isinstance(callee["name"], str)
+            assert isinstance(callee["size"], int)
+            assert isinstance(callee["signature"], str)
+            assert isinstance(callee["flags"], dict)
+            assert "noreturn" in callee["flags"]
+            assert "library" in callee["flags"]
+            assert "thunk" in callee["flags"]
+            assert isinstance(callee["flags"]["noreturn"], bool)
+            assert isinstance(callee["flags"]["library"], bool)
+            assert isinstance(callee["flags"]["thunk"], bool)
+            assert isinstance(callee["comment"], str)
+            assert isinstance(callee["repeatable_comment"], str)
+
+    def test_callers_has_at_least_one_for_some_function(self, fns):
+        functions = assert_ok(fns["get_functions"]())["functions"]
+        found_callers = False
+        for func in functions:
+            result = assert_ok(fns["get_function_callers"](func["address"]))
+            if len(result["callers"]) > 0:
+                found_callers = True
+                break
+        assert found_callers, "No functions with callers found in test binary (32-bit PE malware sample should have call graph)"
+
+    def test_callees_has_at_least_one_for_some_function(self, fns):
+        functions = assert_ok(fns["get_functions"]())["functions"]
+        found_callees = False
+        for func in functions:
+            result = assert_ok(fns["get_function_callees"](func["address"]))
+            if len(result["callees"]) > 0:
+                found_callees = True
+                break
+        assert found_callees, "No functions with callees found in test binary (32-bit PE malware sample should have call graph)"
 
 
 class TestXrefs:
