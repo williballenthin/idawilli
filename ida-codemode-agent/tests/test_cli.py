@@ -15,6 +15,7 @@ from ida_codemode_agent.cli import (
     SessionLogger,
     ScriptEvaluator,
     _available_models,
+    _parse_evaluate_tool_result_text,
     _resolve_model_name,
     _validate_model_name,
     main,
@@ -71,6 +72,65 @@ def test_main_validates_model_before_database_resolution(capsys: pytest.CaptureF
     assert rc == 2
     err = capsys.readouterr().err
     assert "invalid model" in err
+
+
+def test_parse_evaluate_tool_result_ok_blocks() -> None:
+    parsed = _parse_evaluate_tool_result_text(
+        "\n".join(
+            [
+                "status: ok",
+                "stdout:",
+                "Function: _main",
+                "Address: 0x401440",
+                "result:",
+                "{'arch': 'metapc'}",
+            ]
+        )
+    )
+
+    assert parsed["status"] == "ok"
+    assert "Function: _main" in parsed["stdout"]
+    assert "Address: 0x401440" in parsed["stdout"]
+    assert parsed["result"] == "{'arch': 'metapc'}"
+
+
+def test_parse_evaluate_tool_result_error_blocks() -> None:
+    parsed = _parse_evaluate_tool_result_text(
+        "\n".join(
+            [
+                "status: error",
+                "kind: runtime",
+                "message: division by zero",
+                "stderr-before-error:",
+                "warning: demo",
+                "error-detail:",
+                "Traceback...",
+            ]
+        )
+    )
+
+    assert parsed["status"] == "error"
+    assert parsed["kind"] == "runtime"
+    assert parsed["message"] == "division by zero"
+    assert parsed["stderr-before-error"] == "warning: demo"
+    assert "Traceback" in parsed["error-detail"]
+
+
+def test_parse_evaluate_tool_result_keeps_message_like_lines_inside_stdout() -> None:
+    parsed = _parse_evaluate_tool_result_text(
+        "\n".join(
+            [
+                "status: ok",
+                "stdout:",
+                "message: this belongs to stdout",
+                "kind: this also belongs to stdout",
+            ]
+        )
+    )
+
+    assert parsed["status"] == "ok"
+    assert "message: this belongs to stdout" in parsed["stdout"]
+    assert "kind: this also belongs to stdout" in parsed["stdout"]
 
 
 class TestDatabasePlanResolution:

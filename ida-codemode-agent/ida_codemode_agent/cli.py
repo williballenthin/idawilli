@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
 from dataclasses import dataclass
@@ -12,12 +13,16 @@ from functools import cache
 from pathlib import Path
 from typing import Any, Callable, cast, get_args
 
-from rich.console import Console
+from rich.columns import Columns
+from rich.console import Console, Group
 from rich.markdown import Markdown
 from rich.panel import Panel
+from rich.pretty import Pretty
 from rich.prompt import Prompt
 from rich.rule import Rule
 from rich.syntax import Syntax
+from rich.table import Table
+from rich.text import Text
 
 DEFAULT_MODEL = os.getenv("IDA_CODEMODE_AGENT_MODEL", "google/gemini-3-flash-preview")
 DEFAULT_PROVIDER = os.getenv("IDA_CODEMODE_AGENT_PROVIDER", "openrouter")
@@ -345,9 +350,14 @@ def _extract_script_from_tool_args(args: object) -> str | None:
 def _render_tool_call(console: Console, tool_name: str, args: object) -> None:
     script = _extract_script_from_tool_args(args)
     if script is None:
-        body = "(no args)"
+        body: object = Text("(no args)", style="dim")
     else:
-        body = Syntax(_truncate(script, 4_000), "python", line_numbers=False, word_wrap=True)
+        clipped = _truncate(script, 4_000)
+        line_count = script.count("\n") + 1
+        body = Group(
+            Text(f"{line_count} lines • {len(script)} chars", style="dim"),
+            Syntax(clipped, "python", line_numbers=True, word_wrap=True),
+        )
 
     console.print(
         Panel(
@@ -358,15 +368,162 @@ def _render_tool_call(console: Console, tool_name: str, args: object) -> None:
     )
 
 
+_EVAL_RESULT_FIELDS = (
+    "status",
+    "kind",
+    "message",
+    "stdout",
+    "stderr",
+    "result",
+    "stdout-before-error",
+    "stderr-before-error",
+    "error-detail",
+)
+
+_EVAL_RESULT_BLOCK_FIELDS = {
+    "stdout",
+    "stderr",
+    "result",
+    "stdout-before-error",
+    "stderr-before-error",
+    "error-detail",
+}
+
+
+def _parse_evaluate_tool_result_text(text: str) -> dict[str, str]:
+    """Parse ScriptEvaluator's textual tool result format into keyed fields."""
+    parsed: dict[str, str] = {}
+    current_block: str | None = None
+    block_lines: list[str] = []
+
+    def flush_block() -> None:
+        nonlocal current_block, block_lines
+        if current_block is None:
+            return
+        parsed[current_block] = "\n".join(block_lines).rstrip("\n")
+        current_block = None
+        block_lines = []
+
+    for line in text.splitlines():
+        matched_key: str | None = None
+        remainder = ""
+
+        for key in _EVAL_RESULT_FIELDS:
+            prefix = f"{key}:"
+            if line.startswith(prefix):
+                matched_key = key
+                remainder = line[len(prefix) :].lstrip()
+                break
+
+        if matched_key is not None:
+            if current_block is not None and (
+                matched_key not in _EVAL_RESULT_BLOCK_FIELDS or remainder != ""
+            ):
+                block_lines.append(line)
+                continue
+
+            flush_block()
+            if matched_key in _EVAL_RESULT_BLOCK_FIELDS and remainder == "":
+                current_block = matched_key
+                block_lines = []
+            else:
+                parsed[matched_key] = remainder
+            continue
+
+        if current_block is not None:
+            block_lines.append(line)
+        else:
+            existing = parsed.get("_raw", "")
+            parsed["_raw"] = f"{existing}\n{line}".strip("\n")
+
+    flush_block()
+    return parsed
+
+
+def _render_eval_text_block(title: str, text: str, *, border_style: str) -> Panel:
+    body = Syntax(_truncate(text or "(empty)", 8_000), "text", line_numbers=False, word_wrap=True)
+    return Panel(body, title=title, border_style=border_style)
+
+
+def _render_eval_result_block(text: str) -> Panel:
+    rendered: object
+    clipped = _truncate(text or "(empty)", 8_000)
+
+    try:
+        rendered = Pretty(ast.literal_eval(clipped), expand_all=False)
+    except Exception:
+        rendered = Syntax(clipped, "python", line_numbers=False, word_wrap=True)
+
+    return Panel(rendered, title="result", border_style="cyan")
+
+
+def _render_evaluate_tool_result(console: Console, tool_name: str, text: str) -> bool:
+    parsed = _parse_evaluate_tool_result_text(text)
+    status = parsed.get("status")
+    if status not in {"ok", "error"}:
+        return False
+
+    header = Table.grid(expand=True, padding=(0, 1))
+    header.add_column(style="bold cyan", no_wrap=True)
+    header.add_column(ratio=1)
+
+    badge_style = "bold white on green" if status == "ok" else "bold white on red"
+    header.add_row("status:", Text(f" {status.upper()} ", style=badge_style))
+
+    if kind := parsed.get("kind"):
+        header.add_row("kind:", Text(kind, style="yellow"))
+    if message := parsed.get("message"):
+        header.add_row("message:", Text(message))
+
+    sections: list[object] = [header]
+
+    stdout = parsed.get("stdout") or parsed.get("stdout-before-error")
+    stderr = parsed.get("stderr") or parsed.get("stderr-before-error")
+
+    stream_panels: list[Panel] = []
+    if stdout:
+        stream_panels.append(_render_eval_text_block("stdout", stdout, border_style="green"))
+    if stderr:
+        stream_panels.append(_render_eval_text_block("stderr", stderr, border_style="red"))
+
+    if len(stream_panels) == 2:
+        sections.append(Columns(stream_panels, equal=True, expand=True))
+    elif len(stream_panels) == 1:
+        sections.append(stream_panels[0])
+
+    if result := parsed.get("result"):
+        sections.append(_render_eval_result_block(result))
+
+    if error_detail := parsed.get("error-detail"):
+        sections.append(_render_eval_text_block("error detail", error_detail, border_style="red"))
+
+    if raw := parsed.get("_raw"):
+        sections.append(Text(_truncate(raw, 2_000), style="dim"))
+
+    border_style = "green" if status == "ok" else "red"
+    console.print(
+        Panel(
+            Group(*sections),
+            title=f"tool result: {tool_name}",
+            border_style=border_style,
+        )
+    )
+    return True
+
+
 def _render_tool_result(console: Console, tool_name: str, result_content: object) -> None:
+    if isinstance(result_content, str) and tool_name == "evaluate_ida_script":
+        if _render_evaluate_tool_result(console, tool_name, result_content):
+            return
+
     if isinstance(result_content, str):
-        text = result_content
+        body: object = Syntax(_truncate(result_content, 6_000), "text", line_numbers=False, word_wrap=True)
     else:
-        text = repr(result_content)
+        body = Pretty(result_content, expand_all=False)
 
     console.print(
         Panel(
-            _truncate(text, 6_000),
+            body,
             title=f"tool result: {tool_name}",
             border_style="green",
         )
