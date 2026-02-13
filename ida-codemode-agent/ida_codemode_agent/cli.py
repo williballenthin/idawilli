@@ -222,8 +222,11 @@ def build_agent(model: Any, evaluator: ScriptEvaluator) -> Any:
 
     if hasattr(agent, "tool_plain"):
 
+        # Keep tool callbacks async so pydantic-ai executes them on the event-loop
+        # thread instead of offloading sync callables to a worker thread. IDA APIs
+        # require main-thread access.
         @agent.tool_plain
-        def evaluate_ida_script(script: str) -> str:
+        async def evaluate_ida_script(script: str) -> str:
             """Execute sandboxed Python source against the opened IDA database."""
 
             return evaluator.evaluate(script)
@@ -232,7 +235,7 @@ def build_agent(model: Any, evaluator: ScriptEvaluator) -> Any:
         from pydantic_ai import RunContext
 
         @agent.tool
-        def evaluate_ida_script(_ctx: RunContext[Any], script: str) -> str:
+        async def evaluate_ida_script(_ctx: RunContext[Any], script: str) -> str:
             """Execute sandboxed Python source against the opened IDA database."""
 
             return evaluator.evaluate(script)
