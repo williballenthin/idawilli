@@ -72,6 +72,12 @@ class XrefFromInfo(TypedDict):
     is_jump: bool
 
 
+class DataXrefInfo(TypedDict):
+    from_address: int
+    to_address: int
+    type: str
+
+
 class StringInfo(TypedDict):
     address: int
     length: int
@@ -154,6 +160,10 @@ class GetXrefsFromAtOk(TypedDict):
     xrefs: list[XrefFromInfo]
 
 
+class GetFunctionDataXrefsOk(TypedDict):
+    xrefs: list[DataXrefInfo]
+
+
 class GetStringsOk(TypedDict):
     strings: list[StringInfo]
 
@@ -222,6 +232,7 @@ GetFunctionCalleesResult = GetFunctionCalleesOk | ApiError
 GetBasicBlocksAtResult = GetBasicBlocksAtOk | ApiError
 GetXrefsToAtResult = GetXrefsToAtOk | ApiError
 GetXrefsFromAtResult = GetXrefsFromAtOk | ApiError
+GetFunctionDataXrefsResult = GetFunctionDataXrefsOk | ApiError
 GetStringsResult = GetStringsOk | ApiError
 GetStringAtResult = GetStringAtOk | ApiError
 GetSegmentsResult = GetSegmentsOk | ApiError
@@ -623,6 +634,39 @@ def get_xrefs_from_at(address: int) -> GetXrefsFromAtResult:
                     "type": "fl_CN",
                     "is_call": True,
                     "is_jump": False,
+                }
+            ],
+        }"""
+    raise NotImplementedError
+
+
+def get_function_data_xrefs(function_start: int) -> GetFunctionDataXrefsResult:
+    """Data cross-references originating from all instructions in a function.
+
+    Use this to discover data accesses such as global variables, string literals,
+    and structure references used within a function. See also `get_xrefs_from_at`,
+    `get_function_at`, and `get_strings`.
+
+    Args:
+        function_start: Effective address that must be exactly a function start.
+
+    Returns:
+        Success payload
+        `{xrefs: list[{from_address: int, to_address: int, type: str}]}` or
+        `{"error": str}`.
+
+    Errors:
+        - Address does not resolve to any function.
+        - Address resolves inside a function but is not the function start.
+        - Data xref enumeration failed.
+
+    Example success payload:
+        {
+            "xrefs": [
+                {
+                    "from_address": 4198404,
+                    "to_address": 4220000,
+                    "type": "dr_O",
                 }
             ],
         }"""

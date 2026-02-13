@@ -39,6 +39,7 @@ FUNCTION_NAMES: list[str] = [
     "decompile_function_at",
     "get_function_callers",
     "get_function_callees",
+    "get_function_data_xrefs",
     "get_basic_blocks_at",
     "get_xrefs_to_at",
     "get_xrefs_from_at",
@@ -413,6 +414,51 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
 
         return {
             "callees": items,
+        }
+
+    def get_function_data_xrefs(function_start):
+        func, err = _lookup_function_start(function_start, context="function data xref analysis")
+        if err is not None:
+            return err
+
+        try:
+            items = []
+            flowchart = db.functions.get_flowchart(func)
+            if flowchart is None:
+                return {"xrefs": []}
+
+            visited = set()
+            for block in flowchart:
+                ea = int(block.start_ea)
+                end_ea = int(block.end_ea)
+
+                while ea < end_ea:
+                    if ea not in visited:
+                        visited.add(ea)
+                        try:
+                            for xref in db.xrefs.from_ea(ea):
+                                if not xref.is_call and not xref.is_jump:
+                                    items.append({
+                                        "from_address": int(ea),
+                                        "to_address": int(xref.to_ea),
+                                        "type": str(xref.type.name),
+                                    })
+                        except Exception:
+                            pass
+
+                    try:
+                        insn = db.instructions.get_at(ea)
+                        if insn is not None:
+                            ea += int(insn.size)
+                        else:
+                            ea += 1
+                    except Exception:
+                        ea += 1
+        except Exception as exc:
+            return _error_from_exc(f"failed to enumerate data xrefs for function at {function_start:#x}", exc)
+
+        return {
+            "xrefs": items,
         }
 
     def get_basic_blocks_at(address):
@@ -797,6 +843,7 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         "decompile_function_at": decompile_function_at,
         "get_function_callers": get_function_callers,
         "get_function_callees": get_function_callees,
+        "get_function_data_xrefs": get_function_data_xrefs,
         "get_basic_blocks_at": get_basic_blocks_at,
         "get_xrefs_to_at": get_xrefs_to_at,
         "get_xrefs_from_at": get_xrefs_from_at,
