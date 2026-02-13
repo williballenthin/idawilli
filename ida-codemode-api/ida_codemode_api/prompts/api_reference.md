@@ -5,6 +5,7 @@ Callers should check for the presence of the `error` key to detect failures.
 
 | Function | Returns | Description |
 |----------|---------|-------------|
+| `help(api)` | `{documentation: str}` | Extensive documentation for a specific API callback. |
 | `get_binary_info()` | `{path: str, module: str, architecture: str, bitness: int, format: str, base_address: int, entry_point: int, minimum_ea: int, maximum_ea: int, filesize: int, md5: str, sha256: str, crc32: int}` | Binary-wide metadata for the currently opened database. |
 | `get_functions()` | `{functions: list[{address: int, name: str, size: int}]}` | All discovered function descriptors. |
 | `get_function_by_name(name)` | `{address: int, name: str, size: int}` | Function descriptor resolved by exact symbol name. |

@@ -153,10 +153,12 @@ class IdaSandbox:
         db: An open ``ida_domain.Database`` instance.
         limits: Optional ``pydantic_monty.ResourceLimits`` overriding the
             defaults (30 s wall-clock, 100 MB memory, 200 recursion depth).
-        type_check: When ``True``, scripts are statically type-checked at
-            construction time and again on every :meth:`run` call.  Type
-            errors are returned as ``SandboxResult.error`` with
-            ``kind="typing"`` instead of raising.
+
+    Notes:
+        Static type checking is always enabled. Scripts are type-checked at
+        construction time and again on every :meth:`run` call. Type errors
+        are returned as ``SandboxResult.error`` with ``kind="typing"``
+        instead of raising.
     """
 
     def __init__(
@@ -164,11 +166,9 @@ class IdaSandbox:
         db: Any,
         *,
         limits: pydantic_monty.ResourceLimits | None = None,
-        type_check: bool = False,
     ):
         self.db = db
         self.limits = limits if limits is not None else dict(DEFAULT_LIMITS)
-        self.type_check = type_check
         self._fn_impls = create_api_from_database(db)
 
     def run(self, code: str, print_callback: Callable[[str, str], None] | None = None) -> SandboxResult:
@@ -207,8 +207,8 @@ class IdaSandbox:
             m = pydantic_monty.Monty(
                 code,
                 external_functions=FUNCTION_NAMES,
-                type_check=self.type_check,
-                type_check_stubs=TYPE_STUBS if self.type_check else None,
+                type_check=True,
+                type_check_stubs=TYPE_STUBS,
             )
         except pydantic_monty.MontySyntaxError as exc:
             return SandboxResult(error=_syntax_error_to_sandbox_error(exc))

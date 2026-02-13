@@ -30,8 +30,8 @@ class TestFunctionNames:
     def test_is_list(self):
         assert isinstance(FUNCTION_NAMES, list)
 
-    def test_has_26_functions(self):
-        assert len(FUNCTION_NAMES) == 26
+    def test_has_27_functions(self):
+        assert len(FUNCTION_NAMES) == 27
 
     def test_no_duplicates(self):
         assert len(FUNCTION_NAMES) == len(set(FUNCTION_NAMES))
@@ -161,6 +161,7 @@ class TestPayloadContracts:
         raw_bytes = assert_ok(fns["get_bytes_at"](first["address"], 4))["bytes"]
 
         payloads = {
+            "help": assert_ok(fns["help"]("get_functions")),
             "get_binary_info": assert_ok(fns["get_binary_info"]()),
             "get_functions": functions_result,
             "get_function_by_name": assert_ok(fns["get_function_by_name"](first["name"])),
@@ -185,6 +186,7 @@ class TestPayloadContracts:
         }
 
         expected_keys = {
+            "help": {"documentation"},
             "get_binary_info": {
                 "path",
                 "module",
@@ -519,3 +521,18 @@ class TestComments:
     def test_get_comment_no_crash(self, fns, first_func):
         result = fns["get_comment_at"](first_func["address"])
         assert "error" in result or "comment" in result
+
+
+class TestHelp:
+    def test_help_known_callback(self, fns):
+        result = assert_ok(fns["help"]("get_function_at"))
+        text = result["documentation"]
+
+        assert isinstance(text, str)
+        assert "get_function_at" in text
+        assert "Returns:" in text
+
+    def test_help_unknown_callback(self, fns):
+        result = fns["help"]("definitely_not_a_callback")
+        assert "error" in result
+        assert isinstance(result["error"], str)

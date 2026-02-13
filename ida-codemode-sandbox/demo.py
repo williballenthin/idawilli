@@ -97,7 +97,7 @@ def main():
 
     with Database.open(binary_path, ida_options, save_on_close=False) as db:
         logger.info("Analysis complete.  Creating sandbox...")
-        sandbox = IdaSandbox(db, type_check=True)
+        sandbox = IdaSandbox(db)
 
         logger.info("Evaluating sandbox script...")
         result = sandbox.run(SANDBOX_SCRIPT)

@@ -17,6 +17,8 @@ Three layers tested against a real IDA Pro database
     error handling work correctly.
 """
 
+import inspect
+
 import pydantic_monty
 
 from ida_codemode_api import (
@@ -590,25 +592,26 @@ class TestResourceLimits:
 
 
 class TestTypeChecking:
-    """Opt-in static type checking."""
+    """Always-on static type checking."""
 
-    def test_off_by_default(self, db):
-        assert IdaSandbox(db).type_check is False
+    def test_not_configurable_in_constructor(self, db):
+        params = inspect.signature(IdaSandbox).parameters
+        assert "type_check" not in params
 
     def test_valid_code_passes(self, db):
-        sandbox = IdaSandbox(db, type_check=True)
+        sandbox = IdaSandbox(db)
         result = sandbox.run("1 + 2")
         assert result.ok
         assert result.output == 3
 
     def test_catches_type_error(self, db):
-        sandbox = IdaSandbox(db, type_check=True)
+        sandbox = IdaSandbox(db)
         result = sandbox.run('1 + "a"')
         assert not result.ok
         assert result.error.kind == "typing"
 
     def test_catches_wrong_arg_type(self, db):
-        sandbox = IdaSandbox(db, type_check=True)
+        sandbox = IdaSandbox(db)
         result = sandbox.run('disassemble_function("not_an_int")')
         assert not result.ok
         assert result.error.kind == "typing"
@@ -618,13 +621,13 @@ class TestTypeChecking:
             assert f"def {name}(" in TYPE_STUBS, f"stub missing for {name}"
 
     def test_valid_sandbox_calls_pass(self, db):
-        sandbox = IdaSandbox(db, type_check=True)
+        sandbox = IdaSandbox(db)
         result = sandbox.run("len(enumerate_functions())")
         assert result.ok
 
     def test_enumeration_functions_pass(self, db):
         """All no-arg enumeration functions pass type checking."""
-        sandbox = IdaSandbox(db, type_check=True)
+        sandbox = IdaSandbox(db)
         code = """\
 info = get_binary_info()
 segs = enumerate_segments()
@@ -800,9 +803,9 @@ print("random: " + str(r))
         assert "demangled: main" in text
         assert "random:" in text
 
-    def test_comprehensive_with_type_check(self, db):
+    def test_comprehensive_type_checked(self, db):
         """Type-checked variant avoids subscripting Optional returns."""
-        sandbox = IdaSandbox(db, type_check=True)
+        sandbox = IdaSandbox(db)
         code = """\
 info = get_binary_info()
 print("arch: " + info["architecture"])

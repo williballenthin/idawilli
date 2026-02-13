@@ -17,7 +17,7 @@ from ida_codemode_sandbox import IdaSandbox
 
 ida_opts = IdaCommandOptions(auto_analysis=True, new_database=False)
 with Database.open("sample.exe", ida_opts, save_on_close=False) as db:
-    sandbox = IdaSandbox(db, type_check=True)
+    sandbox = IdaSandbox(db)
     result = sandbox.run(SCRIPT)
 
     if result.ok:
@@ -315,10 +315,10 @@ sandbox = IdaSandbox(db, limits=pydantic_monty.ResourceLimits(
 
 ## Type checking
 
-Enable static type checking to catch errors before execution:
+Static type checking is always enabled to catch errors before execution:
 
 ```python
-sandbox = IdaSandbox(db, type_check=True)
+sandbox = IdaSandbox(db)
 result = sandbox.run('get_function_disassembly_at("wrong")')
 # result.ok == False
 # result.error.kind == "typing"

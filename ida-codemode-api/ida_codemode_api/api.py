@@ -30,6 +30,7 @@ TYPE_STUBS = TYPE_STUBS_PATH.read_text(encoding="utf-8")
 
 
 FUNCTION_NAMES: list[str] = [
+    "help",
     "get_binary_info",
     "get_functions",
     "get_function_by_name",
@@ -208,6 +209,56 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             return None, _error(f"{context}: address {address:#x} is not a function start")
 
         return func, None
+
+    def help(api):
+        if not isinstance(api, str):
+            return _error(f"api must be str, got {type(api).__name__}")
+
+        callback_name = api.strip()
+        if callback_name.endswith("()"):
+            callback_name = callback_name[:-2]
+
+        if not callback_name:
+            return _error("api must be a non-empty callback name")
+
+        if callback_name not in FUNCTION_NAMES:
+            available = ", ".join(FUNCTION_NAMES)
+            return _error(f"unknown callback {callback_name!r}; available callbacks: {available}")
+
+        declaration = getattr(api_types, callback_name, None)
+        if declaration is None or not callable(declaration):
+            return _error(f"callback {callback_name!r} is unavailable")
+
+        try:
+            signature = inspect.signature(declaration)
+        except Exception as exc:
+            return _error_from_exc(f"failed to inspect callback signature for {callback_name!r}", exc)
+
+        try:
+            hints = get_type_hints(declaration, include_extras=True)
+        except Exception:
+            hints = {}
+
+        rendered_parameters: list[str] = []
+        for parameter in signature.parameters.values():
+            annotation = hints.get(parameter.name)
+            if annotation is None:
+                rendered_parameters.append(parameter.name)
+                continue
+
+            rendered_parameters.append(f"{parameter.name}: {_render_type(annotation)}")
+
+        return_annotation = hints.get("return", Any)
+        rendered_return = _render_type(return_annotation)
+        rendered_signature = f"{callback_name}({', '.join(rendered_parameters)})"
+
+        doc = inspect.getdoc(declaration)
+        if not doc:
+            return _error(f"callback {callback_name!r} has no documentation")
+
+        return {
+            "documentation": f"{rendered_signature} -> {rendered_return}\n\n{doc}",
+        }
 
     def get_binary_info():
         try:
@@ -720,6 +771,7 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         }
 
     api: dict[str, Callable[..., Any]] = {
+        "help": help,
         "get_binary_info": get_binary_info,
         "get_functions": get_functions,
         "get_function_by_name": get_function_by_name,

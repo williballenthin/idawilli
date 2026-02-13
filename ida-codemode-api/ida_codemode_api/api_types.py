@@ -201,6 +201,11 @@ class GetCommentAtOk(TypedDict):
     comment: str
 
 
+class HelpOk(TypedDict):
+    documentation: str
+
+
+HelpResult = HelpOk | ApiError
 GetBinaryInfoResult = BinaryInfo | ApiError
 GetFunctionsResult = GetFunctionsOk | ApiError
 GetFunctionByNameResult = FunctionInfo | ApiError
@@ -227,6 +232,32 @@ GetDisassemblyAtResult = GetDisassemblyAtOk | ApiError
 GetInstructionAtResult = InstructionInfo | ApiError
 GetAddressTypeResult = GetAddressTypeOk | ApiError
 GetCommentAtResult = GetCommentAtOk | ApiError
+
+
+def help(api: str) -> HelpResult:
+    """Extensive documentation for a specific API callback.
+
+    Use this for progressive disclosure when you need the full docs for one
+    callback, including argument semantics, return payload shape, and examples.
+    See also `get_functions`, `get_function_at`, and `get_comment_at`.
+
+    Args:
+        api: Callback name to describe, such as `"get_function_at"`.
+
+    Returns:
+        Success payload `{documentation: str}` containing the callback
+        signature and full declaration docstring, or `{"error": str}`.
+
+    Errors:
+        - Callback name is empty.
+        - Callback name does not match any available API function.
+        - Callback documentation is unavailable.
+
+    Example success payload:
+        {
+            "documentation": "get_function_at(address: int) -> {address: int, name: str, size: int}\\n\\nFunction descriptor for a function start address.\\n...",
+        }"""
+    raise NotImplementedError
 
 
 def get_binary_info() -> GetBinaryInfoResult:
