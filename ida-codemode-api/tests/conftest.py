@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from ida_codemode_api import build_ida_functions
+from ida_codemode_api import create_api_from_database
 
 TESTS_DIR = Path(__file__).resolve().parent
 TEST_BINARY = TESTS_DIR / "data" / "Practical Malware Analysis Lab 01-01.exe_"
@@ -37,12 +37,12 @@ def db(test_binary):
 @pytest.fixture(scope="session")
 def fns(db):
     """The dict of API callables for direct-call testing."""
-    return build_ida_functions(db)
+    return create_api_from_database(db)
 
 
 @pytest.fixture(scope="session")
 def first_func(fns):
     """Address of the first function IDA found."""
-    functions = fns["enumerate_functions"]()
+    functions = fns["get_functions"]()
     assert len(functions) > 0, "IDA found no functions in the test binary"
     return functions[0]

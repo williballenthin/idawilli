@@ -1,319 +1,471 @@
-"""IDA Codemode API: the 28-function analysis contract for IDA Pro.
+"""IDA Codemode API.
 
-Defines a portable API of pure-function analysis routines that serialize
-IDA domain objects into plain Python primitives (dicts, lists, ints,
-strings).  Every function takes JSON-safe arguments and returns JSON-safe
-values, making the API suitable for in-process sandboxes, JSON-RPC
-servers, or any other execution backend.
+Portable analysis APIs for IDA Pro suitable for sandboxed code execution,
+JSON-RPC exposure, and LLM tool use.
 
-Use :func:`build_ida_functions` to create a concrete implementation
-backed by an ``ida_domain.Database``.
-
-Exposed functions
------------------
-
-Database metadata
-    ``get_binary_info``
-
-Function enumeration & lookup
-    ``enumerate_functions``, ``get_function_by_name``
-
-Function analysis
-    ``disassemble_function``, ``decompile_function``,
-    ``get_function_signature``, ``get_callers``,
-    ``get_callees``, ``get_basic_blocks``
-
-Cross-references
-    ``get_xrefs_to``, ``get_xrefs_from``
-
-Strings
-    ``enumerate_strings``, ``get_string_at``
-
-Segments
-    ``enumerate_segments``
-
-Names / symbols
-    ``enumerate_names``, ``get_name_at``, ``demangle_name``
-
-Imports & entry points
-    ``enumerate_imports``, ``enumerate_entries``
-
-Bytes / memory
-    ``read_bytes``, ``find_bytes``, ``get_disassembly_at``,
-    ``get_instruction_at``
-
-Address classification
-    ``is_code_at``, ``is_data_at``, ``is_valid_address``
-
-Comments
-    ``get_comment_at``
-
-Utilities
-    ``random_int``
+All APIs use JSON-safe primitives (dicts, lists, ints, strings, bools,
+None). Use :func:`create_api_from_database` to build concrete callables
+bound to an open ``ida_domain.Database``.
 """
 
 from __future__ import annotations
 
-import random as _random
-from pathlib import Path
-from typing import Any, Callable
-
-_PROMPTS_DIR = Path(__file__).parent / "prompts"
+import ast
+import re
+from typing import Any, Callable, Literal, TypedDict
 
 
-# ---------------------------------------------------------------------------
-# Type-checking stubs for every API function
-# ---------------------------------------------------------------------------
+class BinaryInfo(TypedDict):
+    path: str
+    module: str
+    architecture: str
+    bitness: int
+    format: str
+    base_address: int
+    entry_point: int
+    minimum_ea: int
+    maximum_ea: int
+    filesize: int
+    md5: str
+    sha256: str
+    crc32: int
 
-TYPE_STUBS = """\
-from typing import Any
 
-# --- Database metadata ---
+class FunctionInfo(TypedDict):
+    address: int
+    name: str
+    size: int
 
-def get_binary_info() -> dict[str, Any]:
-    \"\"\"Return metadata about the binary under analysis.\"\"\"
+
+class NamedAddress(TypedDict):
+    address: int
+    name: str
+
+
+class BasicBlockInfo(TypedDict):
+    start: int
+    end: int
+    successors: list[int]
+    predecessors: list[int]
+
+
+class XrefToInfo(TypedDict):
+    from_address: int
+    type: str
+    is_call: bool
+    is_jump: bool
+
+
+class XrefFromInfo(TypedDict):
+    to_address: int
+    type: str
+    is_call: bool
+    is_jump: bool
+
+
+class StringInfo(TypedDict):
+    address: int
+    length: int
+    type: str
+    value: str
+
+
+SegmentInfo = TypedDict(
+    "SegmentInfo",
+    {
+        "name": str,
+        "start": int,
+        "end": int,
+        "size": int,
+        "permissions": int,
+        "class": str,
+        "bitness": int,
+    },
+)
+
+
+class ImportInfo(TypedDict):
+    address: int
+    name: str
+    module: str
+    ordinal: int
+
+
+class EntryPointInfo(TypedDict):
+    ordinal: int
+    address: int
+    name: str
+    forwarder: str | None
+
+
+class InstructionInfo(TypedDict):
+    address: int
+    size: int
+    mnemonic: str
+    disassembly: str
+    is_call: bool
+
+
+AddressType = Literal["code", "data", "unknown", "invalid"]
+
+
+TYPE_STUBS = '''\
+from typing import Literal, TypedDict
+
+
+class BinaryInfo(TypedDict):
+    path: str
+    module: str
+    architecture: str
+    bitness: int
+    format: str
+    base_address: int
+    entry_point: int
+    minimum_ea: int
+    maximum_ea: int
+    filesize: int
+    md5: str
+    sha256: str
+    crc32: int
+
+
+class FunctionInfo(TypedDict):
+    address: int
+    name: str
+    size: int
+
+
+class NamedAddress(TypedDict):
+    address: int
+    name: str
+
+
+class BasicBlockInfo(TypedDict):
+    start: int
+    end: int
+    successors: list[int]
+    predecessors: list[int]
+
+
+class XrefToInfo(TypedDict):
+    from_address: int
+    type: str
+    is_call: bool
+    is_jump: bool
+
+
+class XrefFromInfo(TypedDict):
+    to_address: int
+    type: str
+    is_call: bool
+    is_jump: bool
+
+
+class StringInfo(TypedDict):
+    address: int
+    length: int
+    type: str
+    value: str
+
+
+SegmentInfo = TypedDict(
+    "SegmentInfo",
+    {
+        "name": str,
+        "start": int,
+        "end": int,
+        "size": int,
+        "permissions": int,
+        "class": str,
+        "bitness": int,
+    },
+)
+
+
+class ImportInfo(TypedDict):
+    address: int
+    name: str
+    module: str
+    ordinal: int
+
+
+class EntryPointInfo(TypedDict):
+    ordinal: int
+    address: int
+    name: str
+    forwarder: str | None
+
+
+class InstructionInfo(TypedDict):
+    address: int
+    size: int
+    mnemonic: str
+    disassembly: str
+    is_call: bool
+
+
+AddressType = Literal["code", "data", "unknown", "invalid"]
+
+
+def get_binary_info() -> BinaryInfo:
+    """Return global metadata about the analyzed binary."""
     ...
 
-# --- Function enumeration & lookup ---
 
-def enumerate_functions() -> list[dict[str, Any]]:
-    \"\"\"Return all functions: [{address, name, size}, ...].\"\"\"
+def get_functions() -> list[FunctionInfo]:
+    """Return every discovered function descriptor."""
     ...
 
-def get_function_by_name(name: str) -> dict[str, Any] | None:
-    \"\"\"Look up a function by *name*, returning its descriptor or None.\"\"\"
+
+def get_function_by_name(name: str) -> FunctionInfo | None:
+    """Look up a function by exact symbolic name."""
     ...
 
-# --- Function analysis ---
 
-def disassemble_function(address: int) -> list[str]:
-    \"\"\"Return disassembly lines for the function at *address*.\"\"\"
+def get_function_at(address: int) -> FunctionInfo | None:
+    """Look up the function that starts at the given address."""
     ...
 
-def decompile_function(address: int) -> list[str]:
-    \"\"\"Return C pseudocode lines for the function at *address*.\"\"\"
+
+def get_function_disassembly_at(address: int) -> list[str]:
+    """Return disassembly lines for the function at address."""
     ...
 
-def get_function_signature(address: int) -> str | None:
-    \"\"\"Return the type signature of the function at *address*.\"\"\"
+
+def decompile_function_at(address: int) -> list[str]:
+    """Return Hex-Rays pseudocode lines for the function at address."""
     ...
 
-def get_callers(address: int) -> list[dict[str, Any]]:
-    \"\"\"Return functions that call the function at *address*.\"\"\"
+
+def get_function_signature_at(address: int) -> str | None:
+    """Return the C-like function signature at address."""
     ...
 
-def get_callees(address: int) -> list[dict[str, Any]]:
-    \"\"\"Return functions called by the function at *address*.\"\"\"
+
+def get_callers_at(address: int) -> list[NamedAddress]:
+    """Return callers of the function at address."""
     ...
 
-def get_basic_blocks(address: int) -> list[dict[str, Any]]:
-    \"\"\"Return the control-flow graph of the function at *address*.\"\"\"
+
+def get_callees_at(address: int) -> list[NamedAddress]:
+    """Return callees of the function at address."""
     ...
 
-# --- Cross-references ---
 
-def get_xrefs_to(address: int) -> list[dict[str, Any]]:
-    \"\"\"Return cross-references TO *address*.\"\"\"
+def get_basic_blocks_at(address: int) -> list[BasicBlockInfo]:
+    """Return CFG basic blocks for the function at address."""
     ...
 
-def get_xrefs_from(address: int) -> list[dict[str, Any]]:
-    \"\"\"Return cross-references FROM *address*.\"\"\"
+
+def get_xrefs_to_at(address: int) -> list[XrefToInfo]:
+    """Return all cross-references that target address."""
     ...
 
-# --- Strings ---
 
-def enumerate_strings() -> list[dict[str, Any]]:
-    \"\"\"Return all detected strings in the binary.\"\"\"
+def get_xrefs_from_at(address: int) -> list[XrefFromInfo]:
+    """Return all cross-references that originate at address."""
     ...
+
+
+def get_strings() -> list[StringInfo]:
+    """Return every string recognized by IDA."""
+    ...
+
 
 def get_string_at(address: int) -> str | None:
-    \"\"\"Read the null-terminated C string at *address*.\"\"\"
+    """Return a null-terminated C string at address."""
     ...
 
-# --- Segments ---
 
-def enumerate_segments() -> list[dict[str, Any]]:
-    \"\"\"Return all memory segments.\"\"\"
+def get_segments() -> list[SegmentInfo]:
+    """Return all memory segment descriptors."""
     ...
 
-# --- Names / symbols ---
 
-def enumerate_names() -> list[dict[str, Any]]:
-    \"\"\"Return all named addresses (symbols / labels).\"\"\"
+def get_names() -> list[NamedAddress]:
+    """Return all named addresses."""
     ...
+
 
 def get_name_at(address: int) -> str | None:
-    \"\"\"Return the symbol name at *address*, or None.\"\"\"
+    """Return the symbol name at address."""
     ...
+
 
 def demangle_name(name: str) -> str:
-    \"\"\"Demangle a C++ mangled *name*.\"\"\"
+    """Demangle a C++ symbol name."""
     ...
 
-# --- Imports & entries ---
 
-def enumerate_imports() -> list[dict[str, Any]]:
-    \"\"\"Return all imported functions.\"\"\"
+def get_imports() -> list[ImportInfo]:
+    """Return imported symbols."""
     ...
 
-def enumerate_entries() -> list[dict[str, Any]]:
-    \"\"\"Return all entry points / exports.\"\"\"
+
+def get_entries() -> list[EntryPointInfo]:
+    """Return entry points and exported symbols."""
     ...
 
-# --- Bytes / memory ---
 
-def read_bytes(address: int, size: int) -> list[int]:
-    \"\"\"Return *size* bytes at *address* as a list of ints.\"\"\"
+def get_bytes_at(address: int, size: int) -> list[int]:
+    """Return raw bytes at address."""
     ...
+
 
 def find_bytes(pattern: list[int]) -> list[int]:
-    \"\"\"Find all occurrences of a byte *pattern*; return matching addresses.\"\"\"
+    """Return addresses matching a byte pattern."""
     ...
+
 
 def get_disassembly_at(address: int) -> str | None:
-    \"\"\"Return the disassembly text for the single instruction at *address*.\"\"\"
+    """Return disassembly text for one instruction."""
     ...
 
-def get_instruction_at(address: int) -> dict[str, Any] | None:
-    \"\"\"Return structured instruction data at *address*.\"\"\"
+
+def get_instruction_at(address: int) -> InstructionInfo | None:
+    """Return structured instruction data at address."""
     ...
 
-# --- Address classification ---
 
-def is_code_at(address: int) -> bool:
-    \"\"\"Return True if *address* contains code.\"\"\"
+def get_address_type(address: int) -> AddressType:
+    """Classify address as code, data, unknown, or invalid."""
     ...
 
-def is_data_at(address: int) -> bool:
-    \"\"\"Return True if *address* contains defined data.\"\"\"
-    ...
-
-def is_valid_address(address: int) -> bool:
-    \"\"\"Return True if *address* is mapped in the database.\"\"\"
-    ...
-
-# --- Comments ---
 
 def get_comment_at(address: int) -> str | None:
-    \"\"\"Return the comment at *address*, or None.\"\"\"
+    """Return the comment attached to address."""
     ...
+'''
 
-# --- Utilities ---
-
-def random_int(low: int, high: int) -> int:
-    \"\"\"Return a random integer in [low, high].\"\"\"
-    ...
-"""
-
-
-# ---------------------------------------------------------------------------
-# Function names  (must match TYPE_STUBS above)
-# ---------------------------------------------------------------------------
 
 FUNCTION_NAMES: list[str] = [
-    # Database metadata
     "get_binary_info",
-    # Function enumeration & lookup
-    "enumerate_functions",
+    "get_functions",
     "get_function_by_name",
-    # Function analysis
-    "disassemble_function",
-    "decompile_function",
-    "get_function_signature",
-    "get_callers",
-    "get_callees",
-    "get_basic_blocks",
-    # Cross-references
-    "get_xrefs_to",
-    "get_xrefs_from",
-    # Strings
-    "enumerate_strings",
+    "get_function_at",
+    "get_function_disassembly_at",
+    "decompile_function_at",
+    "get_function_signature_at",
+    "get_callers_at",
+    "get_callees_at",
+    "get_basic_blocks_at",
+    "get_xrefs_to_at",
+    "get_xrefs_from_at",
+    "get_strings",
     "get_string_at",
-    # Segments
-    "enumerate_segments",
-    # Names / symbols
-    "enumerate_names",
+    "get_segments",
+    "get_names",
     "get_name_at",
     "demangle_name",
-    # Imports & entries
-    "enumerate_imports",
-    "enumerate_entries",
-    # Bytes / memory
-    "read_bytes",
+    "get_imports",
+    "get_entries",
+    "get_bytes_at",
     "find_bytes",
     "get_disassembly_at",
     "get_instruction_at",
-    # Address classification
-    "is_code_at",
-    "is_data_at",
-    "is_valid_address",
-    # Comments
+    "get_address_type",
     "get_comment_at",
-    # Utilities
-    "random_int",
 ]
 
 
-# ---------------------------------------------------------------------------
-# IDA-backed function builder
-# ---------------------------------------------------------------------------
+_TYPED_DICTS: dict[str, Any] = {
+    "BinaryInfo": BinaryInfo,
+    "FunctionInfo": FunctionInfo,
+    "NamedAddress": NamedAddress,
+    "BasicBlockInfo": BasicBlockInfo,
+    "XrefToInfo": XrefToInfo,
+    "XrefFromInfo": XrefFromInfo,
+    "StringInfo": StringInfo,
+    "SegmentInfo": SegmentInfo,
+    "ImportInfo": ImportInfo,
+    "EntryPointInfo": EntryPointInfo,
+    "InstructionInfo": InstructionInfo,
+}
 
 
-def build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
-    """Build the IDA-backed function implementations.
+def _typed_dict_shape(name: str) -> str:
+    cls = _TYPED_DICTS[name]
+    keys = ", ".join(cls.__annotations__.keys())
+    return "{" + keys + "}"
 
-    Each function serializes IDA domain objects into plain Python types
-    (dicts, lists, ints, strings) so they can cross process, sandbox, or
-    RPC boundaries.
+
+def _render_return_annotation(annotation: str) -> str:
+    rendered = annotation
+    for name in sorted(_TYPED_DICTS.keys(), key=len, reverse=True):
+        rendered = re.sub(rf"\b{name}\b", _typed_dict_shape(name), rendered)
+    return rendered
+
+
+def _api_rows_from_type_stubs() -> list[tuple[str, str, str, str]]:
+    module = ast.parse(TYPE_STUBS)
+    rows: dict[str, tuple[str, str, str, str]] = {}
+
+    for node in module.body:
+        if not isinstance(node, ast.FunctionDef):
+            continue
+
+        arg_names = [arg.arg for arg in node.args.args]
+        signature = f"{node.name}({', '.join(arg_names)})"
+        returns = ast.unparse(node.returns) if node.returns is not None else "Any"
+
+        doc = ast.get_docstring(node) or ""
+        description = doc.strip().splitlines()[0] if doc.strip() else ""
+
+        rows[node.name] = (node.name, signature, returns, description)
+
+    return [rows[name] for name in FUNCTION_NAMES if name in rows]
+
+
+def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
+    """Build API callables backed by an open ``ida_domain.Database``.
 
     Args:
-        db: An open ``ida_domain.Database``.
+        db: Open database object from ``ida_domain``.
 
     Returns:
-        Mapping of function name to implementation callable.
+        Mapping from API name to callable implementation.
+
+    Example:
+        Build the API and inspect function docstrings.
 
     Example::
 
         from ida_domain import Database
-        from ida_codemode_api import build_ida_functions
+        from ida_codemode_api import create_api_from_database
 
         with Database.open(path, options) as db:
-            fns = build_ida_functions(db)
-            info = fns["get_binary_info"]()
-            print(info["architecture"])
+            api = create_api_from_database(db)
+            print(api["get_binary_info"]()["module"])
+            print(api["get_binary_info"].__doc__.splitlines()[0])
     """
 
-    # -----------------------------------------------------------------------
-    # Database metadata
-    # -----------------------------------------------------------------------
+    def _serialize_function(func: Any) -> FunctionInfo:
+        return {
+            "address": int(func.start_ea),
+            "name": str(db.functions.get_name(func)),
+            "size": int(func.size() if callable(func.size) else func.size),
+        }
 
-    def get_binary_info() -> dict[str, Any]:
-        """Return global metadata about the binary under analysis.
+    def get_binary_info() -> BinaryInfo:
+        """Return global metadata about the analyzed binary.
 
-        Returns:
-            A dict with keys:
+        Example result::
 
-            - **path** (*str*) – file system path of the input file.
-            - **module** (*str*) – short module / file name.
-            - **architecture** (*str*) – processor family (e.g. ``"metapc"``).
-            - **bitness** (*int*) – address size: 32 or 64.
-            - **format** (*str*) – file format description
-              (e.g. ``"ELF64 for x86-64 (Shared object)"``).
-            - **base_address** (*int*) – image base address.
-            - **entry_point** (*int*) – program entry point address.
-            - **minimum_ea** (*int*) – lowest mapped effective address.
-            - **maximum_ea** (*int*) – highest mapped effective address.
-            - **filesize** (*int*) – size of the input file in bytes.
-            - **md5** (*str*) – MD5 hex digest of the input file.
-            - **sha256** (*str*) – SHA-256 hex digest of the input file.
-            - **crc32** (*int*) – CRC-32 checksum of the input file.
-
-        Example::
-
-            info = get_binary_info()
-            print(info["module"] + " (" + info["architecture"] + ", "
-                  + str(info["bitness"]) + "-bit)")
-            # => "sample.exe (metapc, 32-bit)"
+            {
+                "path": "/tmp/sample.exe",
+                "module": "sample.exe",
+                "architecture": "metapc",
+                "bitness": 32,
+                "format": "PE",
+                "base_address": 4194304,
+                "entry_point": 4198400,
+                "minimum_ea": 4194304,
+                "maximum_ea": 4259840,
+                "filesize": 123456,
+                "md5": "...",
+                "sha256": "...",
+                "crc32": 123456789,
+            }
         """
         return {
             "path": str(db.path),
@@ -331,84 +483,54 @@ def build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             "crc32": int(db.crc32),
         }
 
-    # -----------------------------------------------------------------------
-    # Function enumeration & lookup
-    # -----------------------------------------------------------------------
+    def get_functions() -> list[FunctionInfo]:
+        """Return every discovered function descriptor.
 
-    def enumerate_functions() -> list[dict[str, Any]]:
-        """Return every function in the database.
+        See also: ``get_function_at``, ``get_function_by_name``,
+        ``get_function_signature_at``, ``get_function_disassembly_at``,
+        ``get_callers_at``, ``get_callees_at``, ``get_basic_blocks_at``.
 
-        Returns:
-            A list of dicts, each with keys:
+        Example result::
 
-            - **address** (*int*) – function start address.
-            - **name** (*str*) – function name.
-            - **size** (*int*) – function size in bytes.
-
-        Example::
-
-            functions = enumerate_functions()
-            for f in functions:
-                print(hex(f["address"]) + " " + f["name"]
-                      + " (" + str(f["size"]) + " bytes)")
+            [{"address": 4198400, "name": "main", "size": 1337}]
         """
-        results: list[dict[str, Any]] = []
-        for func in db.functions:
-            results.append({
-                "address": int(func.start_ea),
-                "name": str(db.functions.get_name(func)),
-                "size": int(func.size() if callable(func.size) else func.size),
-            })
-        return results
+        return [_serialize_function(func) for func in db.functions]
 
-    def get_function_by_name(name: str) -> dict[str, Any] | None:
-        """Look up a function by its symbolic *name*.
+    def get_function_by_name(name: str) -> FunctionInfo | None:
+        """Look up a function by exact symbolic name.
 
-        Args:
-            name: The exact function name to search for.
+        Example result::
 
-        Returns:
-            A dict with ``address``, ``name``, and ``size`` keys,
-            or ``None`` if no function with that name exists.
-
-        Example::
-
-            fn = get_function_by_name("main")
-            if fn is not None:
-                print(fn["name"] + " at " + hex(fn["address"]))
+            {"address": 4198400, "name": "main", "size": 1337}
         """
         func = db.functions.get_function_by_name(name)
         if func is None:
             return None
-        return {
-            "address": int(func.start_ea),
-            "name": str(db.functions.get_name(func)),
-            "size": int(func.size() if callable(func.size) else func.size),
-        }
+        return _serialize_function(func)
 
-    # -----------------------------------------------------------------------
-    # Function analysis
-    # -----------------------------------------------------------------------
+    def get_function_at(address: int) -> FunctionInfo | None:
+        """Look up the function that starts at the given address.
 
-    def disassemble_function(address: int) -> list[str]:
-        """Return the disassembly listing for the function at *address*.
+        Example result::
 
-        Each element is one line of disassembly text as IDA formats it
-        (e.g. ``"mov     rax, [rbp+var_8]"``).
+            {"address": 4198400, "name": "main", "size": 1337}
+        """
+        try:
+            func = db.functions.get_at(address)
+        except Exception:
+            return None
+        if func is None:
+            return None
+        if int(func.start_ea) != int(address):
+            return None
+        return _serialize_function(func)
 
-        Args:
-            address: Start address of the target function.
+    def get_function_disassembly_at(address: int) -> list[str]:
+        """Return disassembly lines for the function at address.
 
-        Returns:
-            List of disassembly line strings, or an empty list if no
-            function exists at *address*.
+        Example result::
 
-        Example::
-
-            fn = get_function_by_name("main")
-            if fn is not None:
-                for line in disassemble_function(fn["address"]):
-                    print(line)
+            ["push ebp", "mov ebp, esp", "..."]
         """
         try:
             func = db.functions.get_at(address)
@@ -418,26 +540,12 @@ def build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             return []
         return list(db.functions.get_disassembly(func))
 
-    def decompile_function(address: int) -> list[str]:
-        """Return C pseudocode for the function at *address*.
+    def decompile_function_at(address: int) -> list[str]:
+        """Return Hex-Rays pseudocode lines for the function at address.
 
-        Requires the Hex-Rays decompiler.  When the decompiler is not
-        available or decompilation fails, an empty list is returned.
+        Example result::
 
-        Args:
-            address: Start address of the target function.
-
-        Returns:
-            List of pseudocode line strings, or ``[]`` when
-            decompilation is unavailable.
-
-        Example::
-
-            fn = get_function_by_name("main")
-            if fn is not None:
-                pseudocode = decompile_function(fn["address"])
-                for line in pseudocode:
-                    print(line)
+            ["int __cdecl main(int argc, const char **argv)", "{", "  return 0;", "}"]
         """
         try:
             func = db.functions.get_at(address)
@@ -451,25 +559,12 @@ def build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
         except Exception:
             return []
 
-    def get_function_signature(address: int) -> str | None:
-        """Return the type signature of the function at *address*.
+    def get_function_signature_at(address: int) -> str | None:
+        """Return the C-like function signature at address.
 
-        The signature is a C-style declaration string such as
-        ``"int __cdecl main(int argc, const char **argv)"``.
+        Example result::
 
-        Args:
-            address: Start address of the target function.
-
-        Returns:
-            Signature string, or ``None`` if no type information is
-            available or no function exists at *address*.
-
-        Example::
-
-            fn = get_function_by_name("main")
-            if fn is not None:
-                sig = get_function_signature(fn["address"])
-                print("Signature: " + str(sig))
+            "int __cdecl main(int argc, const char **argv)"
         """
         try:
             func = db.functions.get_at(address)
@@ -480,24 +575,12 @@ def build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
         sig = db.functions.get_signature(func)
         return str(sig) if sig is not None else None
 
-    def get_callers(address: int) -> list[dict[str, Any]]:
-        """Return functions that contain a call to the function at *address*.
+    def get_callers_at(address: int) -> list[NamedAddress]:
+        """Return callers of the function at address.
 
-        Args:
-            address: Start address of the target function.
+        Example result::
 
-        Returns:
-            A list of dicts, each with keys:
-
-            - **address** (*int*) – caller function start address.
-            - **name** (*str*) – caller function name.
-
-        Example::
-
-            fn = get_function_by_name("CreateFileA")
-            if fn is not None:
-                for caller in get_callers(fn["address"]):
-                    print(caller["name"] + " calls CreateFileA")
+            [{"address": 4202496, "name": "sub_402000"}]
         """
         try:
             func = db.functions.get_at(address)
@@ -505,32 +588,20 @@ def build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             return []
         if func is None:
             return []
-        results: list[dict[str, Any]] = []
-        for caller in db.functions.get_callers(func):
-            results.append({
+        return [
+            {
                 "address": int(caller.start_ea),
                 "name": str(db.functions.get_name(caller)),
-            })
-        return results
+            }
+            for caller in db.functions.get_callers(func)
+        ]
 
-    def get_callees(address: int) -> list[dict[str, Any]]:
-        """Return functions called by the function at *address*.
+    def get_callees_at(address: int) -> list[NamedAddress]:
+        """Return callees of the function at address.
 
-        Args:
-            address: Start address of the calling function.
+        Example result::
 
-        Returns:
-            A list of dicts, each with keys:
-
-            - **address** (*int*) – callee function start address.
-            - **name** (*str*) – callee function name.
-
-        Example::
-
-            fn = get_function_by_name("main")
-            if fn is not None:
-                for callee in get_callees(fn["address"]):
-                    print("main calls " + callee["name"])
+            [{"address": 4206592, "name": "CreateFileA"}]
         """
         try:
             func = db.functions.get_at(address)
@@ -538,44 +609,20 @@ def build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             return []
         if func is None:
             return []
-        results: list[dict[str, Any]] = []
-        for callee in db.functions.get_callees(func):
-            results.append({
+        return [
+            {
                 "address": int(callee.start_ea),
                 "name": str(db.functions.get_name(callee)),
-            })
-        return results
+            }
+            for callee in db.functions.get_callees(func)
+        ]
 
-    def get_basic_blocks(address: int) -> list[dict[str, Any]]:
-        """Return the control-flow graph of the function at *address*.
+    def get_basic_blocks_at(address: int) -> list[BasicBlockInfo]:
+        """Return CFG basic blocks for the function at address.
 
-        Each basic block is a maximal sequence of instructions with a
-        single entry point and a single exit point.
+        Example result::
 
-        Args:
-            address: Start address of the target function.
-
-        Returns:
-            A list of dicts, each with keys:
-
-            - **start** (*int*) – block start address.
-            - **end** (*int*) – block end address (exclusive).
-            - **successors** (*list[int]*) – start addresses of successor
-              blocks.
-            - **predecessors** (*list[int]*) – start addresses of predecessor
-              blocks.
-
-            Returns ``[]`` if no function exists at *address*.
-
-        Example::
-
-            fn = get_function_by_name("main")
-            if fn is not None:
-                blocks = get_basic_blocks(fn["address"])
-                print("Basic blocks: " + str(len(blocks)))
-                for b in blocks:
-                    print(hex(b["start"]) + "-" + hex(b["end"])
-                          + " -> " + str(len(b["successors"])) + " succs")
+            [{"start": 4198400, "end": 4198410, "successors": [4198420], "predecessors": []}]
         """
         try:
             func = db.functions.get_at(address)
@@ -586,7 +633,8 @@ def build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
         flowchart = db.functions.get_flowchart(func)
         if flowchart is None:
             return []
-        results: list[dict[str, Any]] = []
+
+        results: list[BasicBlockInfo] = []
         for block in flowchart:
             results.append({
                 "start": int(block.start_ea),
@@ -596,34 +644,14 @@ def build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             })
         return results
 
-    # -----------------------------------------------------------------------
-    # Cross-references
-    # -----------------------------------------------------------------------
+    def get_xrefs_to_at(address: int) -> list[XrefToInfo]:
+        """Return all cross-references that target address.
 
-    def get_xrefs_to(address: int) -> list[dict[str, Any]]:
-        """Return all cross-references that target *address*.
+        Example result::
 
-        Args:
-            address: The destination address to query.
-
-        Returns:
-            A list of dicts, each with keys:
-
-            - **from_address** (*int*) – source address of the reference.
-            - **type** (*str*) – reference type name
-              (e.g. ``"CALL_NEAR"``, ``"OFFSET"``).
-            - **is_call** (*bool*) – ``True`` if this is a call reference.
-            - **is_jump** (*bool*) – ``True`` if this is a jump reference.
-
-        Example::
-
-            fn = get_function_by_name("main")
-            if fn is not None:
-                for xref in get_xrefs_to(fn["address"]):
-                    tag = " [CALL]" if xref["is_call"] else ""
-                    print(hex(xref["from_address"]) + tag)
+            [{"from_address": 4202496, "type": "CALL_NEAR", "is_call": True, "is_jump": False}]
         """
-        results: list[dict[str, Any]] = []
+        results: list[XrefToInfo] = []
         try:
             for xref in db.xrefs.to_ea(address):
                 results.append({
@@ -636,29 +664,14 @@ def build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             pass
         return results
 
-    def get_xrefs_from(address: int) -> list[dict[str, Any]]:
-        """Return all cross-references originating at *address*.
+    def get_xrefs_from_at(address: int) -> list[XrefFromInfo]:
+        """Return all cross-references that originate at address.
 
-        Args:
-            address: The source address to query.
+        Example result::
 
-        Returns:
-            A list of dicts, each with keys:
-
-            - **to_address** (*int*) – destination address of the reference.
-            - **type** (*str*) – reference type name.
-            - **is_call** (*bool*) – ``True`` if this is a call reference.
-            - **is_jump** (*bool*) – ``True`` if this is a jump reference.
-
-        Example::
-
-            fn = get_function_by_name("main")
-            if fn is not None:
-                for xref in get_xrefs_from(fn["address"]):
-                    print("-> " + hex(xref["to_address"])
-                          + " (" + xref["type"] + ")")
+            [{"to_address": 4206592, "type": "CALL_NEAR", "is_call": True, "is_jump": False}]
         """
-        results: list[dict[str, Any]] = []
+        results: list[XrefFromInfo] = []
         try:
             for xref in db.xrefs.from_ea(address):
                 results.append({
@@ -671,29 +684,14 @@ def build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             pass
         return results
 
-    # -----------------------------------------------------------------------
-    # Strings
-    # -----------------------------------------------------------------------
+    def get_strings() -> list[StringInfo]:
+        """Return every string recognized by IDA.
 
-    def enumerate_strings() -> list[dict[str, Any]]:
-        """Return every string detected by IDA in the binary.
+        Example result::
 
-        Returns:
-            A list of dicts, each with keys:
-
-            - **address** (*int*) – address of the string.
-            - **length** (*int*) – character count.
-            - **type** (*str*) – string type name (e.g. ``"C"``, ``"C_16"``).
-            - **value** (*str*) – the string contents decoded as UTF-8.
-
-        Example::
-
-            strings = enumerate_strings()
-            for s in strings:
-                if "password" in s["value"].lower():
-                    print(hex(s["address"]) + ": " + s["value"])
+            [{"address": 4214784, "length": 12, "type": "C", "value": "Hello world"}]
         """
-        results: list[dict[str, Any]] = []
+        results: list[StringInfo] = []
         for s in db.strings:
             value = s.contents
             if isinstance(value, (bytes, bytearray)):
@@ -707,53 +705,26 @@ def build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
         return results
 
     def get_string_at(address: int) -> str | None:
-        """Read the null-terminated C string starting at *address*.
+        """Return a null-terminated C string at address.
 
-        Args:
-            address: Address of the first byte of the string.
+        Example result::
 
-        Returns:
-            The string contents, or ``None`` if no string is found.
-
-        Example::
-
-            strings = enumerate_strings()
-            if len(strings) > 0:
-                value = get_string_at(strings[0]["address"])
-                print("First string: " + str(value))
+            "kernel32.dll"
         """
         try:
             result = db.bytes.get_cstring_at(address)
             return str(result) if result is not None else None
-        except (RuntimeError, Exception):
+        except Exception:
             return None
 
-    # -----------------------------------------------------------------------
-    # Segments
-    # -----------------------------------------------------------------------
+    def get_segments() -> list[SegmentInfo]:
+        """Return all memory segment descriptors.
 
-    def enumerate_segments() -> list[dict[str, Any]]:
-        """Return every memory segment in the database.
+        Example result::
 
-        Returns:
-            A list of dicts, each with keys:
-
-            - **name** (*str*) – segment name (e.g. ``".text"``).
-            - **start** (*int*) – segment start address.
-            - **end** (*int*) – segment end address (exclusive).
-            - **size** (*int*) – segment size in bytes.
-            - **permissions** (*int*) – permission bitmask (R=4, W=2, X=1).
-            - **class** (*str*) – segment class (e.g. ``"CODE"``, ``"DATA"``).
-            - **bitness** (*int*) – segment address width (16, 32, or 64).
-
-        Example::
-
-            for seg in enumerate_segments():
-                print(seg["name"] + " " + hex(seg["start"])
-                      + "-" + hex(seg["end"])
-                      + " (" + seg["class"] + ")")
+            [{"name": ".text", "start": 4194304, "end": 4202496, "size": 8192, "permissions": 5, "class": "CODE", "bitness": 32}]
         """
-        results: list[dict[str, Any]] = []
+        results: list[SegmentInfo] = []
         for seg in db.segments:
             results.append({
                 "name": str(db.segments.get_name(seg)),
@@ -766,48 +737,21 @@ def build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             })
         return results
 
-    # -----------------------------------------------------------------------
-    # Names / symbols
-    # -----------------------------------------------------------------------
+    def get_names() -> list[NamedAddress]:
+        """Return all named addresses.
 
-    def enumerate_names() -> list[dict[str, Any]]:
-        """Return all named addresses (symbols and labels) in the database.
+        Example result::
 
-        Returns:
-            A list of dicts, each with keys:
-
-            - **address** (*int*) – the named address.
-            - **name** (*str*) – the symbol name.
-
-        Example::
-
-            names = enumerate_names()
-            print("Named symbols: " + str(len(names)))
-            for n in names:
-                print(hex(n["address"]) + " " + n["name"])
+            [{"address": 4198400, "name": "main"}]
         """
-        results: list[dict[str, Any]] = []
-        for ea, name in db.names:
-            results.append({
-                "address": int(ea),
-                "name": str(name),
-            })
-        return results
+        return [{"address": int(ea), "name": str(name)} for ea, name in db.names]
 
     def get_name_at(address: int) -> str | None:
-        """Return the symbol name at *address*.
+        """Return the symbol name at address.
 
-        Args:
-            address: The address to query.
+        Example result::
 
-        Returns:
-            The name string, or ``None`` if the address has no name.
-
-        Example::
-
-            name = get_name_at(0x401000)
-            if name is not None:
-                print("Symbol at 0x401000: " + name)
+            "main"
         """
         try:
             result = db.names.get_at(address)
@@ -816,80 +760,84 @@ def build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
         return str(result) if result else None
 
     def demangle_name(name: str) -> str:
-        """Demangle a C++ mangled symbol *name*.
+        """Demangle a C++ symbol name.
 
-        For example, ``"_Z3addii"`` becomes ``"add(int,int)"``.
+        Example result::
 
-        Args:
-            name: The mangled name string.
-
-        Returns:
-            The demangled name.  Returns *name* unchanged if it is not
-            a valid mangled name.
-
-        Example::
-
-            names = enumerate_names()
-            for n in names:
-                demangled = demangle_name(n["name"])
-                if demangled != n["name"]:
-                    print(n["name"] + " -> " + demangled)
+            "std::basic_string<char>::size() const"
         """
         result = db.names.demangle_name(name)
         return str(result) if result else str(name)
 
-    # -----------------------------------------------------------------------
-    # Imports & entry points
-    # -----------------------------------------------------------------------
+    def get_imports() -> list[ImportInfo]:
+        """Return imported symbols.
 
-    def enumerate_imports() -> list[dict[str, Any]]:
-        """Return all imported functions / symbols.
+        Example result::
 
-        Returns:
-            A list of dicts, each with keys:
-
-            - **address** (*int*) – import address (IAT slot or PLT entry).
-            - **name** (*str*) – imported symbol name.
-            - **module** (*str*) – name of the providing module / library.
-            - **ordinal** (*int*) – import ordinal number.
-
-        Example::
-
-            imports = enumerate_imports()
-            for imp in imports:
-                print(imp["module"] + "!" + imp["name"])
+            [{"address": 4206592, "name": "CreateFileA", "module": "KERNEL32", "ordinal": 0}]
         """
-        results: list[dict[str, Any]] = []
-        for imp in db.imports.get_all_imports():
-            results.append({
-                "address": int(imp.address),
-                "name": str(imp.name),
-                "module": str(imp.module_name),
-                "ordinal": int(imp.ordinal),
-            })
+        results: list[ImportInfo] = []
+
+        # Preferred path: ida_domain may expose db.imports.
+        if hasattr(db, "imports"):
+            try:
+                for imp in db.imports.get_all_imports():
+                    results.append({
+                        "address": int(imp.address),
+                        "name": str(imp.name),
+                        "module": str(imp.module_name),
+                        "ordinal": int(imp.ordinal),
+                    })
+                return results
+            except Exception:
+                results = []
+
+        # Fallback path: use IDA's import-enumeration APIs directly.
+        try:
+            import ida_nalt  # type: ignore
+        except Exception:
+            return results
+
+        try:
+            module_count = int(ida_nalt.get_import_module_qty())
+        except Exception:
+            return results
+
+        for module_index in range(module_count):
+            module_name = ida_nalt.get_import_module_name(module_index)
+            module_name_str = str(module_name) if module_name else ""
+
+            def _collect(ea: int, name: str | None, ordinal: int, _m: str = module_name_str) -> bool:
+                results.append({
+                    "address": int(ea),
+                    "name": str(name) if name is not None else "",
+                    "module": _m,
+                    "ordinal": int(ordinal),
+                })
+                return True
+
+            try:
+                ida_nalt.enum_import_names(module_index, _collect)
+            except Exception:
+                continue
+
         return results
 
-    def enumerate_entries() -> list[dict[str, Any]]:
-        """Return all entry points and exported symbols.
+    def get_entries() -> list[EntryPointInfo]:
+        """Return entry points and exported symbols.
 
-        Returns:
-            A list of dicts, each with keys:
+        Example result::
 
-            - **ordinal** (*int*) – entry point ordinal.
-            - **address** (*int*) – entry point address.
-            - **name** (*str*) – entry point name.
-            - **forwarder** (*str | None*) – forwarded name, if any.
-
-        Example::
-
-            entries = enumerate_entries()
-            for e in entries:
-                print("Entry: " + e["name"] + " at " + hex(e["address"]))
+            [{"ordinal": 1, "address": 4198400, "name": "_DllMain@12", "forwarder": None}]
         """
-        results: list[dict[str, Any]] = []
+        results: list[EntryPointInfo] = []
         for entry in db.entries:
             forwarder: str | None = None
-            if hasattr(entry, "has_forwarder") and entry.has_forwarder:
+            has_forwarder = getattr(entry, "has_forwarder", None)
+            if callable(has_forwarder):
+                if bool(has_forwarder()):
+                    forwarder = str(entry.forwarder_name)
+            elif bool(has_forwarder):
                 forwarder = str(entry.forwarder_name)
             results.append({
                 "ordinal": int(entry.ordinal),
@@ -899,33 +847,12 @@ def build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             })
         return results
 
-    # -----------------------------------------------------------------------
-    # Bytes / memory
-    # -----------------------------------------------------------------------
+    def get_bytes_at(address: int, size: int) -> list[int]:
+        """Return raw bytes at address.
 
-    def read_bytes(address: int, size: int) -> list[int]:
-        """Read raw bytes from the database.
+        Example result::
 
-        Args:
-            address: Start address to read from.
-            size: Number of bytes to read.
-
-        Returns:
-            A list of integer byte values (0-255).  Returns ``[]`` if
-            *address* is unmapped.
-
-        Example::
-
-            fn = get_function_by_name("main")
-            if fn is not None:
-                raw = read_bytes(fn["address"], 16)
-                parts = []
-                for b in raw:
-                    if b < 16:
-                        parts.append("0" + hex(b)[2:])
-                    else:
-                        parts.append(hex(b)[2:])
-                print(" ".join(parts))
+            [85, 139, 236, 131, 236, 8]
         """
         try:
             data = db.bytes.get_bytes_at(address, size)
@@ -936,80 +863,33 @@ def build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
         return list(data)
 
     def find_bytes(pattern: list[int]) -> list[int]:
-        """Search the entire database for a byte pattern.
+        """Return addresses matching a byte pattern.
 
-        The *pattern* is a list of integer byte values
-        (e.g. ``[0x55, 0x48, 0x89, 0xe5]`` for a typical x86-64
-        function prologue).
+        Example result::
 
-        Args:
-            pattern: Byte values to search for.
-
-        Returns:
-            A list of addresses where the pattern was found.
-
-        Example::
-
-            # Find x86 "push ebp; mov ebp, esp" prologue
-            hits = find_bytes([0x55, 0x8B, 0xEC])
-            for addr in hits:
-                name = get_name_at(addr)
-                if name is not None:
-                    print(hex(addr) + " " + name)
+            [4198400, 4202496]
         """
         return [int(ea) for ea in db.bytes.find_binary_sequence(bytes(pattern))]
 
     def get_disassembly_at(address: int) -> str | None:
-        """Return the disassembly text for the single instruction at *address*.
+        """Return disassembly text for one instruction.
 
-        Unlike :func:`disassemble_function` which returns an entire function,
-        this returns just one instruction line.
+        Example result::
 
-        Args:
-            address: Address of the instruction.
-
-        Returns:
-            Disassembly string, or ``None`` if *address* does not contain
-            a recognized instruction.
-
-        Example::
-
-            fn = get_function_by_name("main")
-            if fn is not None:
-                text = get_disassembly_at(fn["address"])
-                print("First instruction: " + str(text))
+            "push    ebp"
         """
         try:
             result = db.bytes.get_disassembly_at(address)
             return str(result) if result is not None else None
-        except (RuntimeError, Exception):
+        except Exception:
             return None
 
-    def get_instruction_at(address: int) -> dict[str, Any] | None:
-        """Return structured data for the instruction at *address*.
+    def get_instruction_at(address: int) -> InstructionInfo | None:
+        """Return structured instruction data at address.
 
-        Args:
-            address: Address of the instruction to decode.
+        Example result::
 
-        Returns:
-            A dict with keys:
-
-            - **address** (*int*) – instruction address.
-            - **size** (*int*) – instruction length in bytes.
-            - **mnemonic** (*str*) – opcode mnemonic (e.g. ``"mov"``).
-            - **disassembly** (*str*) – full disassembly text.
-            - **is_call** (*bool*) – ``True`` if this is a call instruction.
-
-            Returns ``None`` if no instruction could be decoded.
-
-        Example::
-
-            fn = get_function_by_name("main")
-            if fn is not None:
-                insn = get_instruction_at(fn["address"])
-                if insn is not None:
-                    print(insn["mnemonic"] + " (size="
-                          + str(insn["size"]) + ")")
+            {"address": 4198400, "size": 1, "mnemonic": "push", "disassembly": "push ebp", "is_call": False}
         """
         try:
             insn = db.instructions.get_at(address)
@@ -1025,79 +905,42 @@ def build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             "is_call": bool(db.instructions.is_call_instruction(insn)),
         }
 
-    # -----------------------------------------------------------------------
-    # Address classification
-    # -----------------------------------------------------------------------
+    def get_address_type(address: int) -> AddressType:
+        """Classify address as code, data, unknown, or invalid.
 
-    def is_code_at(address: int) -> bool:
-        """Return ``True`` if *address* contains executable code.
+        Example result::
 
-        Args:
-            address: The address to classify.
-
-        Example::
-
-            fn = get_function_by_name("main")
-            if fn is not None:
-                print("is code: " + str(is_code_at(fn["address"])))
-                # => "is code: True"
+            "code"
         """
+        if not bool(db.is_valid_ea(address)):
+            return "invalid"
+
         try:
-            return bool(db.bytes.is_code_at(address))
+            if bool(db.bytes.is_code_at(address)):
+                return "code"
         except Exception:
-            return False
+            pass
 
-    def is_data_at(address: int) -> bool:
-        """Return ``True`` if *address* contains defined data.
-
-        Args:
-            address: The address to classify.
-
-        Example::
-
-            strings = enumerate_strings()
-            if len(strings) > 0:
-                print("is data: "
-                      + str(is_data_at(strings[0]["address"])))
-        """
         try:
-            return bool(db.bytes.is_data_at(address))
+            if bool(db.bytes.is_data_at(address)):
+                return "data"
         except Exception:
-            return False
+            pass
 
-    def is_valid_address(address: int) -> bool:
-        """Return ``True`` if *address* is mapped in the database.
+        try:
+            if bool(db.bytes.is_unknown_at(address)):
+                return "unknown"
+        except Exception:
+            pass
 
-        Args:
-            address: The address to check.
-
-        Example::
-
-            print(is_valid_address(0x401000))   # True (if mapped)
-            print(is_valid_address(0xDEADDEAD)) # False
-        """
-        return bool(db.is_valid_ea(address))
-
-    # -----------------------------------------------------------------------
-    # Comments
-    # -----------------------------------------------------------------------
+        return "unknown"
 
     def get_comment_at(address: int) -> str | None:
-        """Return the analyst comment at *address*.
+        """Return the comment attached to address.
 
-        Args:
-            address: The address to query.
+        Example result::
 
-        Returns:
-            The comment string, or ``None`` if no comment exists.
-
-        Example::
-
-            functions = enumerate_functions()
-            for f in functions:
-                comment = get_comment_at(f["address"])
-                if comment is not None:
-                    print(f["name"] + ': "' + comment + '"')
+            "decrypts config"
         """
         try:
             result = db.comments.get_at(address)
@@ -1105,78 +948,51 @@ def build_ida_functions(db: Any) -> dict[str, Callable[..., Any]]:
             return None
         return str(result) if result else None
 
-    # -----------------------------------------------------------------------
-    # Utilities
-    # -----------------------------------------------------------------------
-
-    def random_int(low: int, high: int) -> int:
-        """Return a random integer *n* such that ``low <= n <= high``.
-
-        Args:
-            low: Inclusive lower bound.
-            high: Inclusive upper bound.
-
-        Example::
-
-            functions = enumerate_functions()
-            idx = random_int(0, len(functions) - 1)
-            print("Random function: " + functions[idx]["name"])
-        """
-        return _random.randint(low, high)
-
-    # -----------------------------------------------------------------------
-    # Collect and return
-    # -----------------------------------------------------------------------
-
-    return {
-        # Database metadata
+    api: dict[str, Callable[..., Any]] = {
         "get_binary_info": get_binary_info,
-        # Function enumeration & lookup
-        "enumerate_functions": enumerate_functions,
+        "get_functions": get_functions,
         "get_function_by_name": get_function_by_name,
-        # Function analysis
-        "disassemble_function": disassemble_function,
-        "decompile_function": decompile_function,
-        "get_function_signature": get_function_signature,
-        "get_callers": get_callers,
-        "get_callees": get_callees,
-        "get_basic_blocks": get_basic_blocks,
-        # Cross-references
-        "get_xrefs_to": get_xrefs_to,
-        "get_xrefs_from": get_xrefs_from,
-        # Strings
-        "enumerate_strings": enumerate_strings,
+        "get_function_at": get_function_at,
+        "get_function_disassembly_at": get_function_disassembly_at,
+        "decompile_function_at": decompile_function_at,
+        "get_function_signature_at": get_function_signature_at,
+        "get_callers_at": get_callers_at,
+        "get_callees_at": get_callees_at,
+        "get_basic_blocks_at": get_basic_blocks_at,
+        "get_xrefs_to_at": get_xrefs_to_at,
+        "get_xrefs_from_at": get_xrefs_from_at,
+        "get_strings": get_strings,
         "get_string_at": get_string_at,
-        # Segments
-        "enumerate_segments": enumerate_segments,
-        # Names / symbols
-        "enumerate_names": enumerate_names,
+        "get_segments": get_segments,
+        "get_names": get_names,
         "get_name_at": get_name_at,
         "demangle_name": demangle_name,
-        # Imports & entries
-        "enumerate_imports": enumerate_imports,
-        "enumerate_entries": enumerate_entries,
-        # Bytes / memory
-        "read_bytes": read_bytes,
+        "get_imports": get_imports,
+        "get_entries": get_entries,
+        "get_bytes_at": get_bytes_at,
         "find_bytes": find_bytes,
         "get_disassembly_at": get_disassembly_at,
         "get_instruction_at": get_instruction_at,
-        # Address classification
-        "is_code_at": is_code_at,
-        "is_data_at": is_data_at,
-        "is_valid_address": is_valid_address,
-        # Comments
+        "get_address_type": get_address_type,
         "get_comment_at": get_comment_at,
-        # Utilities
-        "random_int": random_int,
     }
+
+    return api
 
 
 def api_reference() -> str:
-    """Return the function-reference tables as markdown.
+    """Return a Markdown function table generated from stubs/docstrings."""
+    rows = _api_rows_from_type_stubs()
 
-    A prompt fragment listing every API function, its return type, and a
-    short description.  Suitable for inclusion in LLM system prompts or
-    documentation.
-    """
-    return (_PROMPTS_DIR / "api_reference.md").read_text()
+    lines = [
+        "## Function reference",
+        "",
+        "| Function | Returns | Description |",
+        "|----------|---------|-------------|",
+    ]
+
+    for _, signature, returns, description in rows:
+        rendered_return = _render_return_annotation(returns)
+        lines.append(f"| `{signature}` | `{rendered_return}` | {description} |")
+
+    return "\n".join(lines)

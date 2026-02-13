@@ -1,84 +1,30 @@
 ## Function reference
 
-### Database metadata
-
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `get_binary_info()` | `dict` | path, module, architecture, bitness, format, base_address, entry_point, minimum_ea, maximum_ea, filesize, md5, sha256, crc32 |
-
-### Functions
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `enumerate_functions()` | `list[dict]` | All functions: `{address, name, size}` |
-| `get_function_by_name(name)` | `dict \| None` | Look up by exact name |
-| `disassemble_function(address)` | `list[str]` | Disassembly lines |
-| `decompile_function(address)` | `list[str]` | C pseudocode (needs Hex-Rays) |
-| `get_function_signature(address)` | `str \| None` | C-style type signature |
-| `get_callers(address)` | `list[dict]` | Functions that call this one: `{address, name}` |
-| `get_callees(address)` | `list[dict]` | Functions this one calls: `{address, name}` |
-| `get_basic_blocks(address)` | `list[dict]` | CFG: `{start, end, successors, predecessors}` |
-
-### Cross-references
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `get_xrefs_to(address)` | `list[dict]` | Refs targeting address: `{from_address, type, is_call, is_jump}` |
-| `get_xrefs_from(address)` | `list[dict]` | Refs originating at address: `{to_address, type, is_call, is_jump}` |
-
-### Strings
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `enumerate_strings()` | `list[dict]` | All strings: `{address, length, type, value}` |
-| `get_string_at(address)` | `str \| None` | Read null-terminated C string |
-
-### Segments
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `enumerate_segments()` | `list[dict]` | All segments: `{name, start, end, size, permissions, class, bitness}` |
-
-### Names / symbols
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `enumerate_names()` | `list[dict]` | All named addresses: `{address, name}` |
-| `get_name_at(address)` | `str \| None` | Symbol name at address |
-| `demangle_name(name)` | `str` | Demangle C++ name (pass-through if not mangled) |
-
-### Imports and entries
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `enumerate_imports()` | `list[dict]` | All imports: `{address, name, module, ordinal}` |
-| `enumerate_entries()` | `list[dict]` | All entry points: `{ordinal, address, name, forwarder}` |
-
-### Bytes / memory
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `read_bytes(address, size)` | `list[int]` | Raw byte values (0-255) |
-| `find_bytes(pattern)` | `list[int]` | Addresses matching byte pattern |
-| `get_disassembly_at(address)` | `str \| None` | Single instruction disassembly |
-| `get_instruction_at(address)` | `dict \| None` | `{address, size, mnemonic, disassembly, is_call}` |
-
-### Address classification
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `is_code_at(address)` | `bool` | Address contains code |
-| `is_data_at(address)` | `bool` | Address contains defined data |
-| `is_valid_address(address)` | `bool` | Address is mapped |
-
-### Comments
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `get_comment_at(address)` | `str \| None` | Analyst comment at address |
-
-### Utilities
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `random_int(low, high)` | `int` | Random integer in `[low, high]` |
+| `get_binary_info()` | `{path, module, architecture, bitness, format, base_address, entry_point, minimum_ea, maximum_ea, filesize, md5, sha256, crc32}` | Return global metadata about the analyzed binary. |
+| `get_functions()` | `list[{address, name, size}]` | Return every discovered function descriptor. |
+| `get_function_by_name(name)` | `{address, name, size} | None` | Look up a function by exact symbolic name. |
+| `get_function_at(address)` | `{address, name, size} | None` | Look up the function that starts at the given address. |
+| `get_function_disassembly_at(address)` | `list[str]` | Return disassembly lines for the function at address. |
+| `decompile_function_at(address)` | `list[str]` | Return Hex-Rays pseudocode lines for the function at address. |
+| `get_function_signature_at(address)` | `str | None` | Return the C-like function signature at address. |
+| `get_callers_at(address)` | `list[{address, name}]` | Return callers of the function at address. |
+| `get_callees_at(address)` | `list[{address, name}]` | Return callees of the function at address. |
+| `get_basic_blocks_at(address)` | `list[{start, end, successors, predecessors}]` | Return CFG basic blocks for the function at address. |
+| `get_xrefs_to_at(address)` | `list[{from_address, type, is_call, is_jump}]` | Return all cross-references that target address. |
+| `get_xrefs_from_at(address)` | `list[{to_address, type, is_call, is_jump}]` | Return all cross-references that originate at address. |
+| `get_strings()` | `list[{address, length, type, value}]` | Return every string recognized by IDA. |
+| `get_string_at(address)` | `str | None` | Return a null-terminated C string at address. |
+| `get_segments()` | `list[{name, start, end, size, permissions, class, bitness}]` | Return all memory segment descriptors. |
+| `get_names()` | `list[{address, name}]` | Return all named addresses. |
+| `get_name_at(address)` | `str | None` | Return the symbol name at address. |
+| `demangle_name(name)` | `str` | Demangle a C++ symbol name. |
+| `get_imports()` | `list[{address, name, module, ordinal}]` | Return imported symbols. |
+| `get_entries()` | `list[{ordinal, address, name, forwarder}]` | Return entry points and exported symbols. |
+| `get_bytes_at(address, size)` | `list[int]` | Return raw bytes at address. |
+| `find_bytes(pattern)` | `list[int]` | Return addresses matching a byte pattern. |
+| `get_disassembly_at(address)` | `str | None` | Return disassembly text for one instruction. |
+| `get_instruction_at(address)` | `{address, size, mnemonic, disassembly, is_call} | None` | Return structured instruction data at address. |
+| `get_address_type(address)` | `AddressType` | Classify address as code, data, unknown, or invalid. |
+| `get_comment_at(address)` | `str | None` | Return the comment attached to address. |

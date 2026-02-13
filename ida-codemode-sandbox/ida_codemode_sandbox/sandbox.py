@@ -16,7 +16,8 @@ import pydantic_monty
 from ida_codemode_api import (
     FUNCTION_NAMES,
     TYPE_STUBS,
-    build_ida_functions,
+    api_reference as codemode_api_reference,
+    create_api_from_database,
 )
 
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
@@ -168,7 +169,7 @@ class IdaSandbox:
         self.db = db
         self.limits = limits if limits is not None else dict(DEFAULT_LIMITS)
         self.type_check = type_check
-        self._fn_impls = build_ida_functions(db)
+        self._fn_impls = create_api_from_database(db)
 
     def run(self, code: str, print_callback: Callable[[str, str], None] | None = None) -> SandboxResult:
         """Evaluate *code* in the sandbox.
@@ -185,7 +186,7 @@ class IdaSandbox:
 
         Example::
 
-            result = sandbox.run('functions = enumerate_functions()\\n'
+            result = sandbox.run('functions = get_functions()\\n'
                                  'print("count: " + str(len(functions)))')
             if result.ok:
                 print("".join(result.stdout))
@@ -269,7 +270,17 @@ class IdaSandbox:
                 },
             )
         """
-        return (_PROMPTS_DIR / "system_prompt.md").read_text()
+        prompt = (_PROMPTS_DIR / "system_prompt.md").read_text()
+
+        marker_ref = "## Function reference"
+        marker_tips = "## Tips"
+        if marker_ref not in prompt or marker_tips not in prompt:
+            return prompt
+
+        before_ref, _, rest = prompt.partition(marker_ref)
+        _, _, after_tips = rest.partition(marker_tips)
+
+        return before_ref + codemode_api_reference() + "\n\n" + marker_tips + after_tips
 
     @staticmethod
     def api_reference() -> str:
@@ -283,4 +294,4 @@ class IdaSandbox:
 
             custom_prompt = "You are a binary analyst.\\n" + IdaSandbox.api_reference()
         """
-        return (_PROMPTS_DIR / "api_reference.md").read_text()
+        return codemode_api_reference()

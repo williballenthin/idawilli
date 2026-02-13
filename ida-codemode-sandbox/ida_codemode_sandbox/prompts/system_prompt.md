@@ -1,6 +1,6 @@
 ## Writing analysis scripts
 
-Scripts run inside a sandboxed Python subset interpreter.  The 28
+Scripts run inside a sandboxed Python subset interpreter.  The 26
 analysis functions listed below are pre-loaded as globals — just call
 them.  Scripts **cannot** import modules, access the filesystem, or
 make network calls.
@@ -33,7 +33,7 @@ Dicts use string keys.  A function descriptor, for example, is always:
 
 ```python
 # Find all functions larger than 1 KB
-functions = enumerate_functions()
+functions = get_functions()
 large = []
 for f in functions:
     if f["size"] > 1024:
@@ -48,15 +48,15 @@ for f in large:
 ```python
 fn = get_function_by_name("main")
 if fn is not None:
-    sig = get_function_signature(fn["address"])
+    sig = get_function_signature_at(fn["address"])
     print("Signature: " + str(sig))
 
-    callees = get_callees(fn["address"])
+    callees = get_callees_at(fn["address"])
     print("Calls " + str(len(callees)) + " functions:")
     for c in callees:
         print("  " + c["name"])
 
-    blocks = get_basic_blocks(fn["address"])
+    blocks = get_basic_blocks_at(fn["address"])
     print("Basic blocks: " + str(len(blocks)))
 ```
 
@@ -66,8 +66,8 @@ if fn is not None:
 # Find functions called by main that also have callers beyond main
 main = get_function_by_name("main")
 if main is not None:
-    for callee in get_callees(main["address"]):
-        callers = get_callers(callee["address"])
+    for callee in get_callees_at(main["address"]):
+        callers = get_callers_at(callee["address"])
         if len(callers) > 1:
             names = []
             for c in callers:
@@ -79,11 +79,11 @@ if main is not None:
 
 ```python
 # For every string that mentions "password", show who references it
-strings = enumerate_strings()
+strings = get_strings()
 for s in strings:
     if "password" in s["value"].lower():
         print(s["value"])
-        xrefs = get_xrefs_to(s["address"])
+        xrefs = get_xrefs_to_at(s["address"])
         for x in xrefs:
             name = get_name_at(x["from_address"])
             print("  ref from " + hex(x["from_address"]) + " " + str(name))
@@ -95,7 +95,7 @@ for s in strings:
 fn = get_function_by_name("main")
 if fn is not None:
     # Full function disassembly
-    for line in disassemble_function(fn["address"]):
+    for line in get_function_disassembly_at(fn["address"]):
         print(line)
 
     # Single instruction at entry
@@ -104,7 +104,7 @@ if fn is not None:
         print(insn["mnemonic"] + " (size=" + str(insn["size"]) + ")")
 
     # Raw bytes
-    raw = read_bytes(fn["address"], 8)
+    raw = get_bytes_at(fn["address"], 8)
     parts = []
     for b in raw:
         if b < 16:
@@ -129,12 +129,12 @@ for addr in hits:
 #### Imports and entry points
 
 ```python
-imports = enumerate_imports()
+imports = get_imports()
 print("Imports: " + str(len(imports)))
 for imp in imports:
     print("  " + imp["module"] + "!" + imp["name"])
 
-entries = enumerate_entries()
+entries = get_entries()
 for e in entries:
     print("Entry: " + e["name"] + " at " + hex(e["address"]))
 ```
@@ -151,12 +151,11 @@ print("MD5:    " + info["md5"])
 #### Address classification
 
 ```python
-functions = enumerate_functions()
+functions = get_functions()
 for f in functions:
     addr = f["address"]
     parts = [f["name"]]
-    if is_code_at(addr):
-        parts.append("CODE")
+    parts.append(get_address_type(addr).upper())
     comment = get_comment_at(addr)
     if comment is not None:
         parts.append('"' + comment + '"')
@@ -176,40 +175,40 @@ for f in functions:
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `enumerate_functions()` | `list[dict]` | All functions: `{address, name, size}` |
+| `get_functions()` | `list[dict]` | All functions: `{address, name, size}` |
 | `get_function_by_name(name)` | `dict \| None` | Look up by exact name |
-| `disassemble_function(address)` | `list[str]` | Disassembly lines |
-| `decompile_function(address)` | `list[str]` | C pseudocode (needs Hex-Rays) |
-| `get_function_signature(address)` | `str \| None` | C-style type signature |
-| `get_callers(address)` | `list[dict]` | Functions that call this one: `{address, name}` |
-| `get_callees(address)` | `list[dict]` | Functions this one calls: `{address, name}` |
-| `get_basic_blocks(address)` | `list[dict]` | CFG: `{start, end, successors, predecessors}` |
+| `get_function_disassembly_at(address)` | `list[str]` | Disassembly lines |
+| `decompile_function_at(address)` | `list[str]` | C pseudocode (needs Hex-Rays) |
+| `get_function_signature_at(address)` | `str \| None` | C-style type signature |
+| `get_callers_at(address)` | `list[dict]` | Functions that call this one: `{address, name}` |
+| `get_callees_at(address)` | `list[dict]` | Functions this one calls: `{address, name}` |
+| `get_basic_blocks_at(address)` | `list[dict]` | CFG: `{start, end, successors, predecessors}` |
 
 ### Cross-references
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `get_xrefs_to(address)` | `list[dict]` | Refs targeting address: `{from_address, type, is_call, is_jump}` |
-| `get_xrefs_from(address)` | `list[dict]` | Refs originating at address: `{to_address, type, is_call, is_jump}` |
+| `get_xrefs_to_at(address)` | `list[dict]` | Refs targeting address: `{from_address, type, is_call, is_jump}` |
+| `get_xrefs_from_at(address)` | `list[dict]` | Refs originating at address: `{to_address, type, is_call, is_jump}` |
 
 ### Strings
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `enumerate_strings()` | `list[dict]` | All strings: `{address, length, type, value}` |
+| `get_strings()` | `list[dict]` | All strings: `{address, length, type, value}` |
 | `get_string_at(address)` | `str \| None` | Read null-terminated C string |
 
 ### Segments
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `enumerate_segments()` | `list[dict]` | All segments: `{name, start, end, size, permissions, class, bitness}` |
+| `get_segments()` | `list[dict]` | All segments: `{name, start, end, size, permissions, class, bitness}` |
 
 ### Names / symbols
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `enumerate_names()` | `list[dict]` | All named addresses: `{address, name}` |
+| `get_names()` | `list[dict]` | All named addresses: `{address, name}` |
 | `get_name_at(address)` | `str \| None` | Symbol name at address |
 | `demangle_name(name)` | `str` | Demangle C++ name (pass-through if not mangled) |
 
@@ -217,14 +216,14 @@ for f in functions:
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `enumerate_imports()` | `list[dict]` | All imports: `{address, name, module, ordinal}` |
-| `enumerate_entries()` | `list[dict]` | All entry points: `{ordinal, address, name, forwarder}` |
+| `get_imports()` | `list[dict]` | All imports: `{address, name, module, ordinal}` |
+| `get_entries()` | `list[dict]` | All entry points: `{ordinal, address, name, forwarder}` |
 
 ### Bytes / memory
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `read_bytes(address, size)` | `list[int]` | Raw byte values (0-255) |
+| `get_bytes_at(address, size)` | `list[int]` | Raw byte values (0-255) |
 | `find_bytes(pattern)` | `list[int]` | Addresses matching byte pattern |
 | `get_disassembly_at(address)` | `str \| None` | Single instruction disassembly |
 | `get_instruction_at(address)` | `dict \| None` | `{address, size, mnemonic, disassembly, is_call}` |
@@ -233,9 +232,7 @@ for f in functions:
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `is_code_at(address)` | `bool` | Address contains code |
-| `is_data_at(address)` | `bool` | Address contains defined data |
-| `is_valid_address(address)` | `bool` | Address is mapped |
+| `get_address_type(address)` | `"code" \| "data" \| "unknown" \| "invalid"` | Classify an address in one call |
 
 ### Comments
 
@@ -247,14 +244,13 @@ for f in functions:
 
 | Function | Returns | Description |
 |----------|---------|-------------|
-| `random_int(low, high)` | `int` | Random integer in `[low, high]` |
 
 
 ## Tips
 
 - **Unmapped addresses return empty results**, not errors.
-  `disassemble_function(0xDEAD)` returns `[]`, `get_name_at(0xDEAD)` returns `None`.
-- **`decompile_function` requires a Hex-Rays license.**
+  `get_function_disassembly_at(0xDEAD)` returns `[]`, `get_name_at(0xDEAD)` returns `None`.
+- **`decompile_function_at` requires a Hex-Rays license.**
   It returns `[]` gracefully when the decompiler is unavailable.
 - **String concatenation, not f-strings for print.**
   While f-strings are supported, `print("x = " + str(val))` is the
@@ -262,7 +258,7 @@ for f in functions:
 - **`find_bytes` takes `list[int]`, not `bytes`.**
   The sandbox does not have a `bytes` literal, so patterns
   are expressed as lists of integers.
-- **Use `enumerate_*` then filter**, rather than trying to guess addresses.
+- **Use listing APIs (`get_functions`, `get_strings`, etc.) then filter**, rather than guessing addresses.
   Discover addresses dynamically from the API rather than hardcoding them.
 - **Keep scripts focused.**
   Write small scripts that answer a specific question, then iterate.

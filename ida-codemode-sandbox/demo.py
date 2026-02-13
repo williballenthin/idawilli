@@ -21,24 +21,22 @@ from ida_codemode_sandbox import IdaSandbox
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# The script below runs *inside* the Monty sandbox.  It can only call the
-# five IDA routines plus the random_int helper that the sandbox exposes.
+# The script below runs *inside* the Monty sandbox and calls codemode APIs.
 # ---------------------------------------------------------------------------
 SANDBOX_SCRIPT = """\
-# --- enumerate all functions ---
-functions = enumerate_functions()
+# --- list all functions ---
+functions = get_functions()
 print("Found " + str(len(functions)) + " functions:")
 for f in functions:
     print("  " + hex(f["address"]) + ": " + f["name"])
 
-# --- pick a function at random ---
-idx = random_int(0, len(functions) - 1)
-target = functions[idx]
+# --- choose the first function ---
+target = functions[0]
 print("")
 print("=== Selected: " + target["name"] + " at " + hex(target["address"]) + " ===")
 
 # --- cross-references TO the function ---
-xrefs_to = get_xrefs_to(target["address"])
+xrefs_to = get_xrefs_to_at(target["address"])
 print("")
 print("Cross-references TO " + target["name"] + ":")
 if len(xrefs_to) == 0:
@@ -52,7 +50,7 @@ for xref in xrefs_to:
     print("  from " + hex(xref["from_address"]) + " (" + xref["type"] + ")" + tag)
 
 # --- cross-references FROM the function entry ---
-xrefs_from = get_xrefs_from(target["address"])
+xrefs_from = get_xrefs_from_at(target["address"])
 print("")
 print("Cross-references FROM " + hex(target["address"]) + ":")
 if len(xrefs_from) == 0:
@@ -66,14 +64,14 @@ for xref in xrefs_from:
     print("  to " + hex(xref["to_address"]) + " (" + xref["type"] + ")" + tag)
 
 # --- disassembly ---
-disasm = disassemble_function(target["address"])
+disasm = get_function_disassembly_at(target["address"])
 print("")
 print("Disassembly of " + target["name"] + ":")
 for line in disasm:
     print("  " + line)
 
 # --- raw bytes ---
-raw = read_bytes(target["address"], 16)
+raw = get_bytes_at(target["address"], 16)
 hex_str = ""
 for b in raw:
     if b < 16:
