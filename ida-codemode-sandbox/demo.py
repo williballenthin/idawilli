@@ -1,90 +1,84 @@
 #!/usr/bin/env python3
-"""Demonstrate the IDA Sandbox: analyze a binary through a sandboxed script.
+"""Demonstrate sandboxed IDA Code Mode execution.
 
-The demo opens a binary with IDA Pro (headless/idalib), creates a Monty
-sandbox that exposes a handful of IDA analysis primitives, and evaluates a
-hard-coded analysis script inside that sandbox.
-
-Usage::
+Usage:
 
     python demo.py <path-to-executable>
 """
 
 import logging
 import sys
+from pathlib import Path
 
+# Keep local imports available even if ida_domain adjusts sys.path.
+PROJECT_ROOT = Path(__file__).resolve().parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from ida_codemode_sandbox import IdaSandbox
 from ida_domain import Database
 from ida_domain.database import IdaCommandOptions
 
-from ida_codemode_sandbox import IdaSandbox
-
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# The script below runs *inside* the Monty sandbox and calls codemode APIs.
-# ---------------------------------------------------------------------------
 SANDBOX_SCRIPT = """\
-# --- list all functions ---
-functions = get_functions()
-print("Found " + str(len(functions)) + " functions:")
-for f in functions:
-    print("  " + hex(f["address"]) + ": " + f["name"])
+def expect_ok(result):
+    if "error" in result:
+        print("API error: " + result["error"])
+        return None
+    return result
 
-# --- choose the first function ---
-target = functions[0]
-print("")
-print("=== Selected: " + target["name"] + " at " + hex(target["address"]) + " ===")
+meta = expect_ok(get_database_metadata())
+if meta is not None:
+    print("Architecture: " + meta["architecture"])
+    print("Bitness: " + str(meta["bitness"]))
 
-# --- cross-references TO the function ---
-xrefs_to = get_xrefs_to_at(target["address"])
-print("")
-print("Cross-references TO " + target["name"] + ":")
-if len(xrefs_to) == 0:
-    print("  (none)")
-for xref in xrefs_to:
-    tag = ""
-    if xref["is_call"]:
-        tag = " [CALL]"
-    if xref["is_jump"]:
-        tag = " [JUMP]"
-    print("  from " + hex(xref["from_address"]) + " (" + xref["type"] + ")" + tag)
-
-# --- cross-references FROM the function entry ---
-xrefs_from = get_xrefs_from_at(target["address"])
-print("")
-print("Cross-references FROM " + hex(target["address"]) + ":")
-if len(xrefs_from) == 0:
-    print("  (none)")
-for xref in xrefs_from:
-    tag = ""
-    if xref["is_call"]:
-        tag = " [CALL]"
-    if xref["is_jump"]:
-        tag = " [JUMP]"
-    print("  to " + hex(xref["to_address"]) + " (" + xref["type"] + ")" + tag)
-
-# --- disassembly ---
-disasm = get_function_disassembly_at(target["address"])
-print("")
-print("Disassembly of " + target["name"] + ":")
-for line in disasm:
-    print("  " + line)
-
-# --- raw bytes ---
-raw = get_bytes_at(target["address"], 16)
-hex_str = ""
-for b in raw:
-    if b < 16:
-        hex_str = hex_str + "0" + hex(b)[2:]
+funcs = expect_ok(get_functions())
+if funcs is None:
+    print("No function list available.")
+else:
+    if len(funcs["functions"]) == 0:
+        print("No functions discovered.")
     else:
-        hex_str = hex_str + hex(b)[2:]
-    hex_str = hex_str + " "
-print("")
-print("First 16 bytes: " + hex_str)
+        target = funcs["functions"][0]
+        print("")
+        print("=== Selected: " + target["name"] + " at " + hex(target["address"]) + " ===")
+
+        xrefs_to = expect_ok(get_xrefs_to_at(target["address"]))
+        if xrefs_to is not None:
+            print("")
+            print("Cross-references TO " + target["name"] + ":")
+            if len(xrefs_to["xrefs"]) == 0:
+                print("  (none)")
+            for xref in xrefs_to["xrefs"]:
+                tag = ""
+                if xref["is_call"]:
+                    tag = " [CALL]"
+                if xref["is_jump"]:
+                    tag = " [JUMP]"
+                print("  from " + hex(xref["from_address"]) + " (" + xref["type"] + ")" + tag)
+
+        disasm = expect_ok(get_function_disassembly_at(target["address"]))
+        if disasm is not None:
+            print("")
+            print("Disassembly:")
+            for line in disasm["disassembly"]:
+                print("  " + line)
+
+        raw = expect_ok(get_bytes_at(target["address"], 16))
+        if raw is not None:
+            parts = []
+            for b in raw["bytes"]:
+                if b < 16:
+                    parts.append("0" + hex(b)[2:])
+                else:
+                    parts.append(hex(b)[2:])
+            print("")
+            print("First 16 bytes: " + " ".join(parts))
 """
 
 
-def main():
+def main() -> int:
     if len(sys.argv) < 2:
         print(f"Usage: {sys.argv[0]} <path-to-executable>", file=sys.stderr)
         return 1
@@ -96,7 +90,7 @@ def main():
     ida_options = IdaCommandOptions(auto_analysis=True, new_database=False)
 
     with Database.open(binary_path, ida_options, save_on_close=False) as db:
-        logger.info("Analysis complete.  Creating sandbox...")
+        logger.info("Analysis complete. Creating sandbox...")
         sandbox = IdaSandbox(db)
 
         logger.info("Evaluating sandbox script...")
@@ -104,20 +98,18 @@ def main():
 
         if result.ok:
             print("".join(result.stdout), end="")
-        else:
-            print(
-                f"Sandbox error ({result.error.kind}):\n"
-                f"{result.error.formatted}",
-                file=sys.stderr,
-            )
-            # Still emit any partial output produced before the error.
-            if result.stdout:
-                print("--- partial output ---")
-                print("".join(result.stdout), end="")
-            return 1
+            return 0
 
-    return 0
+        print(
+            f"Sandbox error ({result.error.kind}):\n"
+            f"{result.error.formatted}",
+            file=sys.stderr,
+        )
+        if result.stdout:
+            print("--- partial output ---")
+            print("".join(result.stdout), end="")
+        return 1
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

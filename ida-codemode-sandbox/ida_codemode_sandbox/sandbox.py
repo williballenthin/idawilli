@@ -1,9 +1,9 @@
-"""IDA Sandbox: a Monty-based sandbox exposing IDA Pro analysis routines.
+"""IDA Sandbox: a Monty-based sandbox exposing IDA Code Mode callbacks.
 
 Creates a secure execution environment where sandboxed Python code can call
-a curated set of IDA Pro analysis functions backed by ``ida_codemode_api``.
-Every function serializes IDA objects into plain Python primitives (dicts,
-lists, ints, strings) so they can safely cross the sandbox boundary.
+many IDA analysis and annotation routines backed by ``ida_codemode_api``.
+Callbacks return JSON-safe payloads and error dictionaries that can safely
+cross the sandbox boundary.
 """
 
 from __future__ import annotations
@@ -134,7 +134,7 @@ def _typing_error_to_sandbox_error(exc: pydantic_monty.MontyTypingError) -> Sand
 
 
 class IdaSandbox:
-    """A Monty sandbox with IDA Pro analysis routines exposed.
+    """A Monty sandbox with IDA Code Mode routines exposed.
 
     Usage::
 
@@ -186,8 +186,7 @@ class IdaSandbox:
 
         Example::
 
-            result = sandbox.run('functions = get_functions()\\n'
-                                 'print("count: " + str(len(functions)))')
+            result = sandbox.run('print("hello from sandbox")')
             if result.ok:
                 print("".join(result.stdout))
         """

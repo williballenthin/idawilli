@@ -1,12 +1,14 @@
 # ida-codemode-sandbox
 
-A secure Python sandbox for IDA Pro binary analysis, built on
-[pydantic-monty](https://github.com/pydantic/monty).
+A secure Monty-based execution sandbox for IDA Code Mode scripts.
 
-Sandboxed scripts can call 26 IDA analysis functions but cannot access
-the filesystem, network, or host process.  This makes it safe to run
-AI-generated or untrusted analysis code against a real IDA database.
+This package wires:
 
+- [`pydantic-monty`](https://github.com/pydantic/monty) (sandboxed Python execution)
+- [`ida-codemode-api`](https://github.com/williballenthin/idawilli/tree/master/ida-codemode-api) (analysis + mutation callbacks)
+
+The sandbox returns structured execution results (`SandboxResult`) and keeps
+host-side controls for time, memory, and recursion limits.
 
 ## Quick start
 
@@ -15,343 +17,98 @@ from ida_domain import Database
 from ida_domain.database import IdaCommandOptions
 from ida_codemode_sandbox import IdaSandbox
 
-ida_opts = IdaCommandOptions(auto_analysis=True, new_database=False)
-with Database.open("sample.exe", ida_opts, save_on_close=False) as db:
+opts = IdaCommandOptions(auto_analysis=True, new_database=False)
+with Database.open("sample.exe", opts, save_on_close=False) as db:
     sandbox = IdaSandbox(db)
-    result = sandbox.run(SCRIPT)
 
+    code = '''
+def expect_ok(result):
+    if "error" in result:
+        print("API error: " + result["error"])
+        return None
+    return result
+
+meta = expect_ok(get_database_metadata())
+if meta is not None:
+    print("arch: " + meta["architecture"])
+
+funcs = expect_ok(get_functions())
+if funcs is not None:
+    print("function count: " + str(len(funcs["functions"])))
+'''
+
+    result = sandbox.run(code)
     if result.ok:
-        print("".join(result.stdout))
+        print("".join(result.stdout), end="")
     else:
-        print(f"error: {result.error.formatted}")
+        print(result.error.formatted)
 ```
 
+## Script pattern
 
-## Writing sandbox scripts
+Code inside the sandbox should treat API callbacks as returning either:
 
-Scripts run inside [Monty](https://github.com/pydantic/monty), a
-sandboxed Python subset interpreter.  The 26 analysis functions listed
-below are pre-loaded as globals — just call them.
+- success payload
+- `{"error": "..."}`
 
-### Language subset
-
-Monty supports core Python: variables, `if`/`elif`/`else`, `for`/`while`,
-`def`, `class`, `list`/`dict`/`tuple`/`set` literals, list comprehensions,
-f-strings, `try`/`except`, and common builtins (`len`, `range`, `str`,
-`int`, `hex`, `print`, `sorted`, `enumerate`, `zip`, `isinstance`, …).
-
-**Not available**: `import`, `open()`, `eval()`, `exec()`, `__import__`,
-`os`, `sys`, `subprocess`, or any I/O.  This is by design.
-
-### Data model
-
-Every function returns plain Python values — `dict`, `list`, `str`,
-`int`, `bool`, or `None`.  IDA domain objects are serialized at the
-boundary so scripts never hold opaque references.
-
-Dicts use string keys.  A function descriptor, for example, is always:
-```python
-{"address": 0x401000, "name": "main", "size": 42}
-```
-
-### Patterns and examples
-
-#### Enumerate and filter
+Use a small helper and check for errors before reading payload fields:
 
 ```python
-# Find all functions larger than 1 KB
-functions = get_functions()
-large = []
-for f in functions:
-    if f["size"] > 1024:
-        large.append(f)
-print("Large functions: " + str(len(large)))
-for f in large:
-    print("  " + f["name"] + " (" + str(f["size"]) + " bytes)")
+def expect_ok(result):
+    if "error" in result:
+        print("API error: " + result["error"])
+        return None
+    return result
 ```
 
-#### Look up a function by name, then analyze it
+## API docs
 
-```python
-fn = get_function_by_name("main")
-if fn is not None:
-    sig = get_function_signature_at(fn["address"])
-    print("Signature: " + str(sig))
+This repository intentionally does **not** duplicate callback docs.
+Use the source of truth from `ida-codemode-api`:
 
-    callees = get_callees_at(fn["address"])
-    print("Calls " + str(len(callees)) + " functions:")
-    for c in callees:
-        print("  " + c["name"])
+- Runtime helper: `IdaSandbox.api_reference()`
+- Runtime helper: `help("callback_name")` (inside sandbox code)
+- Upstream project docs: `ida-codemode-api`
 
-    blocks = get_basic_blocks_at(fn["address"])
-    print("Basic blocks: " + str(len(blocks)))
-```
+## Prompt helpers
 
-#### Walk the call graph
+- `IdaSandbox.system_prompt()` returns sandbox usage guidance plus the current
+  `ida-codemode-api` function reference (inserted dynamically at runtime).
+- `IdaSandbox.api_reference()` returns only the current function table.
 
-```python
-# Find functions called by main that also have callers beyond main
-main = get_function_by_name("main")
-if main is not None:
-    for callee in get_callees_at(main["address"]):
-        callers = get_callers_at(callee["address"])
-        if len(callers) > 1:
-            names = []
-            for c in callers:
-                names.append(c["name"])
-            print(callee["name"] + " also called by: " + str(names))
-```
+## `execute()` adapter
 
-#### Cross-reference analysis
+`IdaSandbox.execute(code: str) -> str` is a convenience adapter for callers
+expecting a plain string executor:
 
-```python
-# For every string that mentions "password", show who references it
-strings = get_strings()
-for s in strings:
-    if "password" in s["value"].lower():
-        print(s["value"])
-        xrefs = get_xrefs_to_at(s["address"])
-        for x in xrefs:
-            name = get_name_at(x["from_address"])
-            print("  ref from " + hex(x["from_address"]) + " " + str(name))
-```
-
-#### Disassembly and bytes
-
-```python
-fn = get_function_by_name("main")
-if fn is not None:
-    # Full function disassembly
-    for line in get_function_disassembly_at(fn["address"]):
-        print(line)
-
-    # Single instruction at entry
-    insn = get_instruction_at(fn["address"])
-    if insn is not None:
-        print(insn["mnemonic"] + " (size=" + str(insn["size"]) + ")")
-
-    # Raw bytes
-    raw = get_bytes_at(fn["address"], 8)
-    parts = []
-    for b in raw:
-        if b < 16:
-            parts.append("0" + hex(b)[2:])
-        else:
-            parts.append(hex(b)[2:])
-    print(" ".join(parts))
-```
-
-#### Search for a byte pattern
-
-```python
-# Find all locations of "push ebp; mov ebp, esp" (x86 prologue)
-hits = find_bytes([0x55, 0x8B, 0xEC])
-print("Found prologue at " + str(len(hits)) + " locations")
-for addr in hits:
-    name = get_name_at(addr)
-    if name is not None:
-        print("  " + hex(addr) + " " + name)
-```
-
-#### Imports and entry points
-
-```python
-imports = get_imports()
-print("Imports: " + str(len(imports)))
-for imp in imports:
-    print("  " + imp["module"] + "!" + imp["name"])
-
-entries = get_entries()
-for e in entries:
-    print("Entry: " + e["name"] + " at " + hex(e["address"]))
-```
-
-#### Binary metadata
-
-```python
-info = get_binary_info()
-print(info["module"] + " (" + info["architecture"] + ", " + str(info["bitness"]) + "-bit)")
-print("Format: " + info["format"])
-print("MD5:    " + info["md5"])
-```
-
-#### Address classification
-
-```python
-functions = get_functions()
-for f in functions:
-    addr = f["address"]
-    parts = [f["name"]]
-    parts.append(get_address_type(addr).upper())
-    comment = get_comment_at(addr)
-    if comment is not None:
-        parts.append('"' + comment + '"')
-    print("  ".join(parts))
-```
-
-
-## Function reference
-
-### Database metadata
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `get_binary_info()` | `dict` | path, module, architecture, bitness, format, base_address, entry_point, minimum_ea, maximum_ea, filesize, md5, sha256, crc32 |
-
-### Functions
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `get_functions()` | `list[dict]` | All functions: `{address, name, size}` |
-| `get_function_by_name(name)` | `dict \| None` | Look up by exact name |
-| `get_function_disassembly_at(address)` | `list[str]` | Disassembly lines |
-| `decompile_function_at(address)` | `list[str]` | C pseudocode (needs Hex-Rays) |
-| `get_function_signature_at(address)` | `str \| None` | C-style type signature |
-| `get_callers_at(address)` | `list[dict]` | Functions that call this one: `{address, name}` |
-| `get_callees_at(address)` | `list[dict]` | Functions this one calls: `{address, name}` |
-| `get_basic_blocks_at(address)` | `list[dict]` | CFG: `{start, end, successors, predecessors}` |
-
-### Cross-references
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `get_xrefs_to_at(address)` | `list[dict]` | Refs targeting address: `{from_address, type, is_call, is_jump}` |
-| `get_xrefs_from_at(address)` | `list[dict]` | Refs originating at address: `{to_address, type, is_call, is_jump}` |
-
-### Strings
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `get_strings()` | `list[dict]` | All strings: `{address, length, type, value}` |
-| `get_string_at(address)` | `str \| None` | Read null-terminated C string |
-
-### Segments
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `get_segments()` | `list[dict]` | All segments: `{name, start, end, size, permissions, class, bitness}` |
-
-### Names / symbols
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `get_names()` | `list[dict]` | All named addresses: `{address, name}` |
-| `get_name_at(address)` | `str \| None` | Symbol name at address |
-| `demangle_name(name)` | `str` | Demangle C++ name (pass-through if not mangled) |
-
-### Imports and entries
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `get_imports()` | `list[dict]` | All imports: `{address, name, module, ordinal}` |
-| `get_entries()` | `list[dict]` | All entry points: `{ordinal, address, name, forwarder}` |
-
-### Bytes / memory
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `get_bytes_at(address, size)` | `list[int]` | Raw byte values (0-255) |
-| `find_bytes(pattern)` | `list[int]` | Addresses matching byte pattern |
-| `get_disassembly_at(address)` | `str \| None` | Single instruction disassembly |
-| `get_instruction_at(address)` | `dict \| None` | `{address, size, mnemonic, disassembly, is_call}` |
-
-### Address classification
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `get_address_type(address)` | `"code" \| "data" \| "unknown" \| "invalid"` | Classify an address in one call |
-
-### Comments
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `get_comment_at(address)` | `str \| None` | Analyst comment at address |
-
-### Utilities
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-
-
-## Tips
-
-- **Unmapped addresses return empty results**, not errors.
-  `get_function_disassembly_at(0xDEAD)` returns `[]`, `get_name_at(0xDEAD)` returns `None`.
-- **`decompile_function_at` requires a Hex-Rays license.**
-  It returns `[]` gracefully when the decompiler is unavailable.
-- **String concatenation, not f-strings for print.**
-  While Monty supports f-strings, `print("x = " + str(val))` is the
-  most portable pattern.
-- **`find_bytes` takes `list[int]`, not `bytes`.**
-  Monty's Python subset does not have a `bytes` literal, so patterns
-  are expressed as lists of integers.
-- **Use listing APIs (`get_functions`, `get_strings`, etc.) then filter**, rather than guessing addresses.
-  Discover addresses dynamically from the API rather than hardcoding them.
-- **Keep scripts focused.**
-  Write small scripts that answer a specific question, then iterate.
-  The 30-second timeout is generous for focused queries but will cut
-  off scripts that try to dump everything.
-
+- on success: returns captured stdout
+- on failure: returns a human-readable `Script error (...)` message
 
 ## Resource limits
 
-| Limit | Default |
-|-------|---------|
-| Timeout | 30 seconds |
-| Memory | 100 MB |
-| Recursion depth | 200 frames |
+Defaults:
+
+- timeout: 30 seconds
+- memory: 100 MB
+- recursion depth: 200
 
 Override at construction:
 
 ```python
 import pydantic_monty
 
-sandbox = IdaSandbox(db, limits=pydantic_monty.ResourceLimits(
-    max_duration_secs=60.0,
-    max_memory=200_000_000,
-))
+sandbox = IdaSandbox(
+    db,
+    limits=pydantic_monty.ResourceLimits(
+        max_duration_secs=60.0,
+        max_memory=200_000_000,
+        max_recursion_depth=500,
+    ),
+)
 ```
-
-
-## Type checking
-
-Static type checking is always enabled to catch errors before execution:
-
-```python
-sandbox = IdaSandbox(db)
-result = sandbox.run('get_function_disassembly_at("wrong")')
-# result.ok == False
-# result.error.kind == "typing"
-```
-
-
-## Structured results
-
-`sandbox.run()` returns a `SandboxResult`:
-
-```python
-result = sandbox.run(script)
-
-result.ok        # True if no error
-result.output    # value of the last expression
-result.stdout    # list of printed lines
-result.stderr    # list of stderr lines
-result.error     # SandboxError or None
-
-# On error:
-result.error.kind       # "runtime", "syntax", or "typing"
-result.error.message    # short description
-result.error.formatted  # full traceback / details
-result.error.inner_type # e.g. "ZeroDivisionError"
-```
-
 
 ## Running tests
 
 ```bash
-python -m pytest ida-codemode-sandbox/tests/ -v
+python -m pytest -v
 ```
-
-Tests run against real IDA Pro analysis of the shared test binary
-(`tests/data/Practical Malware Analysis Lab 01-01.exe_`).
-No mocks.
