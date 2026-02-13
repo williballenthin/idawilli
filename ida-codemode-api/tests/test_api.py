@@ -40,8 +40,8 @@ class TestFunctionNames:
     def test_is_list(self):
         assert isinstance(FUNCTION_NAMES, list)
 
-    def test_has_34_functions(self):
-        assert len(FUNCTION_NAMES) == 34
+    def test_has_37_functions(self):
+        assert len(FUNCTION_NAMES) == 37
 
     def test_no_duplicates(self):
         assert len(FUNCTION_NAMES) == len(set(FUNCTION_NAMES))
@@ -122,7 +122,7 @@ class TestApiReference:
 
 class TestApiDocstrings:
     def test_api_types_docstrings_have_required_sections(self):
-        mutator_functions = {"set_name_at", "set_type_at", "set_comment_at", "set_repeatable_comment_at"}
+        mutator_functions = {"set_name_at", "set_type_at", "set_comment_at", "set_repeatable_comment_at", "add_bookmark", "delete_bookmark"}
 
         for name in FUNCTION_NAMES:
             declaration = getattr(api_types, name)
@@ -217,6 +217,7 @@ class TestPayloadContracts:
             "get_instruction_at": assert_ok(fns["get_instruction_at"](first["address"])),
             "get_address_type": assert_ok(fns["get_address_type"](first["address"])),
             "read_pointer": assert_ok(fns["read_pointer"](first["address"])),
+            "get_bookmarks": assert_ok(fns["get_bookmarks"]()),
         }
 
         expected_keys = {
@@ -265,6 +266,7 @@ class TestPayloadContracts:
             },
             "get_address_type": {"address_type"},
             "read_pointer": {"pointer"},
+            "get_bookmarks": {"bookmarks"},
         }
 
         for function_name, payload in payloads.items():
@@ -272,6 +274,10 @@ class TestPayloadContracts:
 
         if functions:
             assert_keys_exact(functions[0], {"address", "name", "size", "signature", "flags", "comment", "repeatable_comment"})
+
+        bookmarks = payloads["get_bookmarks"]["bookmarks"]
+        if bookmarks:
+            assert_keys_exact(bookmarks[0], {"index", "address", "description"})
 
         if payloads["get_function_callers"]["callers"]:
             assert_keys_exact(payloads["get_function_callers"]["callers"][0], {"address", "name", "size", "signature", "flags", "comment", "repeatable_comment"})
@@ -732,3 +738,77 @@ class TestDatabaseMutators:
     def test_set_repeatable_comment_at_exists(self, fns):
         assert "set_repeatable_comment_at" in fns
         assert callable(fns["set_repeatable_comment_at"])
+
+
+class TestBookmarks:
+    def test_get_bookmarks_returns_list(self, fns):
+        result = assert_ok(fns["get_bookmarks"]())
+        assert "bookmarks" in result
+        assert isinstance(result["bookmarks"], list)
+
+    def test_bookmark_shape(self, fns):
+        bookmarks = assert_ok(fns["get_bookmarks"]())["bookmarks"]
+        for bm in bookmarks:
+            assert "index" in bm
+            assert "address" in bm
+            assert "description" in bm
+            assert isinstance(bm["index"], int)
+            assert isinstance(bm["address"], int)
+            assert isinstance(bm["description"], str)
+
+    def test_add_and_delete_bookmark(self, fns, first_func):
+        initial_bookmarks = assert_ok(fns["get_bookmarks"]())["bookmarks"]
+        initial_count = len(initial_bookmarks)
+
+        test_address = first_func["address"]
+        test_description = "Test bookmark for API"
+
+        assert_mutator_success(fns["add_bookmark"](test_address, test_description))
+
+        after_add = assert_ok(fns["get_bookmarks"]())["bookmarks"]
+        assert len(after_add) == initial_count + 1
+
+        added_bookmark = None
+        for bm in after_add:
+            if bm["address"] == test_address and bm["description"] == test_description:
+                added_bookmark = bm
+                break
+
+        assert added_bookmark is not None, "newly added bookmark not found"
+
+        assert_mutator_success(fns["delete_bookmark"](added_bookmark["index"]))
+
+        after_delete = assert_ok(fns["get_bookmarks"]())["bookmarks"]
+        assert len(after_delete) == initial_count
+
+        for bm in after_delete:
+            assert not (bm["address"] == test_address and bm["description"] == test_description)
+
+    def test_delete_nonexistent_bookmark_fails(self, fns):
+        result = fns["delete_bookmark"](999)
+        assert "error" in result
+        assert isinstance(result["error"], str)
+
+    def test_add_bookmark_at_same_address_with_different_descriptions(self, fns, first_func):
+        test_address = first_func["address"]
+
+        initial_bookmarks = assert_ok(fns["get_bookmarks"]())["bookmarks"]
+        initial_count = len(initial_bookmarks)
+
+        assert_mutator_success(fns["add_bookmark"](test_address, "First bookmark"))
+        assert_mutator_success(fns["add_bookmark"](test_address, "Second bookmark"))
+
+        after_add = assert_ok(fns["get_bookmarks"]())["bookmarks"]
+        assert len(after_add) == initial_count + 2
+
+        matching = [bm for bm in after_add if bm["address"] == test_address]
+        assert len(matching) >= 2
+
+        for _ in range(len(matching)):
+            current = assert_ok(fns["get_bookmarks"]())["bookmarks"]
+            to_delete = [bm for bm in current if bm["address"] == test_address]
+            if to_delete:
+                assert_mutator_success(fns["delete_bookmark"](to_delete[0]["index"]))
+
+        final_bookmarks = assert_ok(fns["get_bookmarks"]())["bookmarks"]
+        assert len(final_bookmarks) == initial_count

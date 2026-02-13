@@ -61,6 +61,9 @@ FUNCTION_NAMES: list[str] = [
     "get_address_type",
     "get_comment_at",
     "read_pointer",
+    "get_bookmarks",
+    "add_bookmark",
+    "delete_bookmark",
     "set_name_at",
     "set_type_at",
     "set_comment_at",
@@ -947,6 +950,87 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             "pointer": pointer,
         }
 
+    def get_bookmarks():
+        try:
+            import idc
+            import ida_idaapi
+        except Exception as exc:
+            return _error_from_exc("failed to import IDA modules for bookmark access", exc)
+
+        try:
+            items = []
+            max_slots = 1024
+            for index in range(max_slots):
+                try:
+                    ea = idc.get_bookmark(index)
+                    if ea is None or ea == ida_idaapi.BADADDR:
+                        continue
+
+                    desc = idc.get_bookmark_desc(index)
+                    if desc is None:
+                        desc = ""
+
+                    items.append({
+                        "index": int(index),
+                        "address": int(ea),
+                        "description": str(desc),
+                    })
+                except Exception:
+                    continue
+        except Exception as exc:
+            return _error_from_exc("failed to enumerate bookmarks", exc)
+
+        return {
+            "bookmarks": items,
+        }
+
+    def add_bookmark(address, description):
+        try:
+            import idc
+            import ida_idaapi
+        except Exception as exc:
+            return _error_from_exc("failed to import IDA modules for bookmark creation", exc)
+
+        try:
+            free_slot = None
+            max_slots = 1024
+            for index in range(max_slots):
+                try:
+                    ea = idc.get_bookmark(index)
+                    if ea is None or ea == ida_idaapi.BADADDR:
+                        free_slot = index
+                        break
+                except Exception:
+                    free_slot = index
+                    break
+
+            if free_slot is None:
+                return _error("no free bookmark slots available")
+
+            idc.put_bookmark(address, 0, 0, 0, free_slot, description)
+        except Exception as exc:
+            return _error_from_exc(f"failed to add bookmark at {address:#x}", exc)
+
+        return None
+
+    def delete_bookmark(index):
+        try:
+            import idc
+            import ida_idaapi
+        except Exception as exc:
+            return _error_from_exc("failed to import IDA modules for bookmark deletion", exc)
+
+        try:
+            ea = idc.get_bookmark(index)
+            if ea is None or ea == ida_idaapi.BADADDR:
+                return _error(f"no bookmark exists at index {index}")
+
+            idc.put_bookmark(ida_idaapi.BADADDR, 0, 0, 0, index, "")
+        except Exception as exc:
+            return _error_from_exc(f"failed to delete bookmark at index {index}", exc)
+
+        return None
+
     def set_name_at(address, name):
         try:
             db.names.set_at(address, name)
@@ -1006,6 +1090,9 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         "get_address_type": get_address_type,
         "get_comment_at": get_comment_at,
         "read_pointer": read_pointer,
+        "get_bookmarks": get_bookmarks,
+        "add_bookmark": add_bookmark,
+        "delete_bookmark": delete_bookmark,
         "set_name_at": set_name_at,
         "set_type_at": set_type_at,
         "set_comment_at": set_comment_at,

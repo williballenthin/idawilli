@@ -236,6 +236,16 @@ class ReadPointerOk(TypedDict):
     pointer: int
 
 
+class BookmarkInfo(TypedDict):
+    index: int
+    address: int
+    description: str
+
+
+class GetBookmarksOk(TypedDict):
+    bookmarks: list[BookmarkInfo]
+
+
 class HelpOk(TypedDict):
     documentation: str
 
@@ -270,6 +280,9 @@ GetInstructionAtResult = InstructionInfo | ApiError
 GetAddressTypeResult = GetAddressTypeOk | ApiError
 GetCommentAtResult = GetCommentAtOk | ApiError
 ReadPointerResult = ReadPointerOk | ApiError
+GetBookmarksResult = GetBookmarksOk | ApiError
+AddBookmarkResult = MutatorResult
+DeleteBookmarkResult = MutatorResult
 SetNameAtResult = MutatorResult
 SetTypeAtResult = MutatorResult
 SetCommentAtResult = MutatorResult
@@ -1221,4 +1234,72 @@ def set_repeatable_comment_at(address: int, comment: str) -> SetRepeatableCommen
     Errors:
         - Address is invalid.
         - Comment assignment failed due to IDA backend error."""
+    raise NotImplementedError
+
+
+def get_bookmarks() -> GetBookmarksResult:
+    """All bookmarks defined in the database.
+
+    Use this to enumerate location bookmarks for navigation, documentation, or
+    checkpoint management. See also `add_bookmark`, `delete_bookmark`, and
+    `get_name_at`.
+
+    Args:
+        None.
+
+    Returns:
+        Success payload
+        `{bookmarks: list[{index: int, address: int, description: str}]}` or
+        `{"error": str}`. The `index` field identifies the bookmark slot and is
+        primarily used for precise deletion and duplicate-address disambiguation.
+
+    Errors:
+        - Bookmark enumeration failed due to IDA backend error.
+
+    Example success payload:
+        {
+            "bookmarks": [
+                {"index": 1, "address": 4198400, "description": "Entry point"},
+                {"index": 5, "address": 4200000, "description": "Interesting function"},
+            ],
+        }"""
+    raise NotImplementedError
+
+
+def add_bookmark(address: int, description: str) -> AddBookmarkResult:
+    """Add a bookmark at an address.
+
+    Use this to mark interesting locations for later navigation or documentation
+    workflows. See also `get_bookmarks`, `delete_bookmark`, and `set_name_at`.
+
+    Args:
+        address: Effective address where the bookmark should be placed.
+        description: Human-readable description for the bookmark.
+
+    Returns:
+        `None` on success or `{"error": str}` on failure.
+
+    Errors:
+        - Address is invalid.
+        - No free bookmark slots available.
+        - Bookmark creation failed due to IDA backend error."""
+    raise NotImplementedError
+
+
+def delete_bookmark(index: int) -> DeleteBookmarkResult:
+    """Delete a bookmark by its index.
+
+    Use this to remove bookmarks by their slot index as returned by
+    `get_bookmarks`. See also `get_bookmarks`, `add_bookmark`, and `get_name_at`.
+
+    Args:
+        index: Bookmark slot index to delete.
+
+    Returns:
+        `None` on success or `{"error": str}` on failure.
+
+    Errors:
+        - Index is out of range.
+        - No bookmark exists at the specified index.
+        - Bookmark deletion failed due to IDA backend error."""
     raise NotImplementedError
