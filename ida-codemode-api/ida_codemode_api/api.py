@@ -61,6 +61,10 @@ FUNCTION_NAMES: list[str] = [
     "get_address_type",
     "get_comment_at",
     "read_pointer",
+    "set_name_at",
+    "set_type_at",
+    "set_comment_at",
+    "set_repeatable_comment_at",
 ]
 
 def _collect_typed_dicts(module: Any) -> dict[str, Any]:
@@ -943,6 +947,34 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             "pointer": pointer,
         }
 
+    def set_name_at(address, name):
+        try:
+            db.names.set_at(address, name)
+        except Exception as exc:
+            return _error_from_exc(f"failed to set name at {address:#x}", exc)
+        return None
+
+    def set_type_at(address, type_str):
+        try:
+            db.types.apply_type(address, type_str)
+        except Exception as exc:
+            return _error_from_exc(f"failed to set type at {address:#x}", exc)
+        return None
+
+    def set_comment_at(address, comment):
+        try:
+            db.comments.set_at(address, comment)
+        except Exception as exc:
+            return _error_from_exc(f"failed to set comment at {address:#x}", exc)
+        return None
+
+    def set_repeatable_comment_at(address, comment):
+        try:
+            db.comments.set_repeatable_at(address, comment)
+        except Exception as exc:
+            return _error_from_exc(f"failed to set repeatable comment at {address:#x}", exc)
+        return None
+
     api: dict[str, Callable[..., Any]] = {
         "help": help,
         "get_database_metadata": get_database_metadata,
@@ -974,6 +1006,10 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         "get_address_type": get_address_type,
         "get_comment_at": get_comment_at,
         "read_pointer": read_pointer,
+        "set_name_at": set_name_at,
+        "set_type_at": set_type_at,
+        "set_comment_at": set_comment_at,
+        "set_repeatable_comment_at": set_repeatable_comment_at,
     }
 
     return api

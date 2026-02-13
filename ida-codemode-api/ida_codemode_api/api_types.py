@@ -270,6 +270,10 @@ GetInstructionAtResult = InstructionInfo | ApiError
 GetAddressTypeResult = GetAddressTypeOk | ApiError
 GetCommentAtResult = GetCommentAtOk | ApiError
 ReadPointerResult = ReadPointerOk | ApiError
+SetNameAtResult = MutatorResult
+SetTypeAtResult = MutatorResult
+SetCommentAtResult = MutatorResult
+SetRepeatableCommentAtResult = MutatorResult
 
 
 def help(api: str) -> HelpResult:
@@ -1136,4 +1140,85 @@ def read_pointer(address: int) -> ReadPointerResult:
 
     Example success payload:
         {"pointer": 4198400}"""
+    raise NotImplementedError
+
+
+def set_name_at(address: int, name: str) -> SetNameAtResult:
+    """Set the symbol name at an address.
+
+    Use this to assign or update symbol names for functions, data items, or
+    arbitrary addresses during annotation workflows. See also `get_name_at`,
+    `get_names`, and `get_function_at`.
+
+    Args:
+        address: Effective address where the name should be set.
+        name: Symbol name to assign. Empty string removes the name.
+
+    Returns:
+        `None` on success or `{"error": str}` on failure.
+
+    Errors:
+        - Address is invalid.
+        - Name assignment failed due to IDA backend error.
+        - Name conflicts with existing symbol."""
+    raise NotImplementedError
+
+
+def set_type_at(address: int, type: str) -> SetTypeAtResult:
+    """Set the type signature at an address.
+
+    Use this to apply or update type information for functions, data items, or
+    variables during type annotation workflows. See also `get_function_at`,
+    `get_address_type`, and `get_disassembly_at`.
+
+    Args:
+        address: Effective address where the type should be set.
+        type: Type declaration string in IDA type syntax.
+
+    Returns:
+        `None` on success or `{"error": str}` on failure.
+
+    Errors:
+        - Address is invalid.
+        - Type string is malformed or unparseable.
+        - Type assignment failed due to IDA backend error."""
+    raise NotImplementedError
+
+
+def set_comment_at(address: int, comment: str) -> SetCommentAtResult:
+    """Set the comment at an address.
+
+    Use this to add or update inline comments during annotation workflows. See
+    also `get_comment_at`, `set_repeatable_comment_at`, and `get_disassembly_at`.
+
+    Args:
+        address: Effective address where the comment should be set.
+        comment: Comment text to assign. Empty string removes the comment.
+
+    Returns:
+        `None` on success or `{"error": str}` on failure.
+
+    Errors:
+        - Address is invalid.
+        - Comment assignment failed due to IDA backend error."""
+    raise NotImplementedError
+
+
+def set_repeatable_comment_at(address: int, comment: str) -> SetRepeatableCommentAtResult:
+    """Set the repeatable comment at an address.
+
+    Use this to add or update repeatable comments that propagate to all
+    references during annotation workflows. See also `get_comment_at`,
+    `set_comment_at`, and `get_function_at`.
+
+    Args:
+        address: Effective address where the repeatable comment should be set.
+        comment: Comment text to assign. Empty string removes the comment.
+
+    Returns:
+        `None` on success or `{"error": str}` on failure.
+
+    Errors:
+        - Address is invalid.
+        - Comment assignment failed due to IDA backend error."""
     raise NotImplementedError

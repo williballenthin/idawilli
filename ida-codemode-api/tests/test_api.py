@@ -40,8 +40,8 @@ class TestFunctionNames:
     def test_is_list(self):
         assert isinstance(FUNCTION_NAMES, list)
 
-    def test_has_30_functions(self):
-        assert len(FUNCTION_NAMES) == 30
+    def test_has_34_functions(self):
+        assert len(FUNCTION_NAMES) == 34
 
     def test_no_duplicates(self):
         assert len(FUNCTION_NAMES) == len(set(FUNCTION_NAMES))
@@ -122,6 +122,8 @@ class TestApiReference:
 
 class TestApiDocstrings:
     def test_api_types_docstrings_have_required_sections(self):
+        mutator_functions = {"set_name_at", "set_type_at", "set_comment_at", "set_repeatable_comment_at"}
+
         for name in FUNCTION_NAMES:
             declaration = getattr(api_types, name)
             doc = inspect.getdoc(declaration)
@@ -137,9 +139,11 @@ class TestApiDocstrings:
             )
             assert "Returns:" in doc, f"api_types.{name} docstring missing 'Returns:'"
             assert "Errors:" in doc, f"api_types.{name} docstring missing 'Errors:'"
-            assert (
-                "Example success payload:" in doc
-            ), f"api_types.{name} docstring missing example payload"
+
+            if name not in mutator_functions:
+                assert (
+                    "Example success payload:" in doc
+                ), f"api_types.{name} docstring missing example payload"
 
             if inspect.signature(declaration).parameters:
                 assert "Args:" in doc, f"api_types.{name} docstring missing 'Args:'"
@@ -710,3 +714,21 @@ class TestMutatorConvention:
     def test_assert_mutator_success_rejects_other_values(self):
         with pytest.raises(pytest.fail.Exception, match="mutator returned unexpected value"):
             assert_mutator_success(True)
+
+
+class TestDatabaseMutators:
+    def test_set_name_at_exists(self, fns):
+        assert "set_name_at" in fns
+        assert callable(fns["set_name_at"])
+
+    def test_set_type_at_exists(self, fns):
+        assert "set_type_at" in fns
+        assert callable(fns["set_type_at"])
+
+    def test_set_comment_at_exists(self, fns):
+        assert "set_comment_at" in fns
+        assert callable(fns["set_comment_at"])
+
+    def test_set_repeatable_comment_at_exists(self, fns):
+        assert "set_repeatable_comment_at" in fns
+        assert callable(fns["set_repeatable_comment_at"])
