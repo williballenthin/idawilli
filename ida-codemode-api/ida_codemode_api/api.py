@@ -47,6 +47,7 @@ FUNCTION_NAMES: list[str] = [
     "get_strings",
     "get_string_at",
     "get_segments",
+    "get_segment_containing",
     "get_names",
     "get_name_at",
     "demangle_name",
@@ -639,6 +640,28 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             "segments": items,
         }
 
+    def get_segment_containing(address):
+        try:
+            seg = db.segments.get_at(address)
+        except Exception as exc:
+            return _error_from_exc(f"failed to look up segment at {address:#x}", exc)
+
+        if seg is None:
+            return _error(f"no segment contains address {address:#x}")
+
+        try:
+            return {
+                "name": str(db.segments.get_name(seg)),
+                "start": int(seg.start_ea),
+                "end": int(seg.end_ea),
+                "size": int(db.segments.get_size(seg)),
+                "permissions": int(seg.perm),
+                "class": str(db.segments.get_class(seg)),
+                "bitness": int(db.segments.get_bitness(seg)),
+            }
+        except Exception as exc:
+            return _error_from_exc(f"failed to serialize segment at {address:#x}", exc)
+
     def get_names():
         try:
             items = []
@@ -908,6 +931,7 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         "get_strings": get_strings,
         "get_string_at": get_string_at,
         "get_segments": get_segments,
+        "get_segment_containing": get_segment_containing,
         "get_names": get_names,
         "get_name_at": get_name_at,
         "demangle_name": demangle_name,

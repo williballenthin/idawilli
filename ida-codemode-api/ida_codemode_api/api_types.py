@@ -247,6 +247,7 @@ GetFunctionStringXrefsResult = GetFunctionStringXrefsOk | ApiError
 GetStringsResult = GetStringsOk | ApiError
 GetStringAtResult = GetStringAtOk | ApiError
 GetSegmentsResult = GetSegmentsOk | ApiError
+GetSegmentContainingResult = SegmentInfo | ApiError
 GetNamesResult = GetNamesOk | ApiError
 GetNameAtResult = GetNameAtOk | ApiError
 DemangleNameResult = DemangleNameOk | ApiError
@@ -794,6 +795,38 @@ def get_segments() -> GetSegmentsResult:
                     "bitness": 1,
                 }
             ],
+        }"""
+    raise NotImplementedError
+
+
+def get_segment_containing(address: int) -> GetSegmentContainingResult:
+    """Segment descriptor for the segment containing an address.
+
+    Use this to determine which memory segment contains a specific address for
+    permission checking, boundary validation, or section identification.
+    See also `get_segments`, `get_address_type`, and `get_bytes_at`.
+
+    Args:
+        address: Effective address to look up.
+
+    Returns:
+        Success payload
+        `{name: str, start: int, end: int, size: int, permissions: int,
+        class: str, bitness: int}` or `{"error": str}`.
+
+    Errors:
+        - Address is not contained in any segment.
+        - Segment lookup failed.
+
+    Example success payload:
+        {
+            "name": ".text",
+            "start": 4198400,
+            "end": 4214784,
+            "size": 16384,
+            "permissions": 5,
+            "class": "CODE",
+            "bitness": 1,
         }"""
     raise NotImplementedError
 

@@ -30,8 +30,8 @@ class TestFunctionNames:
     def test_is_list(self):
         assert isinstance(FUNCTION_NAMES, list)
 
-    def test_has_28_functions(self):
-        assert len(FUNCTION_NAMES) == 28
+    def test_has_29_functions(self):
+        assert len(FUNCTION_NAMES) == 29
 
     def test_no_duplicates(self):
         assert len(FUNCTION_NAMES) == len(set(FUNCTION_NAMES))
@@ -176,6 +176,7 @@ class TestPayloadContracts:
             "get_xrefs_from_at": assert_ok(fns["get_xrefs_from_at"](first["address"])),
             "get_strings": strings_result,
             "get_segments": assert_ok(fns["get_segments"]()),
+            "get_segment_containing": assert_ok(fns["get_segment_containing"](first["address"])),
             "get_names": assert_ok(fns["get_names"]()),
             "demangle_name": assert_ok(fns["demangle_name"]("main")),
             "get_imports": assert_ok(fns["get_imports"]()),
@@ -216,6 +217,7 @@ class TestPayloadContracts:
             "get_xrefs_from_at": {"xrefs"},
             "get_strings": {"strings"},
             "get_segments": {"segments"},
+            "get_segment_containing": {"name", "start", "end", "size", "permissions", "class", "bitness"},
             "get_names": {"names"},
             "demangle_name": {"demangled_name"},
             "get_imports": {"imports"},
@@ -517,6 +519,40 @@ class TestSegments:
             assert "permissions" in s
             assert "class" in s
             assert "bitness" in s
+
+
+class TestSegmentContaining:
+    def test_get_segment_containing_valid_address(self, fns, first_func):
+        seg = assert_ok(fns["get_segment_containing"](first_func["address"]))
+        assert "name" in seg
+        assert "start" in seg
+        assert "end" in seg
+        assert "size" in seg
+        assert "permissions" in seg
+        assert "class" in seg
+        assert "bitness" in seg
+        assert isinstance(seg["name"], str)
+        assert isinstance(seg["start"], int)
+        assert isinstance(seg["end"], int)
+        assert isinstance(seg["size"], int)
+        assert isinstance(seg["permissions"], int)
+        assert isinstance(seg["class"], str)
+        assert isinstance(seg["bitness"], int)
+        assert seg["start"] <= first_func["address"] < seg["end"]
+
+    def test_get_segment_containing_invalid_address(self, fns):
+        result = fns["get_segment_containing"](0xDEADDEAD)
+        assert "error" in result
+        assert isinstance(result["error"], str)
+
+    def test_segment_containing_matches_segment_list(self, fns, first_func):
+        seg = assert_ok(fns["get_segment_containing"](first_func["address"]))
+        all_segs = assert_ok(fns["get_segments"]())["segments"]
+        matching_segs = [s for s in all_segs if s["start"] <= first_func["address"] < s["end"]]
+        assert len(matching_segs) == 1
+        assert seg["name"] == matching_segs[0]["name"]
+        assert seg["start"] == matching_segs[0]["start"]
+        assert seg["end"] == matching_segs[0]["end"]
 
 
 class TestNames:
