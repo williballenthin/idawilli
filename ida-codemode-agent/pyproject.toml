@@ -1,0 +1,43 @@
+[project]
+name = "ida-codemode-agent"
+authors = [
+  {name = "Willi Ballenthin", email = "wballenthin@hex-rays.com"},
+]
+description = "Interactive reverse engineering agent harness backed by ida-codemode-sandbox"
+version = "0.1.0"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+dependencies = [
+    "ida-domain",
+    "ida-codemode-sandbox",
+    "pydantic-ai",
+    "rich",
+]
+
+[project.optional-dependencies]
+test = [
+    "idapro",
+    "pytest",
+]
+
+[project.scripts]
+ida-codemode-agent = "ida_codemode_agent.cli:main"
+
+[project.urls]
+source = "https://github.com/williballenthin/idawilli/tree/master/ida-codemode-agent"
+repository = "https://github.com/williballenthin/idawilli"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["ida_codemode_agent*"]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:builtin type SwigPyPacked has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type SwigPyObject has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type swigvarlink has no __module__ attribute:DeprecationWarning",
+]
