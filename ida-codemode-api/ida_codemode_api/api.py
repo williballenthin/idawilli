@@ -37,7 +37,6 @@ FUNCTION_NAMES: list[str] = [
     "get_function_at",
     "get_function_disassembly_at",
     "decompile_function_at",
-    "get_function_signature_at",
     "get_callers_at",
     "get_callees_at",
     "get_basic_blocks_at",
@@ -172,10 +171,43 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
     """
 
     def _serialize_function(func: Any) -> api_types.FunctionInfo:
+        name = str(db.functions.get_name(func))
+        demangled = db.names.demangle_name(name)
+        if demangled:
+            name = str(demangled)
+
+        try:
+            sig = db.functions.get_signature(func)
+            signature = str(sig) if sig else ""
+        except Exception:
+            signature = ""
+
+        try:
+            comment = db.comments.get_at(func.start_ea)
+            comment_str = str(comment) if comment else ""
+        except Exception:
+            comment_str = ""
+
+        try:
+            repeatable = db.comments.get_repeatable_at(func.start_ea)
+            repeatable_str = str(repeatable) if repeatable else ""
+        except Exception:
+            repeatable_str = ""
+
+        flags: api_types.FunctionFlags = {
+            "noreturn": bool(func.flags & 0x1) if hasattr(func, "flags") else False,
+            "library": bool(func.flags & 0x4) if hasattr(func, "flags") else False,
+            "thunk": bool(func.flags & 0x80) if hasattr(func, "flags") else False,
+        }
+
         return {
             "address": int(func.start_ea),
-            "name": str(db.functions.get_name(func)),
+            "name": name,
             "size": int(func.size() if callable(func.size) else func.size),
+            "signature": signature,
+            "flags": flags,
+            "comment": comment_str,
+            "repeatable_comment": repeatable_str,
         }
 
     def _error(message: str) -> api_types.ApiError:
@@ -294,6 +326,17 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             return _error_from_exc(f"failed to look up function named {name!r}", exc)
 
         if func is None:
+            try:
+                for candidate in db.functions:
+                    candidate_name = str(db.functions.get_name(candidate))
+                    demangled = db.names.demangle_name(candidate_name)
+                    if demangled and str(demangled) == name:
+                        func = candidate
+                        break
+            except Exception:
+                pass
+
+        if func is None:
             return _error(f"no function named {name!r}")
 
         return _serialize_function(func)
@@ -340,23 +383,6 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
 
         return {
             "pseudocode": [str(line) for line in result],
-        }
-
-    def get_function_signature_at(address):
-        func, err = _lookup_function_containing(address, context="function signature")
-        if err is not None:
-            return err
-
-        try:
-            sig = db.functions.get_signature(func)
-        except Exception as exc:
-            return _error_from_exc(f"failed to read function signature at {address:#x}", exc)
-
-        if sig is None:
-            return _error(f"function at {address:#x} has no signature")
-
-        return {
-            "signature": str(sig),
         }
 
     def get_callers_at(address):
@@ -524,7 +550,11 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
 
     def get_names():
         try:
-            items = [{"address": int(ea), "name": str(name)} for ea, name in db.names]
+            items = []
+            for ea, name in db.names:
+                demangled = db.names.demangle_name(name)
+                display_name = str(demangled) if demangled else str(name)
+                items.append({"address": int(ea), "name": display_name})
         except Exception as exc:
             return _error_from_exc("failed to enumerate names", exc)
 
@@ -777,7 +807,6 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         "get_function_at": get_function_at,
         "get_function_disassembly_at": get_function_disassembly_at,
         "decompile_function_at": decompile_function_at,
-        "get_function_signature_at": get_function_signature_at,
         "get_callers_at": get_callers_at,
         "get_callees_at": get_callees_at,
         "get_basic_blocks_at": get_basic_blocks_at,

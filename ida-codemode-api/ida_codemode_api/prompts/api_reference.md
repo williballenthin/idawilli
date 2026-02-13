@@ -6,13 +6,12 @@ Callers should check for the presence of the `error` key to detect failures.
 | Function | Returns | Description |
 |----------|---------|-------------|
 | `help(api)` | `{documentation: str}` | Extensive documentation for a specific API callback. |
-| `get_binary_info()` | `{path: str, module: str, architecture: str, bitness: int, format: str, base_address: int, entry_point: int, minimum_ea: int, maximum_ea: int, filesize: int, md5: str, sha256: str, crc32: int}` | Binary-wide metadata for the currently opened database. |
-| `get_functions()` | `{functions: list[{address: int, name: str, size: int}]}` | All discovered function descriptors. |
-| `get_function_by_name(name)` | `{address: int, name: str, size: int}` | Function descriptor resolved by exact symbol name. |
-| `get_function_at(address)` | `{address: int, name: str, size: int}` | Function descriptor for a function start address. |
+| `get_database_metadata()` | `{input_file_path: str, module: str, architecture: str, bitness: int, format: str, base_address: int, entry_point: int, minimum_ea: int, maximum_ea: int, input_file_size: int, input_file_md5: str, input_file_sha256: str}` | Database-wide metadata for the currently opened database. |
+| `get_functions()` | `{functions: list[{address: int, name: str, size: int, signature: str, flags: {noreturn: bool, library: bool, thunk: bool}, comment: str, repeatable_comment: str}]}` | All discovered function descriptors. |
+| `get_function_by_name(name)` | `{address: int, name: str, size: int, signature: str, flags: {noreturn: bool, library: bool, thunk: bool}, comment: str, repeatable_comment: str}` | Function descriptor resolved by exact symbol name. |
+| `get_function_at(address)` | `{address: int, name: str, size: int, signature: str, flags: {noreturn: bool, library: bool, thunk: bool}, comment: str, repeatable_comment: str}` | Function descriptor for a function start address. |
 | `get_function_disassembly_at(address)` | `{disassembly: list[str]}` | Linear-disassembly lines for the containing function. |
 | `decompile_function_at(address)` | `{pseudocode: list[str]}` | Hex-Rays pseudocode lines for the containing function. |
-| `get_function_signature_at(address)` | `{signature: str}` | Type signature string for the containing function. |
 | `get_callers_at(address)` | `{callers: list[{address: int, name: str}]}` | Functions that call the containing function. |
 | `get_callees_at(address)` | `{callees: list[{address: int, name: str}]}` | Functions called by the containing function. |
 | `get_basic_blocks_at(address)` | `{basic_blocks: list[{start: int, end: int, successors: list[int], predecessors: list[int]}]}` | Control-flow graph basic blocks for the containing function. |

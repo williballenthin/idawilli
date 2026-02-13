@@ -30,8 +30,8 @@ class TestFunctionNames:
     def test_is_list(self):
         assert isinstance(FUNCTION_NAMES, list)
 
-    def test_has_27_functions(self):
-        assert len(FUNCTION_NAMES) == 27
+    def test_has_26_functions(self):
+        assert len(FUNCTION_NAMES) == 26
 
     def test_no_duplicates(self):
         assert len(FUNCTION_NAMES) == len(set(FUNCTION_NAMES))
@@ -202,8 +202,8 @@ class TestPayloadContracts:
                 "input_file_sha256",
             },
             "get_functions": {"functions"},
-            "get_function_by_name": {"address", "name", "size"},
-            "get_function_at": {"address", "name", "size"},
+            "get_function_by_name": {"address", "name", "size", "signature", "flags", "comment", "repeatable_comment"},
+            "get_function_at": {"address", "name", "size", "signature", "flags", "comment", "repeatable_comment"},
             "get_function_disassembly_at": {"disassembly"},
             "get_callers_at": {"callers"},
             "get_callees_at": {"callees"},
@@ -233,7 +233,7 @@ class TestPayloadContracts:
             assert_keys_exact(payload, expected_keys[function_name])
 
         if functions:
-            assert_keys_exact(functions[0], {"address", "name", "size"})
+            assert_keys_exact(functions[0], {"address", "name", "size", "signature", "flags", "comment", "repeatable_comment"})
 
         if payloads["get_callers_at"]["callers"]:
             assert_keys_exact(payloads["get_callers_at"]["callers"][0], {"address", "name"})
@@ -258,14 +258,12 @@ class TestPayloadContracts:
 
         optional_calls = {
             "decompile_function_at": fns["decompile_function_at"](first["address"]),
-            "get_function_signature_at": fns["get_function_signature_at"](first["address"]),
             "get_string_at": fns["get_string_at"](string_address),
             "get_name_at": fns["get_name_at"](first["address"]),
             "get_comment_at": fns["get_comment_at"](first["address"]),
         }
         optional_expected_keys = {
             "decompile_function_at": {"pseudocode"},
-            "get_function_signature_at": {"signature"},
             "get_string_at": {"string"},
             "get_name_at": {"name"},
             "get_comment_at": {"comment"},
@@ -326,9 +324,20 @@ class TestFunctionDiscovery:
             assert "address" in f
             assert "name" in f
             assert "size" in f
+            assert "signature" in f
+            assert "flags" in f
+            assert "comment" in f
+            assert "repeatable_comment" in f
             assert isinstance(f["address"], int)
             assert isinstance(f["name"], str)
             assert isinstance(f["size"], int)
+            assert isinstance(f["signature"], str)
+            assert isinstance(f["flags"], dict)
+            assert isinstance(f["comment"], str)
+            assert isinstance(f["repeatable_comment"], str)
+            assert "noreturn" in f["flags"]
+            assert "library" in f["flags"]
+            assert "thunk" in f["flags"]
 
     def test_lookup_by_name(self, fns):
         functions = assert_ok(fns["get_functions"]())["functions"]
@@ -361,13 +370,6 @@ class TestFunctionAnalysis:
             assert isinstance(result["error"], str)
         else:
             assert all(isinstance(line, str) for line in result["pseudocode"])
-
-    def test_signature(self, fns, first_func):
-        sig = fns["get_function_signature_at"](first_func["address"])
-        if "error" in sig:
-            assert isinstance(sig["error"], str)
-        else:
-            assert isinstance(sig["signature"], str)
 
     def test_callers_shape(self, fns, first_func):
         callers = assert_ok(fns["get_callers_at"](first_func["address"]))["callers"]

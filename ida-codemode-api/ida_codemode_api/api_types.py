@@ -30,10 +30,20 @@ class DatabaseMetadata(TypedDict):
     input_file_sha256: str
 
 
+class FunctionFlags(TypedDict):
+    noreturn: bool
+    library: bool
+    thunk: bool
+
+
 class FunctionInfo(TypedDict):
     address: int
     name: str
     size: int
+    signature: str
+    flags: FunctionFlags
+    comment: str
+    repeatable_comment: str
 
 
 class NamedAddress(TypedDict):
@@ -124,10 +134,6 @@ class DecompileFunctionAtOk(TypedDict):
     pseudocode: list[str]
 
 
-class GetFunctionSignatureAtOk(TypedDict):
-    signature: str
-
-
 class GetCallersAtOk(TypedDict):
     callers: list[NamedAddress]
 
@@ -211,7 +217,6 @@ GetFunctionByNameResult = FunctionInfo | ApiError
 GetFunctionAtResult = FunctionInfo | ApiError
 GetFunctionDisassemblyAtResult = GetFunctionDisassemblyAtOk | ApiError
 DecompileFunctionAtResult = DecompileFunctionAtOk | ApiError
-GetFunctionSignatureAtResult = GetFunctionSignatureAtOk | ApiError
 GetCallersAtResult = GetCallersAtOk | ApiError
 GetCalleesAtResult = GetCalleesAtOk | ApiError
 GetBasicBlocksAtResult = GetBasicBlocksAtOk | ApiError
@@ -306,8 +311,9 @@ def get_functions() -> GetFunctionsResult:
         None.
 
     Returns:
-        Success payload `{functions: list[{address: int, name: str, size: int}]}`
-        or `{"error": str}`.
+        Success payload `{functions: list[{address: int, name: str, size: int, signature: str,
+        flags: {noreturn: bool, library: bool, thunk: bool}, comment: str,
+        repeatable_comment: str}]}` or `{"error": str}`.
 
     Errors:
         - Function enumeration failed due to an IDA backend error.
@@ -315,8 +321,15 @@ def get_functions() -> GetFunctionsResult:
     Example success payload:
         {
             "functions": [
-                {"address": 4198400, "name": "_main", "size": 152},
-                {"address": 4198608, "name": "_printf", "size": 48},
+                {
+                    "address": 4198400,
+                    "name": "_main",
+                    "size": 152,
+                    "signature": "int __cdecl main(int argc, const char **argv)",
+                    "flags": {"noreturn": False, "library": False, "thunk": False},
+                    "comment": "",
+                    "repeatable_comment": "",
+                },
             ],
         }"""
     raise NotImplementedError
@@ -326,21 +339,31 @@ def get_function_by_name(name: str) -> GetFunctionByNameResult:
     """Function descriptor resolved by exact symbol name.
 
     Use this when you have a name from `get_names` or external context and need
-    its address and size. See also `get_functions`, `get_function_at`, and
-    `demangle_name`.
+    its address and size. Accepts both mangled and demangled names.
+    See also `get_functions`, `get_function_at`, and `demangle_name`.
 
     Args:
-        name: Exact function name as stored in the database.
+        name: Function name (mangled or demangled) to look up.
 
     Returns:
-        Success payload `{address: int, name: str, size: int}` or `{"error": str}`.
+        Success payload `{address: int, name: str, size: int, signature: str,
+        flags: {noreturn: bool, library: bool, thunk: bool}, comment: str,
+        repeatable_comment: str}` or `{"error": str}`.
 
     Errors:
         - No function exists with the given name.
         - Function lookup failed due to an IDA backend error.
 
     Example success payload:
-        {"address": 4198400, "name": "_main", "size": 152}"""
+        {
+            "address": 4198400,
+            "name": "_main",
+            "size": 152,
+            "signature": "int __cdecl main(int argc, const char **argv)",
+            "flags": {"noreturn": False, "library": False, "thunk": False},
+            "comment": "",
+            "repeatable_comment": "",
+        }"""
     raise NotImplementedError
 
 
@@ -355,7 +378,9 @@ def get_function_at(address: int) -> GetFunctionAtResult:
         address: Effective address that must be exactly a function start.
 
     Returns:
-        Success payload `{address: int, name: str, size: int}` or `{"error": str}`.
+        Success payload `{address: int, name: str, size: int, signature: str,
+        flags: {noreturn: bool, library: bool, thunk: bool}, comment: str,
+        repeatable_comment: str}` or `{"error": str}`.
 
     Errors:
         - Address does not resolve to any function.
@@ -363,7 +388,15 @@ def get_function_at(address: int) -> GetFunctionAtResult:
         - Function lookup failed due to an IDA backend error.
 
     Example success payload:
-        {"address": 4198400, "name": "_main", "size": 152}"""
+        {
+            "address": 4198400,
+            "name": "_main",
+            "size": 152,
+            "signature": "int __cdecl main(int argc, const char **argv)",
+            "flags": {"noreturn": False, "library": False, "thunk": False},
+            "comment": "",
+            "repeatable_comment": "",
+        }"""
     raise NotImplementedError
 
 
@@ -399,8 +432,8 @@ def decompile_function_at(address: int) -> DecompileFunctionAtResult:
     """Hex-Rays pseudocode lines for the containing function.
 
     Use this when higher-level C-like structure is needed for reasoning, triage,
-    or summarization. See also `get_function_signature_at`,
-    `get_function_disassembly_at`, and `get_basic_blocks_at`.
+    or summarization. See also `get_function_at`, `get_function_disassembly_at`,
+    and `get_basic_blocks_at`.
 
     Args:
         address: Effective address anywhere inside the target function.
@@ -421,28 +454,6 @@ def decompile_function_at(address: int) -> DecompileFunctionAtResult:
                 "}",
             ],
         }"""
-    raise NotImplementedError
-
-
-def get_function_signature_at(address: int) -> GetFunctionSignatureAtResult:
-    """Type signature string for the containing function.
-
-    Use this when you need calling-convention and parameter details without doing
-    full decompilation. See also `decompile_function_at`, `get_function_at`, and
-    `get_instruction_at`.
-
-    Args:
-        address: Effective address anywhere inside the target function.
-
-    Returns:
-        Success payload `{signature: str}` or `{"error": str}`.
-
-    Errors:
-        - Address does not resolve to a function.
-        - Function has no available type signature.
-
-    Example success payload:
-        {"signature": "int __cdecl main(int argc, const char **argv)"}"""
     raise NotImplementedError
 
 
@@ -687,8 +698,9 @@ def get_segments() -> GetSegmentsResult:
 def get_names() -> GetNamesResult:
     """All named addresses known to IDA.
 
-    Use this to build symbol maps or fuzzy-name search indexes. See also
-    `get_name_at`, `get_functions`, and `demangle_name`.
+    Use this to build symbol maps or fuzzy-name search indexes. Names are
+    demangled when applicable. See also `get_name_at`, `get_functions`, and
+    `demangle_name`.
 
     Args:
         None.
