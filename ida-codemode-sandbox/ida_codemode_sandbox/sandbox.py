@@ -22,6 +22,15 @@ from ida_codemode_api import (
 
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
 
+_TYPE_GUARD_FUNCTION_NAME = "is_error"
+_TYPE_GUARD_STUB = (
+    "from typing_extensions import TypeIs\n\n"
+    "def is_error(result: object) -> TypeIs[ApiError]: ..."
+)
+
+SANDBOX_FUNCTION_NAMES = [*FUNCTION_NAMES, _TYPE_GUARD_FUNCTION_NAME]
+SANDBOX_TYPE_STUBS = TYPE_STUBS + "\n\n" + _TYPE_GUARD_STUB + "\n"
+
 
 # ---------------------------------------------------------------------------
 # Structured result and error types
@@ -97,6 +106,15 @@ DEFAULT_LIMITS = pydantic_monty.ResourceLimits(
 )
 
 
+def _is_error(result: object) -> bool:
+    """Return ``True`` when *result* matches the ``ApiError`` payload shape."""
+    if not isinstance(result, dict):
+        return False
+
+    value = result.get("error")
+    return isinstance(value, str)
+
+
 # ---------------------------------------------------------------------------
 # Error conversion helpers
 # ---------------------------------------------------------------------------
@@ -169,7 +187,8 @@ class IdaSandbox:
     ):
         self.db = db
         self.limits = limits if limits is not None else dict(DEFAULT_LIMITS)
-        self._fn_impls = create_api_from_database(db)
+        self._fn_impls = dict(create_api_from_database(db))
+        self._fn_impls[_TYPE_GUARD_FUNCTION_NAME] = _is_error
 
     def run(self, code: str, print_callback: Callable[[str, str], None] | None = None) -> SandboxResult:
         """Evaluate *code* in the sandbox.
@@ -205,9 +224,9 @@ class IdaSandbox:
         try:
             m = pydantic_monty.Monty(
                 code,
-                external_functions=FUNCTION_NAMES,
+                external_functions=SANDBOX_FUNCTION_NAMES,
                 type_check=True,
-                type_check_stubs=TYPE_STUBS,
+                type_check_stubs=SANDBOX_TYPE_STUBS,
             )
         except pydantic_monty.MontySyntaxError as exc:
             return SandboxResult(error=_syntax_error_to_sandbox_error(exc))

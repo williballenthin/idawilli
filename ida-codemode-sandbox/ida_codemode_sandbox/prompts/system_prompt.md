@@ -22,11 +22,15 @@ Each callback returns either:
 - a success payload
 - `{"error": "..."}`
 
-Always check for `"error"` before reading payload fields.
+Use `is_error(payload)` before reading payload fields.
+
+`is_error` is a built-in helper in the sandbox with a type-guard signature.
+This avoids a known TypedDict narrowing limitation where direct
+`"error" in payload` checks may fail static type checking.
 
 ```python
 def expect_ok(result):
-    if "error" in result:
+    if is_error(result):
         print("API error: " + result["error"])
         return None
     return result
@@ -63,7 +67,7 @@ if strings_res is not None:
 
 ```python
 set_result = set_comment_at(0x401000, "checked by analyst")
-if set_result is not None and "error" in set_result:
+if set_result is not None and is_error(set_result):
     print("mutation failed: " + set_result["error"])
 ```
 
@@ -73,7 +77,7 @@ if set_result is not None and "error" in set_result:
 
 ## Tips
 
-- Check for `"error"` before reading payload fields.
+- Use `is_error(payload)` before reading payload fields.
 - Read and mutation callbacks are both available; call mutators intentionally.
 - Use `help("callback_name")` for callback-specific details.
 - Prefer discovery callbacks (`get_functions`, `get_strings`, ...) over

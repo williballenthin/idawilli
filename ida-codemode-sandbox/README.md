@@ -23,7 +23,7 @@ with Database.open("sample.exe", opts, save_on_close=False) as db:
 
     code = '''
 def expect_ok(result):
-    if "error" in result:
+    if is_error(result):
         print("API error: " + result["error"])
         return None
     return result
@@ -51,11 +51,12 @@ Code inside the sandbox should treat API callbacks as returning either:
 - success payload
 - `{"error": "..."}`
 
-Use a small helper and check for errors before reading payload fields:
+Use `is_error(payload)` before reading payload fields. This helper is
+available in the sandbox and works with Monty's current type checker:
 
 ```python
 def expect_ok(result):
-    if "error" in result:
+    if is_error(result):
         print("API error: " + result["error"])
         return None
     return result

@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pydantic_monty
+import pytest
 
 from ida_codemode_api import FUNCTION_NAMES, api_reference as codemode_api_reference
 from ida_codemode_sandbox import IdaSandbox, SandboxError, SandboxResult
@@ -17,7 +18,7 @@ from ida_codemode_sandbox import IdaSandbox, SandboxError, SandboxResult
 
 EXPECT_OK_HELPER = """\
 def expect_ok(result):
-    if "error" in result:
+    if is_error(result):
         print("API error: " + result["error"])
         return None
     return result
@@ -45,6 +46,7 @@ class TestSandboxExecution:
         sandbox = IdaSandbox(db)
         assert sandbox.db is db
         assert set(FUNCTION_NAMES).issubset(sandbox._fn_impls.keys())
+        assert "is_error" in sandbox._fn_impls
 
     def test_run_returns_structured_result(self, db):
         sandbox = IdaSandbox(db)
@@ -96,6 +98,165 @@ class TestSandboxErrors:
         assert not result.ok
         assert result.error.kind == "runtime"
         assert "before" in "".join(result.stdout)
+
+
+class TestTypedDictNarrowingRegression:
+    def test_direct_error_key_check_reproduces_typing_failure(self, db):
+        sandbox = IdaSandbox(db)
+        code = """\
+meta = get_database_metadata()
+if "error" in meta:
+    print(meta["error"])
+else:
+    print("Entry: " + hex(meta["entry_point"]))
+
+funcs = get_functions()
+if "error" in funcs:
+    print(funcs["error"])
+else:
+    print("Count: " + str(len(funcs["functions"])))
+"""
+        result = sandbox.run(code)
+
+        assert not result.ok
+        assert result.error is not None
+        assert result.error.kind == "typing"
+        assert 'Unknown key "error"' in result.error.formatted
+        assert "DatabaseMetadata" in result.error.formatted
+        assert "GetFunctionsOk" in result.error.formatted
+
+    def test_type_guard_helper_supports_union_error_checks(self, db):
+        sandbox = IdaSandbox(db)
+        code = """\
+meta = get_database_metadata()
+if is_error(meta):
+    print(meta["error"])
+else:
+    print("Entry: " + hex(meta["entry_point"]))
+
+funcs = get_functions()
+if is_error(funcs):
+    print(funcs["error"])
+else:
+    print("Count: " + str(len(funcs["functions"])))
+"""
+        result = sandbox.run(code)
+
+        assert result.ok
+        out = "".join(result.stdout)
+        assert "Entry:" in out
+        assert "Count:" in out
+
+
+class TestTypeCheckerAlternatives:
+    def test_union_plus_error_key_check_fails_without_type_guard(self):
+        stubs = """\
+from typing import TypedDict
+
+class ApiError(TypedDict):
+    error: str
+
+class ValueOk(TypedDict):
+    value: int
+
+def get_value() -> ValueOk | ApiError:
+    raise NotImplementedError
+"""
+
+        code = """\
+result = get_value()
+if "error" in result:
+    print(result["error"])
+else:
+    print(result["value"])
+"""
+
+        with pytest.raises(pydantic_monty.MontyTypingError) as excinfo:
+            pydantic_monty.Monty(
+                code,
+                external_functions=["get_value"],
+                type_check=True,
+                type_check_stubs=stubs,
+            )
+
+        assert 'Unknown key "error"' in excinfo.value.display(format="full")
+
+    def test_union_plus_typeis_guard_succeeds(self):
+        stubs = """\
+from typing import TypedDict
+from typing_extensions import TypeIs
+
+class ApiError(TypedDict):
+    error: str
+
+class ValueOk(TypedDict):
+    value: int
+
+def get_value() -> ValueOk | ApiError:
+    raise NotImplementedError
+
+def is_error(result: object) -> TypeIs[ApiError]:
+    raise NotImplementedError
+"""
+
+        code = """\
+result = get_value()
+if is_error(result):
+    print(result["error"])
+else:
+    print(result["value"])
+"""
+
+        m = pydantic_monty.Monty(
+            code,
+            external_functions=["get_value", "is_error"],
+            type_check=True,
+            type_check_stubs=stubs,
+        )
+        out = []
+        m.run(
+            external_functions={
+                "get_value": lambda: {"value": 7},
+                "is_error": lambda result: isinstance(result, dict) and "error" in result,
+            },
+            print_callback=lambda _s, t: out.append(t),
+        )
+
+        assert "7" in "".join(out)
+
+    def test_single_merged_total_false_result_type_succeeds(self):
+        stubs = """\
+from typing import TypedDict
+
+class ValueResult(TypedDict, total=False):
+    value: int
+    error: str
+
+def get_value() -> ValueResult:
+    raise NotImplementedError
+"""
+
+        code = """\
+result = get_value()
+if "error" in result:
+    print(result["error"])
+else:
+    print(result["value"])
+"""
+
+        m = pydantic_monty.Monty(
+            code,
+            external_functions=["get_value"],
+            type_check=True,
+            type_check_stubs=stubs,
+        )
+        out = []
+        m.run(
+            external_functions={"get_value": lambda: {"value": 7}},
+            print_callback=lambda _s, t: out.append(t),
+        )
+
+        assert "7" in "".join(out)
 
 
 class TestApiSmokeThroughSandbox:
@@ -191,6 +352,7 @@ class TestPromptHelpers:
         prompt = IdaSandbox.system_prompt()
         assert "get_database_metadata" in prompt
         assert "set_comment_at" in prompt
+        assert "is_error" in prompt
 
     def test_system_prompt_uses_general_wording(self):
         prompt = IdaSandbox.system_prompt()
