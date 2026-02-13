@@ -54,13 +54,6 @@ class NamedAddress(TypedDict):
     name: str
 
 
-class BasicBlockInfo(TypedDict):
-    start: int
-    end: int
-    successors: list[int]
-    predecessors: list[int]
-
-
 class XrefToInfo(TypedDict):
     from_address: int
     type: str
@@ -150,10 +143,6 @@ class GetFunctionCallersOk(TypedDict):
 
 class GetFunctionCalleesOk(TypedDict):
     callees: list[FunctionInfo]
-
-
-class GetBasicBlocksAtOk(TypedDict):
-    basic_blocks: list[BasicBlockInfo]
 
 
 class GetXrefsToAtOk(TypedDict):
@@ -251,7 +240,6 @@ GetFunctionDisassemblyAtResult = GetFunctionDisassemblyAtOk | ApiError
 DecompileFunctionAtResult = DecompileFunctionAtOk | ApiError
 GetFunctionCallersResult = GetFunctionCallersOk | ApiError
 GetFunctionCalleesResult = GetFunctionCalleesOk | ApiError
-GetBasicBlocksAtResult = GetBasicBlocksAtOk | ApiError
 GetXrefsToAtResult = GetXrefsToAtOk | ApiError
 GetXrefsFromAtResult = GetXrefsFromAtOk | ApiError
 GetFunctionDataXrefsResult = GetFunctionDataXrefsOk | ApiError
@@ -476,8 +464,7 @@ def decompile_function_at(address: int) -> DecompileFunctionAtResult:
     """Hex-Rays pseudocode lines for the containing function.
 
     Use this when higher-level C-like structure is needed for reasoning, triage,
-    or summarization. See also `get_function_at`, `get_function_disassembly_at`,
-    and `get_basic_blocks_at`.
+    or summarization. See also `get_function_at` and `get_function_disassembly_at`.
 
     Args:
         address: Effective address anywhere inside the target function.
@@ -565,45 +552,6 @@ def get_function_callees(address: int) -> GetFunctionCalleesResult:
                     "flags": {"noreturn": False, "library": True, "thunk": False},
                     "comment": "",
                     "repeatable_comment": "",
-                },
-            ],
-        }"""
-    raise NotImplementedError
-
-
-def get_basic_blocks_at(address: int) -> GetBasicBlocksAtResult:
-    """Control-flow graph basic blocks for the containing function.
-
-    Use this to build custom CFG analyses, detect branch structure, or map
-    execution regions. See also `get_function_disassembly_at`, `get_function_callers`,
-    and `get_function_callees`.
-
-    Args:
-        address: Effective address anywhere inside the target function.
-
-    Returns:
-        Success payload
-        `{basic_blocks: list[{start: int, end: int, successors: list[int],
-        predecessors: list[int]}]}` or `{"error": str}`.
-
-    Errors:
-        - Address does not resolve to a function.
-        - CFG construction or serialization failed.
-
-    Example success payload:
-        {
-            "basic_blocks": [
-                {
-                    "start": 4198400,
-                    "end": 4198412,
-                    "successors": [4198420],
-                    "predecessors": [],
-                },
-                {
-                    "start": 4198420,
-                    "end": 4198450,
-                    "successors": [],
-                    "predecessors": [4198400],
                 },
             ],
         }"""

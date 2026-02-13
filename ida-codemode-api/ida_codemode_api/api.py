@@ -42,7 +42,6 @@ FUNCTION_NAMES: list[str] = [
     "get_function_callees",
     "get_function_data_xrefs",
     "get_function_string_xrefs",
-    "get_basic_blocks_at",
     "get_xrefs_to_at",
     "get_xrefs_from_at",
     "get_strings",
@@ -527,35 +526,6 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
 
         return {
             "xrefs": items,
-        }
-
-    def get_basic_blocks_at(address):
-        func, err = _lookup_function_containing(address, context="basic-block analysis")
-        if err is not None:
-            return err
-
-        try:
-            flowchart = db.functions.get_flowchart(func)
-        except Exception as exc:
-            return _error_from_exc(f"failed to build CFG for function at {address:#x}", exc)
-
-        if flowchart is None:
-            return _error(f"no control-flow graph available for function at {address:#x}")
-
-        try:
-            items = []
-            for block in flowchart:
-                items.append({
-                    "start": int(block.start_ea),
-                    "end": int(block.end_ea),
-                    "successors": [int(s.start_ea) for s in block.succs()],
-                    "predecessors": [int(p.start_ea) for p in block.preds()],
-                })
-        except Exception as exc:
-            return _error_from_exc(f"failed while serializing CFG for function at {address:#x}", exc)
-
-        return {
-            "basic_blocks": items,
         }
 
     def get_xrefs_to_at(address):
@@ -1131,7 +1101,6 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         "get_function_callees": get_function_callees,
         "get_function_data_xrefs": get_function_data_xrefs,
         "get_function_string_xrefs": get_function_string_xrefs,
-        "get_basic_blocks_at": get_basic_blocks_at,
         "get_xrefs_to_at": get_xrefs_to_at,
         "get_xrefs_from_at": get_xrefs_from_at,
         "get_strings": get_strings,

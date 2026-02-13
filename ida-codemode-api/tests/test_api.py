@@ -40,8 +40,8 @@ class TestFunctionNames:
     def test_is_list(self):
         assert isinstance(FUNCTION_NAMES, list)
 
-    def test_has_38_functions(self):
-        assert len(FUNCTION_NAMES) == 38
+    def test_has_37_functions(self):
+        assert len(FUNCTION_NAMES) == 37
 
     def test_no_duplicates(self):
         assert len(FUNCTION_NAMES) == len(set(FUNCTION_NAMES))
@@ -201,7 +201,6 @@ class TestPayloadContracts:
             "get_function_callees": assert_ok(fns["get_function_callees"](first["address"])),
             "get_function_data_xrefs": assert_ok(fns["get_function_data_xrefs"](first["address"])),
             "get_function_string_xrefs": assert_ok(fns["get_function_string_xrefs"](first["address"])),
-            "get_basic_blocks_at": assert_ok(fns["get_basic_blocks_at"](first["address"])),
             "get_xrefs_to_at": assert_ok(fns["get_xrefs_to_at"](first["address"])),
             "get_xrefs_from_at": assert_ok(fns["get_xrefs_from_at"](first["address"])),
             "get_strings": strings_result,
@@ -243,7 +242,6 @@ class TestPayloadContracts:
             "get_function_callees": {"callees"},
             "get_function_data_xrefs": {"xrefs"},
             "get_function_string_xrefs": {"xrefs"},
-            "get_basic_blocks_at": {"basic_blocks"},
             "get_xrefs_to_at": {"xrefs"},
             "get_xrefs_from_at": {"xrefs"},
             "get_strings": {"strings"},
@@ -442,15 +440,6 @@ class TestFunctionAnalysis:
             assert "flags" in c
             assert "comment" in c
             assert "repeatable_comment" in c
-
-    def test_basic_blocks_shape(self, fns, first_func):
-        blocks = assert_ok(fns["get_basic_blocks_at"](first_func["address"]))["basic_blocks"]
-        assert isinstance(blocks, list)
-        for b in blocks:
-            assert "start" in b
-            assert "end" in b
-            assert "successors" in b
-            assert "predecessors" in b
 
 
 class TestXrefs:

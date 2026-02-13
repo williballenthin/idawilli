@@ -17,7 +17,6 @@ Callers should check for the presence of the `error` key to detect failures.
 | `get_function_callees(address)` | `{callees: list[{address: int, name: str, size: int, signature: str, flags: {noreturn: bool, library: bool, thunk: bool}, comment: str, repeatable_comment: str}]}` | Functions called by the containing function. |
 | `get_function_data_xrefs(function_start)` | `{xrefs: list[{from_address: int, to_address: int, type: str}]}` | Data cross-references originating from all instructions in a function. |
 | `get_function_string_xrefs(function_start)` | `{xrefs: list[{from_address: int, string_address: int, string: str}]}` | String cross-references originating from all instructions in a function. |
-| `get_basic_blocks_at(address)` | `{basic_blocks: list[{start: int, end: int, successors: list[int], predecessors: list[int]}]}` | Control-flow graph basic blocks for the containing function. |
 | `get_xrefs_to_at(address)` | `{xrefs: list[{from_address: int, type: str, is_call: bool, is_jump: bool}]}` | Cross-references that target an address. |
 | `get_xrefs_from_at(address)` | `{xrefs: list[{to_address: int, type: str, is_call: bool, is_jump: bool}]}` | Cross-references that originate at an address. |
 | `get_strings()` | `{strings: list[{address: int, length: int, type: str, value: str}]}` | All strings recognized by IDA analysis. |
