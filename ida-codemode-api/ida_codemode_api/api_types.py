@@ -226,6 +226,10 @@ class GetCommentAtOk(TypedDict):
     comment: str
 
 
+class ReadPointerOk(TypedDict):
+    pointer: int
+
+
 class HelpOk(TypedDict):
     documentation: str
 
@@ -259,6 +263,7 @@ GetDisassemblyAtResult = GetDisassemblyAtOk | ApiError
 GetInstructionAtResult = InstructionInfo | ApiError
 GetAddressTypeResult = GetAddressTypeOk | ApiError
 GetCommentAtResult = GetCommentAtOk | ApiError
+ReadPointerResult = ReadPointerOk | ApiError
 
 
 def help(api: str) -> HelpResult:
@@ -1103,4 +1108,26 @@ def get_comment_at(address: int) -> GetCommentAtResult:
 
     Example success payload:
         {"comment": "decrypts config blob"}"""
+    raise NotImplementedError
+
+
+def read_pointer(address: int) -> ReadPointerResult:
+    """Unsigned pointer-sized integer at an address.
+
+    Use this to dereference pointers in data structures, vtables, and GOT/PLT
+    entries based on database bitness. See also `get_bytes_at`,
+    `get_database_metadata`, and `get_address_type`.
+
+    Args:
+        address: Effective address where the pointer is expected.
+
+    Returns:
+        Success payload `{pointer: int}` or `{"error": str}`.
+
+    Errors:
+        - Address is invalid or unreadable.
+        - Insufficient bytes available at address for pointer size.
+
+    Example success payload:
+        {"pointer": 4198400}"""
     raise NotImplementedError

@@ -59,6 +59,7 @@ FUNCTION_NAMES: list[str] = [
     "get_instruction_at",
     "get_address_type",
     "get_comment_at",
+    "read_pointer",
 ]
 
 def _collect_typed_dicts(module: Any) -> dict[str, Any]:
@@ -913,6 +914,34 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
             "comment": str(result),
         }
 
+    def read_pointer(address):
+        try:
+            bitness = int(db.bitness)
+        except Exception as exc:
+            return _error_from_exc("failed to read database bitness", exc)
+
+        pointer_size = 8 if bitness == 64 else 4
+
+        try:
+            data = db.bytes.get_bytes_at(address, pointer_size)
+        except Exception as exc:
+            return _error_from_exc(f"failed to read {pointer_size} bytes at {address:#x}", exc)
+
+        if data is None:
+            return _error(f"unable to read {pointer_size} bytes at {address:#x}")
+
+        if len(data) < pointer_size:
+            return _error(f"insufficient bytes at {address:#x}: expected {pointer_size}, got {len(data)}")
+
+        try:
+            pointer = int.from_bytes(data, byteorder='little', signed=False)
+        except Exception as exc:
+            return _error_from_exc(f"failed to decode pointer at {address:#x}", exc)
+
+        return {
+            "pointer": pointer,
+        }
+
     api: dict[str, Callable[..., Any]] = {
         "help": help,
         "get_database_metadata": get_database_metadata,
@@ -943,6 +972,7 @@ def create_api_from_database(db: Any) -> dict[str, Callable[..., Any]]:
         "get_instruction_at": get_instruction_at,
         "get_address_type": get_address_type,
         "get_comment_at": get_comment_at,
+        "read_pointer": read_pointer,
     }
 
     return api

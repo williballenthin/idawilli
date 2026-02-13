@@ -30,8 +30,8 @@ class TestFunctionNames:
     def test_is_list(self):
         assert isinstance(FUNCTION_NAMES, list)
 
-    def test_has_29_functions(self):
-        assert len(FUNCTION_NAMES) == 29
+    def test_has_30_functions(self):
+        assert len(FUNCTION_NAMES) == 30
 
     def test_no_duplicates(self):
         assert len(FUNCTION_NAMES) == len(set(FUNCTION_NAMES))
@@ -186,6 +186,7 @@ class TestPayloadContracts:
             "get_disassembly_at": assert_ok(fns["get_disassembly_at"](first["address"])),
             "get_instruction_at": assert_ok(fns["get_instruction_at"](first["address"])),
             "get_address_type": assert_ok(fns["get_address_type"](first["address"])),
+            "read_pointer": assert_ok(fns["read_pointer"](first["address"])),
         }
 
         expected_keys = {
@@ -233,6 +234,7 @@ class TestPayloadContracts:
                 "is_call",
             },
             "get_address_type": {"address_type"},
+            "read_pointer": {"pointer"},
         }
 
         for function_name, payload in payloads.items():
@@ -646,5 +648,18 @@ class TestHelp:
 
     def test_help_unknown_callback(self, fns):
         result = fns["help"]("definitely_not_a_callback")
+        assert "error" in result
+        assert isinstance(result["error"], str)
+
+
+class TestReadPointer:
+    def test_read_pointer_valid_address(self, fns, first_func):
+        result = assert_ok(fns["read_pointer"](first_func["address"]))
+        assert "pointer" in result
+        assert isinstance(result["pointer"], int)
+        assert result["pointer"] >= 0
+
+    def test_read_pointer_invalid_address(self, fns):
+        result = fns["read_pointer"](0xDEADDEAD)
         assert "error" in result
         assert isinstance(result["error"], str)
