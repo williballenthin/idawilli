@@ -5,12 +5,10 @@ from __future__ import annotations
 
 import argparse
 import ast
-import codecs
 import json
 import logging
 import math
 import os
-import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import cache
@@ -28,8 +26,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
-DEFAULT_MODEL = os.getenv("IDA_CODEMODE_AGENT_MODEL", "google/gemini-3-flash-preview")
-DEFAULT_PROVIDER = os.getenv("IDA_CODEMODE_AGENT_PROVIDER", "openrouter")
+DEFAULT_MODEL = os.getenv("IDA_CODEMODE_AGENT_MODEL", "openrouter:google/gemini-3-flash-preview")
 IDB_EXTENSIONS = {".i64", ".idb"}
 
 BASE_SYSTEM_PROMPT = """
@@ -50,12 +47,6 @@ Rules:
 - If a tool run fails with typing errors, send a minimal follow-up script that only fixes the reported type issue.
 - In final responses, include concrete evidence (addresses, names, snippets).
 """.strip()
-
-
-def _resolve_model_name(model: str, provider: str) -> str:
-    if ":" in model:
-        return model
-    return f"{provider}:{model}"
 
 
 @cache
@@ -95,7 +86,7 @@ def _available_models() -> list[str]:
     models = {name for name in get_args(literal) if isinstance(name, str)}
 
     # Keep the configured default visible even when provider catalogs are dynamic.
-    models.add(_resolve_model_name(DEFAULT_MODEL, DEFAULT_PROVIDER))
+    models.add(DEFAULT_MODEL)
 
     try:
         models.update(_openrouter_model_ids())
@@ -109,6 +100,12 @@ def _available_models() -> list[str]:
 def _validate_model_name(model: str) -> None:
     """Validate that the given provider:model reference can be instantiated."""
     from pydantic_ai.models import infer_model
+
+    if ":" not in model:
+        raise ValueError(
+            f"model '{model}' is missing provider prefix; use provider:model "
+            "(for example: openrouter:google/gemini-3-flash-preview)"
+        )
 
     infer_model(model)
 
@@ -181,57 +178,26 @@ class SessionLogger:
 @dataclass
 class DatabaseOpenPlan:
     open_path: Path
-    output_database: str | None = None
-    creates_database: bool = False
-
-
-def _binary_companion_databases(binary_path: Path) -> list[Path]:
-    return [
-        binary_path.with_name(binary_path.name + ".i64"),
-        binary_path.with_name(binary_path.name + ".idb"),
-    ]
 
 
 def resolve_database_plan(input_path: Path) -> DatabaseOpenPlan:
-    """Resolve how to open/create the IDA database from user input."""
+    """Resolve an existing IDA database path from user input."""
     path = input_path.expanduser()
-    suffix = path.suffix.lower()
 
-    if suffix in IDB_EXTENSIONS:
-        if path.exists():
-            return DatabaseOpenPlan(open_path=path)
-
-        binary_candidate = path.with_suffix("")
-        if binary_candidate.exists():
-            return DatabaseOpenPlan(
-                open_path=binary_candidate,
-                output_database=str(path),
-                creates_database=True,
-            )
-
+    if path.suffix.lower() not in IDB_EXTENSIONS:
         raise FileNotFoundError(
-            f"database does not exist: {path} (and no matching binary at {binary_candidate})"
+            f"expected an existing IDA database (.i64/.idb), got: {path}"
         )
 
     if not path.exists():
-        raise FileNotFoundError(f"file does not exist: {path}")
+        raise FileNotFoundError(f"database does not exist: {path}")
 
-    for candidate in _binary_companion_databases(path):
-        if candidate.exists():
-            return DatabaseOpenPlan(open_path=candidate)
-
-    create_target = path.with_name(path.name + ".i64")
-    return DatabaseOpenPlan(
-        open_path=path,
-        output_database=str(create_target),
-        creates_database=True,
-    )
+    return DatabaseOpenPlan(open_path=path)
 
 
 @dataclass
 class ScriptEvaluator:
     sandbox: Any
-    max_script_chars: int = 20_000
     max_output_chars: int = 24_000
     on_evaluation: Callable[[str, str], None] | None = None
 
@@ -244,16 +210,6 @@ class ScriptEvaluator:
         source = script.strip()
         if not source:
             return self._finalize(source, "status: error\nmessage: empty script")
-
-        if len(source) > self.max_script_chars:
-            return self._finalize(
-                source,
-                (
-                    "status: error\n"
-                    f"message: script too large ({len(source)} chars), "
-                    f"max is {self.max_script_chars}"
-                ),
-            )
 
         result = self.sandbox.run(source)
         stdout = "".join(result.stdout)
@@ -624,114 +580,13 @@ def _format_compact_token_count(tokens: int) -> str:
     return f"{compact}{suffix}"
 
 
-PromptInputKind = Literal["text", "eof", "escape"]
+PromptInputKind = Literal["text", "eof"]
 
 
 @dataclass(frozen=True)
 class PromptInputResult:
     kind: PromptInputKind
     text: str = ""
-
-
-def _compose_prompt_line(prompt: str, typed: str, right_label: str, width: int) -> str:
-    min_spacing = 2
-    left = f"{prompt}{typed}"
-
-    if not right_label:
-        return left
-
-    line_width = max(width, len(left) + len(right_label) + min_spacing)
-    spacing = max(min_spacing, line_width - len(left) - len(right_label))
-    return f"{left}{' ' * spacing}{right_label}"
-
-
-def _consume_escape_sequence(fd: int) -> bool:
-    import select
-
-    had_sequence = False
-    timeout = 0.03
-    while True:
-        readable, _, _ = select.select([fd], [], [], timeout)
-        if not readable:
-            break
-        had_sequence = True
-        os.read(fd, 1)
-        timeout = 0.0
-
-    return had_sequence
-
-
-def _prompt_user_terminal_input(console: Console, prompt: str, right_label: str) -> PromptInputResult:
-    import termios
-    import tty
-
-    stdin = sys.stdin
-    stream = console.file if hasattr(console.file, "write") else sys.stdout
-    fd = stdin.fileno()
-
-    original_settings = termios.tcgetattr(fd)
-    decoder = codecs.getincrementaldecoder("utf-8")()
-    buffer: list[str] = []
-
-    def redraw() -> None:
-        line = _compose_prompt_line(prompt, "".join(buffer), right_label, console.width)
-        stream.write("\r")
-        stream.write(line)
-        stream.write("\x1b[K")
-        stream.flush()
-
-    tty.setraw(fd)
-    redraw()
-
-    try:
-        while True:
-            raw = os.read(fd, 1)
-            if not raw:
-                stream.write("\r\n")
-                stream.flush()
-                return PromptInputResult(kind="eof")
-
-            decoded = decoder.decode(raw)
-            if not decoded:
-                continue
-
-            for ch in decoded:
-                if ch in ("\r", "\n"):
-                    stream.write("\r\n")
-                    stream.flush()
-                    return PromptInputResult(kind="text", text="".join(buffer).strip())
-
-                if ch == "\x03":
-                    buffer.clear()
-                    redraw()
-                    continue
-
-                if ch == "\x04":
-                    if buffer:
-                        continue
-                    stream.write("\r\n")
-                    stream.flush()
-                    return PromptInputResult(kind="eof")
-
-                if ch == "\x1b":
-                    if _consume_escape_sequence(fd):
-                        redraw()
-                        continue
-                    buffer.clear()
-                    redraw()
-                    continue
-
-                if ch in ("\x08", "\x7f"):
-                    if buffer:
-                        buffer.pop()
-                        redraw()
-                    continue
-
-                if ch.isprintable() or ch == "\t":
-                    buffer.append(ch)
-                    redraw()
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, original_settings)
 
 
 def _prompt_user_fallback_input(console: Console, prompt: str, right_label: str) -> PromptInputResult:
@@ -753,8 +608,6 @@ def _prompt_user_fallback_input(console: Console, prompt: str, right_label: str)
         console.print(header)
 
     raw_value = console.input(left_prompt)
-    if raw_value == "\x1b":
-        return PromptInputResult(kind="escape")
     return PromptInputResult(kind="text", text=raw_value.strip())
 
 
@@ -765,97 +618,10 @@ def _prompt_user_with_context_estimate(
     token_estimate = _estimate_context_tokens(agent, history)
     right_label = f"~{_format_compact_token_count(token_estimate)} ctx tokens"
 
-    if console.is_terminal and os.name == "posix" and sys.stdin.isatty() and sys.stdout.isatty():
-        return _prompt_user_terminal_input(console, left_prompt_plain, right_label)
-
     try:
         return _prompt_user_fallback_input(console, left_prompt_plain, right_label)
     except EOFError:
         return PromptInputResult(kind="eof")
-
-
-class _AgentTurnEscapeInterruptMonitor:
-    """Map plain Escape to SIGINT while an agent turn is running."""
-
-    def __init__(self) -> None:
-        self.interrupted = False
-        self._fd: int | None = None
-        self._original_termios: Any = None
-        self._stop_event: Any = None
-        self._thread: Any = None
-
-    @staticmethod
-    def _is_supported() -> bool:
-        return os.name == "posix" and sys.stdin.isatty() and sys.stdout.isatty()
-
-    def __enter__(self) -> "_AgentTurnEscapeInterruptMonitor":
-        if not self._is_supported():
-            return self
-
-        import select
-        import signal
-        import termios
-        import threading
-        import tty
-
-        fd = sys.stdin.fileno()
-        try:
-            original_termios = termios.tcgetattr(fd)
-        except Exception:
-            return self
-
-        self._fd = fd
-        self._original_termios = original_termios
-        stop_event = threading.Event()
-        self._stop_event = stop_event
-
-        # Cbreak mode gives us immediate key events without full raw-mode behavior.
-        tty.setcbreak(fd)
-
-        def monitor() -> None:
-            assert self._fd is not None
-            while not stop_event.is_set():
-                readable, _, _ = select.select([self._fd], [], [], 0.05)
-                if not readable:
-                    continue
-
-                try:
-                    raw = os.read(self._fd, 1)
-                except OSError:
-                    break
-
-                if not raw:
-                    break
-
-                if raw != b"\x1b":
-                    continue
-
-                if _consume_escape_sequence(self._fd):
-                    # Ignore escape-sequence prefixes (e.g. arrow keys).
-                    continue
-
-                self.interrupted = True
-                os.kill(os.getpid(), signal.SIGINT)
-                break
-
-        thread = threading.Thread(target=monitor, name="agent-turn-escape-interrupt", daemon=True)
-        self._thread = thread
-        thread.start()
-        return self
-
-    def __exit__(self, _exc_type: Any, _exc: Any, _tb: Any) -> bool:
-        if self._stop_event is not None:
-            self._stop_event.set()
-
-        if self._thread is not None:
-            self._thread.join(timeout=0.3)
-
-        if self._fd is not None and self._original_termios is not None:
-            import termios
-
-            termios.tcsetattr(self._fd, termios.TCSADRAIN, self._original_termios)
-
-        return False
 
 
 def run_agent_turn(
@@ -901,19 +667,18 @@ def run_agent_turn(
                         )
                     )
 
-    with _AgentTurnEscapeInterruptMonitor():
-        with Live(
-            Spinner("dots", text="assistant thinking...", style="cyan"),
-            console=console,
-            refresh_per_second=12,
-            transient=True,
-        ) as live:
-            live_ref["value"] = live
-            result = agent.run_sync(
-                user_input,
-                message_history=history,
-                event_stream_handler=event_handler,
-            )
+    with Live(
+        Spinner("dots", text="assistant thinking...", style="cyan"),
+        console=console,
+        refresh_per_second=12,
+        transient=True,
+    ) as live:
+        live_ref["value"] = live
+        result = agent.run_sync(
+            user_input,
+            message_history=history,
+            event_stream_handler=event_handler,
+        )
 
     output = str(getattr(result, "output", ""))
     session_logger.log("assistant", content=output)
@@ -943,50 +708,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "idb_path",
         type=Path,
         nargs="?",
-        help="Path to IDA database (.idb/.i64) or input binary to open",
+        help="Path to an existing IDA database (.idb/.i64)",
     )
     parser.add_argument(
         "--model",
         default=DEFAULT_MODEL,
         help=(
-            "Model name (or provider:model). "
-            "Default from $IDA_CODEMODE_AGENT_MODEL or google/gemini-3-flash-preview"
-        ),
-    )
-    parser.add_argument(
-        "--provider",
-        default=DEFAULT_PROVIDER,
-        help=(
-            "Provider used when --model has no provider prefix. "
-            "Default from $IDA_CODEMODE_AGENT_PROVIDER or openrouter"
+            "Model reference in provider:model format. "
+            "Default from $IDA_CODEMODE_AGENT_MODEL or openrouter:google/gemini-3-flash-preview"
         ),
     )
     parser.add_argument(
         "--list-models",
         action="store_true",
         help="List known model identifiers (and OpenRouter catalog when reachable) and exit",
-    )
-    parser.add_argument(
-        "--auto-analysis",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Enable/disable IDA auto analysis (default: enabled)",
-    )
-    parser.add_argument(
-        "--new-database",
-        action="store_true",
-        help="Create a new database instead of opening an existing one",
-    )
-    parser.add_argument(
-        "--save-on-close",
-        action="store_true",
-        help="Save DB changes on close (default: auto-save only when creating a new DB)",
-    )
-    parser.add_argument(
-        "--max-script-chars",
-        type=int,
-        default=20_000,
-        help="Maximum script length accepted by the tool",
     )
     parser.add_argument(
         "--max-tool-output-chars",
@@ -1022,25 +757,13 @@ def run_repl(
 
     console.print(Rule("ida-codemode-agent"))
     console.print("[bold green]Session ready.[/bold green] Ask reverse engineering questions.")
-    console.print(
-        "[dim]Commands: /exit, /quit, /clear | Keys: Esc interrupt turn, Ctrl-C clear line, Ctrl-D twice exit[/dim]"
-    )
+    console.print("[dim]Commands: /exit, /quit | Ctrl-D twice exit[/dim]")
 
     while True:
         if pending_inputs:
             prompt_result = PromptInputResult(kind="text", text=pending_inputs.pop(0))
         else:
-            try:
-                prompt_result = _prompt_user_with_context_estimate(console, agent, history)
-            except KeyboardInterrupt:
-                # In fallback input mode Ctrl-C raises KeyboardInterrupt.
-                # Treat it as "clear current input" and continue prompting.
-                console.print()
-                continue
-
-        if prompt_result.kind == "escape":
-            # Escape is reserved for interrupting active agent turns.
-            continue
+            prompt_result = _prompt_user_with_context_estimate(console, agent, history)
 
         if prompt_result.kind == "eof":
             consecutive_eof_count += 1
@@ -1058,12 +781,6 @@ def run_repl(
         if user_input in {"/exit", "/quit", "exit", "quit"}:
             break
 
-        if user_input == "/clear":
-            history = []
-            session_logger.log("history_cleared")
-            console.print("[dim]conversation cleared[/dim]")
-            continue
-
         session_logger.log("user", content=user_input)
 
         try:
@@ -1074,10 +791,6 @@ def run_repl(
                 console=console,
                 session_logger=session_logger,
             )
-        except KeyboardInterrupt:
-            session_logger.log("agent_turn_interrupted")
-            console.print("[dim]assistant turn interrupted[/dim]")
-            continue
         except Exception as exc:  # pragma: no cover
             err = f"model/tool error: {type(exc).__name__}: {exc}"
             session_logger.log("error", stage="agent_turn", message=err)
@@ -1111,7 +824,7 @@ def main(argv: list[str] | None = None) -> int:
         error_console.print("[red]error:[/red] missing input path (idb_path)")
         return 2
 
-    model = _resolve_model_name(args.model, args.provider)
+    model = args.model
 
     try:
         _validate_model_name(model)
@@ -1135,12 +848,12 @@ def main(argv: list[str] | None = None) -> int:
         error_console.print(f"[red]error:[/red] missing runtime dependency: {exc}")
         return 2
 
-    effective_save_on_close = args.save_on_close or plan.creates_database
+    effective_save_on_close = True
 
     ida_options = IdaCommandOptions(
-        auto_analysis=args.auto_analysis,
-        new_database=args.new_database,
-        output_database=plan.output_database,
+        auto_analysis=True,
+        new_database=False,
+        output_database=None,
     )
 
     session_logger = SessionLogger.create_default()
@@ -1148,18 +861,14 @@ def main(argv: list[str] | None = None) -> int:
         "session_start",
         input_path=str(idb_path.expanduser()),
         open_path=str(plan.open_path),
-        output_database=plan.output_database,
-        creates_database=plan.creates_database,
         model=model,
-        auto_analysis=args.auto_analysis,
-        new_database=args.new_database,
+        auto_analysis=True,
+        new_database=False,
         save_on_close=effective_save_on_close,
         initial_prompt_provided=bool(args.initial_prompt),
     )
 
     console.print(f"[bold]Opening IDA:[/bold] {plan.open_path}")
-    if plan.creates_database and plan.output_database:
-        console.print(f"[yellow]Creating database:[/yellow] {plan.output_database}")
     console.print(f"[bold]Using model:[/bold] {model}")
     console.print(f"[dim]Session log: {session_logger.path}[/dim]")
 
@@ -1172,7 +881,6 @@ def main(argv: list[str] | None = None) -> int:
             sandbox = IdaSandbox(db)
             evaluator = ScriptEvaluator(
                 sandbox=sandbox,
-                max_script_chars=args.max_script_chars,
                 max_output_chars=args.max_tool_output_chars,
                 on_evaluation=lambda script, result: session_logger.log(
                     "tool_evaluation",

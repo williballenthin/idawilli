@@ -26,13 +26,13 @@ pip install -e .
 ## Usage
 
 ```bash
-ida-codemode-agent /path/to/sample.exe
+ida-codemode-agent /path/to/sample.i64
 ```
 
 Run one initial prompt before interactive mode:
 
 ```bash
-ida-codemode-agent /path/to/sample.exe --prompt "Summarize imports and likely capabilities"
+ida-codemode-agent /path/to/sample.i64 --prompt "Summarize imports and likely capabilities"
 ```
 
 List known models:
@@ -43,19 +43,12 @@ ida-codemode-agent --list-models
 
 Behavior for input paths:
 
-- If you pass an existing `.i64`/`.idb`, it opens that database.
-- If you pass a binary and a companion DB exists (`.i64`/`.idb`), it uses the DB.
-- If you pass a binary and no DB exists, it creates `<binary>.i64` automatically.
-- If you pass a missing `.i64` but `<base-binary>` exists, it creates that `.i64`.
+- You must pass an existing `.i64` or `.idb` path.
+- The agent does not create new IDA databases.
 
 ## Model defaults
 
-Default model/provider:
-
-- provider: `openrouter`
-- model: `google/gemini-3-flash-preview`
-
-Equivalent resolved model string:
+Default model:
 
 - `openrouter:google/gemini-3-flash-preview`
 
@@ -69,8 +62,6 @@ Override with:
 
 ```bash
 ida-codemode-agent sample.i64 --model anthropic:claude-3-7-sonnet-latest
-# or
-ida-codemode-agent sample.i64 --model gpt-4o-mini --provider openai
 ```
 
 ## Session logs
@@ -98,23 +89,15 @@ Logs include:
 Commands:
 
 - `/exit`, `/quit`, `exit`, `quit`: leave session
-- `/clear`: clear conversation history
 
 Keyboard controls:
 
-- `Esc`: interrupt an active assistant/tool turn
-- `Ctrl-C`: clear the current input line
 - `Ctrl-D` on an empty line: press once for confirmation, twice to exit
 
 ## CLI options
 
-- positional: `idb_path` (path to IDA database or binary; not needed with `--list-models`)
+- positional: `idb_path` (path to an existing IDA `.i64`/`.idb`; not needed with `--list-models`)
 - `--list-models` print known model identifiers and exit (includes OpenRouter catalog entries when reachable)
-- `--model` model name (or `provider:model`)
-- `--provider` provider prefix for unqualified `--model`
-- `--[no-]auto-analysis` toggle IDA auto analysis (default: on)
-- `--new-database` request fresh DB creation
-- `--save-on-close` force save on close (newly created DBs are auto-saved)
+- `--model` model name in `provider:model` format
 - `--prompt` / `--initial-prompt` optional first question to run before interactive prompting
-- `--max-script-chars` max tool script length guard
 - `--max-tool-output-chars` max returned tool-output size guard

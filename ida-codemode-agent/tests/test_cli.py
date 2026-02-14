@@ -13,7 +13,6 @@ from rich.console import Console
 import ida_codemode_agent.cli as cli
 from ida_codemode_agent.cli import (
     DEFAULT_MODEL,
-    DEFAULT_PROVIDER,
     PromptInputResult,
     SessionLogger,
     ScriptEvaluator,
@@ -22,7 +21,6 @@ from ida_codemode_agent.cli import (
     _format_compact_token_count,
     _parse_evaluate_tool_result_text,
     _render_tool_result,
-    _resolve_model_name,
     _validate_model_name,
     main,
     parse_args,
@@ -31,11 +29,10 @@ from ida_codemode_agent.cli import (
 )
 
 
-def test_default_model_and_provider_resolution() -> None:
-    args = parse_args(["/tmp/fake-input"])
+def test_default_model_resolution() -> None:
+    args = parse_args(["/tmp/fake-input.i64"])
     assert args.model == DEFAULT_MODEL
-    assert args.provider == DEFAULT_PROVIDER
-    assert _resolve_model_name(args.model, args.provider) == "openrouter:google/gemini-3-flash-preview"
+    assert ":" in args.model
 
 
 def test_parse_args_accepts_list_models_without_path() -> None:
@@ -69,9 +66,9 @@ def test_available_models_contains_test_model() -> None:
     assert "test" in models
 
 
-def test_available_models_contains_openrouter_default_model() -> None:
+def test_available_models_contains_default_model() -> None:
     models = _available_models()
-    assert _resolve_model_name(DEFAULT_MODEL, DEFAULT_PROVIDER) in models
+    assert DEFAULT_MODEL in models
 
 
 def test_validate_model_name_rejects_unknown_provider() -> None:
@@ -95,7 +92,7 @@ def test_main_list_models_exits_zero(capsys: pytest.CaptureFixture[str]) -> None
 
 
 def test_main_validates_model_before_database_resolution(capsys: pytest.CaptureFixture[str]) -> None:
-    rc = main(["/definitely/missing/file.i64", "--provider", "not-a-provider", "--model", "x"])
+    rc = main(["/definitely/missing/file.i64", "--model", "x"])
     assert rc == 2
     err = capsys.readouterr().err
     assert "invalid model" in err
@@ -212,6 +209,22 @@ def test_render_evaluate_error_omits_duplicate_stderr_traceback() -> None:
     assert rendered.count("Traceback (most recent call last):") == 1
 
 
+def test_removed_provider_flag_is_rejected() -> None:
+    with pytest.raises(SystemExit):
+        parse_args(["/tmp/fake-input.i64", "--provider", "openrouter"])
+
+
+def test_removed_script_size_flag_is_rejected() -> None:
+    with pytest.raises(SystemExit):
+        parse_args(["/tmp/fake-input.i64", "--max-script-chars", "1000"])
+
+
+def test_removed_idb_control_flags_are_rejected() -> None:
+    for flag in ("--new-database", "--auto-analysis", "--no-auto-analysis", "--save-on-close"):
+        with pytest.raises(SystemExit):
+            parse_args(["/tmp/fake-input.i64", flag])
+
+
 class TestReplInputControls:
     def test_initial_prompt_runs_before_interactive_input(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -249,12 +262,12 @@ class TestReplInputControls:
         assert rc == 0
         assert seen_inputs == ["summarize imports"]
 
-    def test_escape_during_prompt_does_not_exit_repl(
+    def test_clear_command_is_no_longer_special(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         events = iter(
             [
-                PromptInputResult(kind="escape"),
+                PromptInputResult(kind="text", text="/clear"),
                 PromptInputResult(kind="text", text="/quit"),
             ]
         )
@@ -265,11 +278,20 @@ class TestReplInputControls:
             lambda *_args, **_kwargs: next(events),
         )
 
-        monkeypatch.setattr(
-            cli,
-            "run_agent_turn",
-            lambda **_kwargs: pytest.fail("run_agent_turn should not be called for prompt escape + /quit"),
-        )
+        seen_inputs: list[str] = []
+
+        def fake_run_agent_turn(
+            *,
+            agent,
+            user_input: str,
+            history,
+            console,
+            session_logger,
+        ):
+            seen_inputs.append(user_input)
+            return [*history, user_input]
+
+        monkeypatch.setattr(cli, "run_agent_turn", fake_run_agent_turn)
 
         console = Console(width=120, record=True)
         logger = SessionLogger(tmp_path / "session.jsonl")
@@ -279,6 +301,7 @@ class TestReplInputControls:
             logger.close()
 
         assert rc == 0
+        assert seen_inputs == ["/clear"]
 
     def test_ctrl_d_twice_exits_repl(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         events = iter(
@@ -349,41 +372,30 @@ class TestReplInputControls:
         assert rc == 0
         assert seen_inputs == ["hello"]
 
-    def test_keyboard_interrupt_clears_line_without_interrupt_banner(
+    def test_keyboard_interrupt_at_prompt_propagates(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        events: list[PromptInputResult | BaseException] = [
-            KeyboardInterrupt(),
-            PromptInputResult(kind="text", text="/quit"),
-        ]
+        def raise_keyboard_interrupt(*_args, **_kwargs):
+            raise KeyboardInterrupt
 
-        def fake_prompt(*_args, **_kwargs):
-            item = events.pop(0)
-            if isinstance(item, BaseException):
-                raise item
-            return item
-
-        monkeypatch.setattr(cli, "_prompt_user_with_context_estimate", fake_prompt)
+        monkeypatch.setattr(
+            cli,
+            "_prompt_user_with_context_estimate",
+            raise_keyboard_interrupt,
+        )
 
         console = Console(width=120, record=True)
         logger = SessionLogger(tmp_path / "session.jsonl")
         try:
-            rc = run_repl(object(), console, logger)
+            with pytest.raises(KeyboardInterrupt):
+                run_repl(object(), console, logger)
         finally:
             logger.close()
 
-        assert rc == 0
-        assert "Interrupted. Type /exit to quit." not in console.export_text()
-
-    def test_agent_turn_keyboard_interrupt_returns_to_prompt(
+    def test_keyboard_interrupt_during_agent_turn_propagates(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        events = iter(
-            [
-                PromptInputResult(kind="text", text="analyze imports"),
-                PromptInputResult(kind="text", text="/quit"),
-            ]
-        )
+        events = iter([PromptInputResult(kind="text", text="analyze imports")])
         monkeypatch.setattr(
             cli,
             "_prompt_user_with_context_estimate",
@@ -395,58 +407,34 @@ class TestReplInputControls:
 
         monkeypatch.setattr(cli, "run_agent_turn", fake_run_agent_turn)
 
-        log_path = tmp_path / "session.jsonl"
         console = Console(width=120, record=True)
-        logger = SessionLogger(log_path)
+        logger = SessionLogger(tmp_path / "session.jsonl")
         try:
-            rc = run_repl(object(), console, logger)
+            with pytest.raises(KeyboardInterrupt):
+                run_repl(object(), console, logger)
         finally:
             logger.close()
 
-        assert rc == 0
-        assert "assistant turn interrupted" in console.export_text()
-
-        records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
-        assert any(record.get("event") == "agent_turn_interrupted" for record in records)
-
 
 class TestDatabasePlanResolution:
-    def test_binary_without_companion_database_creates_i64_plan(self, tmp_path: Path) -> None:
-        binary = tmp_path / "sample.exe"
-        binary.write_bytes(b"MZ")
-
-        plan = resolve_database_plan(binary)
-
-        assert plan.open_path == binary
-        assert plan.creates_database is True
-        assert plan.output_database == str(tmp_path / "sample.exe.i64")
-
-    def test_binary_with_existing_companion_database_prefers_database(self, tmp_path: Path) -> None:
-        binary = tmp_path / "sample.exe"
-        database = tmp_path / "sample.exe.i64"
-        binary.write_bytes(b"MZ")
+    def test_existing_database_is_accepted(self, tmp_path: Path) -> None:
+        database = tmp_path / "sample.i64"
         database.write_bytes(b"IDA")
 
-        plan = resolve_database_plan(binary)
+        plan = resolve_database_plan(database)
 
         assert plan.open_path == database
-        assert plan.creates_database is False
-        assert plan.output_database is None
 
-    def test_missing_database_path_uses_matching_binary_for_creation(self, tmp_path: Path) -> None:
+    def test_non_database_path_is_rejected(self, tmp_path: Path) -> None:
         binary = tmp_path / "sample.exe"
-        requested_database = tmp_path / "sample.exe.i64"
         binary.write_bytes(b"MZ")
 
-        plan = resolve_database_plan(requested_database)
-
-        assert plan.open_path == binary
-        assert plan.creates_database is True
-        assert plan.output_database == str(requested_database)
-
-    def test_missing_database_and_missing_binary_raises(self, tmp_path: Path) -> None:
         with pytest.raises(FileNotFoundError):
-            resolve_database_plan(tmp_path / "missing.exe.i64")
+            resolve_database_plan(binary)
+
+    def test_missing_database_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(FileNotFoundError):
+            resolve_database_plan(tmp_path / "missing.i64")
 
 
 class TestSessionLogger:
