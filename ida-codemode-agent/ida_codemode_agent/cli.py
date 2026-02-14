@@ -15,7 +15,6 @@ from functools import cache
 from pathlib import Path
 from typing import Any, Callable, Literal, cast, get_args
 
-from rich.columns import Columns
 from rich.console import Console, Group, RenderableType
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -320,21 +319,23 @@ def _extract_script_from_tool_args(args: object) -> str | None:
     return repr(args)
 
 
-def _render_tool_call(console: Console, tool_name: str, args: object) -> None:
+def _build_tool_call_body(args: object) -> RenderableType:
     script = _extract_script_from_tool_args(args)
     if script is None:
-        body: object = Text("(no args)", style="dim")
-    else:
-        clipped = _truncate(script, 4_000)
-        line_count = script.count("\n") + 1
-        body = Group(
-            Text(f"{line_count} lines • {len(script)} chars", style="dim"),
-            Syntax(clipped, "python", line_numbers=True, word_wrap=True),
-        )
+        return Text("(no args)", style="dim")
 
+    clipped = _truncate(script, 4_000)
+    line_count = script.count("\n") + 1
+    return Group(
+        Text(f"{line_count} lines • {len(script)} chars", style="dim"),
+        Syntax(clipped, "python", line_numbers=True, word_wrap=True),
+    )
+
+
+def _render_tool_call(console: Console, tool_name: str, args: object) -> None:
     console.print(
         Panel(
-            body,
+            _build_tool_call_body(args),
             title=f"tool call: {tool_name}",
             border_style="magenta",
         )
@@ -413,42 +414,45 @@ def _parse_evaluate_tool_result_text(text: str) -> dict[str, str]:
     return parsed
 
 
-def _render_eval_text_block(title: str, text: str, *, border_style: str) -> Panel:
-    body = Syntax(_truncate(text or "(empty)", 8_000), "text", line_numbers=False, word_wrap=True)
-    return Panel(body, title=title, border_style=border_style)
+def _build_eval_text_section(title: str, text: str, *, style: str) -> RenderableType:
+    return Group(
+        Text(f"{title}:", style=f"bold {style}"),
+        Syntax(_truncate(text or "(empty)", 8_000), "text", line_numbers=False, word_wrap=True),
+    )
 
 
-def _render_eval_result_block(text: str) -> Panel:
-    rendered: object
+def _build_eval_result_section(text: str) -> RenderableType:
     clipped = _truncate(text or "(empty)", 8_000)
 
     try:
-        rendered = Pretty(ast.literal_eval(clipped), expand_all=False)
+        rendered: RenderableType = Pretty(ast.literal_eval(clipped), expand_all=False)
     except Exception:
         rendered = Syntax(clipped, "python", line_numbers=False, word_wrap=True)
 
-    return Panel(rendered, title="result", border_style="cyan")
+    return Group(Text("result:", style="bold cyan"), rendered)
 
 
-def _render_evaluate_tool_result(console: Console, tool_name: str, text: str) -> bool:
+def _build_evaluate_tool_result_renderable(text: str) -> tuple[RenderableType, str, str] | None:
     parsed = _parse_evaluate_tool_result_text(text)
     status = parsed.get("status")
     if status not in {"ok", "error"}:
-        return False
+        return None
 
-    header = Table.grid(expand=True, padding=(0, 1))
-    header.add_column(style="bold cyan", no_wrap=True)
-    header.add_column(ratio=1)
+    meta = Table.grid(expand=True, padding=(0, 1))
+    meta.add_column(style="bold cyan", no_wrap=True)
+    meta.add_column(ratio=1)
 
-    status_style = "bold green" if status == "ok" else "bold red"
-    header.add_row("status:", Text(status.upper(), style=status_style))
-
+    has_meta = False
     if kind := parsed.get("kind"):
-        header.add_row("kind:", Text(kind, style="yellow"))
+        meta.add_row("kind:", Text(kind, style="yellow"))
+        has_meta = True
     if message := parsed.get("message"):
-        header.add_row("message:", Text(message))
+        meta.add_row("message:", Text(message))
+        has_meta = True
 
-    sections: list[RenderableType] = [header]
+    sections: list[RenderableType] = []
+    if has_meta:
+        sections.append(meta)
 
     stdout = parsed.get("stdout") or parsed.get("stdout-before-error")
     stderr = parsed.get("stderr") or parsed.get("stderr-before-error")
@@ -456,52 +460,77 @@ def _render_evaluate_tool_result(console: Console, tool_name: str, text: str) ->
 
     if stderr and error_detail and stderr.strip() == error_detail.strip():
         # Runtime traces can appear both in stderr and structured error-detail.
-        # Prefer a single dedicated error-detail panel.
+        # Prefer a single dedicated error-detail section.
         stderr = None
 
-    stream_panels: list[Panel] = []
-    if stdout:
-        stream_panels.append(_render_eval_text_block("stdout", stdout, border_style="green"))
-    if stderr:
-        stream_panels.append(_render_eval_text_block("stderr", stderr, border_style="red"))
+    result = parsed.get("result")
 
-    if len(stream_panels) == 2:
-        sections.append(Columns(stream_panels, equal=True, expand=True))
-    elif len(stream_panels) == 1:
-        sections.append(stream_panels[0])
+    only_stdout = bool(stdout) and not has_meta and not stderr and not error_detail and not result
+    if only_stdout and stdout is not None:
+        sections.append(Syntax(_truncate(stdout, 8_000), "text", line_numbers=False, word_wrap=True))
+    else:
+        if stdout:
+            sections.append(_build_eval_text_section("stdout", stdout, style="green"))
+        if stderr:
+            sections.append(_build_eval_text_section("stderr", stderr, style="red"))
 
-    if result := parsed.get("result"):
-        sections.append(_render_eval_result_block(result))
+        if result:
+            sections.append(_build_eval_result_section(result))
 
-    if error_detail:
-        sections.append(_render_eval_text_block("error detail", error_detail, border_style="red"))
+        if error_detail:
+            sections.append(_build_eval_text_section("error detail", error_detail, style="red"))
 
+    if not sections:
+        sections.append(Text("(no output)", style="dim"))
+
+    status_label = "OK" if status == "ok" else "ERROR"
     border_style = "green" if status == "ok" else "red"
-    console.print(
-        Panel(
-            Group(*sections),
-            title=f"tool result: {tool_name}",
-            border_style=border_style,
-        )
-    )
-    return True
+    return Group(*sections), border_style, f"result: {status_label}"
 
 
-def _render_tool_result(console: Console, tool_name: str, result_content: object) -> None:
+def _build_tool_result_renderable(tool_name: str, result_content: object) -> tuple[RenderableType, str, str]:
     if isinstance(result_content, str) and tool_name == "evaluate_ida_script":
-        if _render_evaluate_tool_result(console, tool_name, result_content):
-            return
+        parsed = _build_evaluate_tool_result_renderable(result_content)
+        if parsed is not None:
+            return parsed
 
     if isinstance(result_content, str):
-        body: object = Syntax(_truncate(result_content, 6_000), "text", line_numbers=False, word_wrap=True)
+        body: RenderableType = Syntax(_truncate(result_content, 6_000), "text", line_numbers=False, word_wrap=True)
     else:
         body = Pretty(result_content, expand_all=False)
 
+    return body, "green", "result"
+
+
+def _render_tool_result(console: Console, tool_name: str, result_content: object) -> None:
+    body, border_style, _result_heading = _build_tool_result_renderable(tool_name, result_content)
     console.print(
         Panel(
             body,
             title=f"tool result: {tool_name}",
-            border_style="green",
+            border_style=border_style,
+        )
+    )
+
+
+def _render_tool_exchange(
+    console: Console,
+    tool_name: str,
+    args: object,
+    result_content: object,
+) -> None:
+    call_body = _build_tool_call_body(args)
+    result_body, result_border_style, result_heading = _build_tool_result_renderable(tool_name, result_content)
+
+    console.print(
+        Panel(
+            Group(
+                call_body,
+                Rule(result_heading, style="dim"),
+                result_body,
+            ),
+            title=f"tool: {tool_name}",
+            border_style=result_border_style,
         )
     )
 
@@ -639,6 +668,7 @@ def run_agent_turn(
     from rich.live import Live
 
     live_ref: dict[str, Live | None] = {"value": None}
+    pending_tool_calls: dict[str, tuple[str, object]] = {}
 
     async def event_handler(_ctx: Any, events: Any) -> None:
         async for event in events:
@@ -646,11 +676,33 @@ def run_agent_turn(
             event_console = live.console if live is not None else console
 
             if isinstance(event, FunctionToolCallEvent):
-                _render_tool_call(event_console, event.part.tool_name, event.part.args)
+                pending_tool_calls[event.part.tool_call_id] = (event.part.tool_name, event.part.args)
                 continue
 
             if isinstance(event, FunctionToolResultEvent):
-                _render_tool_result(event_console, event.result.tool_name, event.result.content)
+                tool_call_id = getattr(event.result, "tool_call_id", "")
+                pending = pending_tool_calls.pop(tool_call_id, None)
+
+                result_tool_name = getattr(event.result, "tool_name", None)
+                if isinstance(result_tool_name, str) and result_tool_name:
+                    fallback_tool_name = result_tool_name
+                elif pending is not None:
+                    fallback_tool_name = pending[0]
+                else:
+                    fallback_tool_name = "tool"
+
+                if pending is None:
+                    _render_tool_result(event_console, fallback_tool_name, event.result.content)
+                    continue
+
+                call_tool_name, call_args = pending
+                display_tool_name = call_tool_name or fallback_tool_name
+                _render_tool_exchange(
+                    event_console,
+                    display_tool_name,
+                    call_args,
+                    event.result.content,
+                )
                 continue
 
     with Live(
