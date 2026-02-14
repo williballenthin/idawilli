@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from pathlib import Path
 
 import pytest
+from rich.console import Console
 
 import ida_codemode_agent.cli as cli
 from ida_codemode_agent.cli import (
@@ -15,7 +17,10 @@ from ida_codemode_agent.cli import (
     SessionLogger,
     ScriptEvaluator,
     _available_models,
+    _estimate_context_tokens,
+    _format_compact_token_count,
     _parse_evaluate_tool_result_text,
+    _render_tool_result,
     _resolve_model_name,
     _validate_model_name,
     main,
@@ -131,6 +136,58 @@ def test_parse_evaluate_tool_result_keeps_message_like_lines_inside_stdout() -> 
     assert parsed["status"] == "ok"
     assert "message: this belongs to stdout" in parsed["stdout"]
     assert "kind: this also belongs to stdout" in parsed["stdout"]
+
+
+def test_format_compact_token_count() -> None:
+    assert _format_compact_token_count(987) == "987"
+    assert _format_compact_token_count(1_000) == "1k"
+    assert _format_compact_token_count(12_345) == "12.3k"
+    assert _format_compact_token_count(1_000_000) == "1M"
+
+
+def test_estimate_context_tokens_grows_with_history() -> None:
+    class DummyAgent:
+        _system_prompts = ("system prompt",)
+
+    base = _estimate_context_tokens(DummyAgent(), [])
+    larger = _estimate_context_tokens(DummyAgent(), ["hello world", "another message"])
+
+    assert base > 0
+    assert larger > base
+
+
+def test_configure_logging_suppresses_httpx_info() -> None:
+    logging.getLogger("httpx").setLevel(logging.INFO)
+    logging.getLogger("httpcore").setLevel(logging.INFO)
+
+    cli._configure_logging()
+
+    assert logging.getLogger("httpx").level == logging.WARNING
+    assert logging.getLogger("httpcore").level == logging.WARNING
+
+
+def test_render_evaluate_error_omits_duplicate_stderr_traceback() -> None:
+    console = Console(width=120, record=True)
+    tool_result = "\n".join(
+        [
+            "status: error",
+            "kind: runtime",
+            "message: boom",
+            "stderr-before-error:",
+            "Traceback (most recent call last):",
+            "  File \"<string>\", line 1, in <module>",
+            "ZeroDivisionError: division by zero",
+            "error-detail:",
+            "Traceback (most recent call last):",
+            "  File \"<string>\", line 1, in <module>",
+            "ZeroDivisionError: division by zero",
+        ]
+    )
+
+    _render_tool_result(console, "evaluate_ida_script", tool_result)
+    rendered = console.export_text()
+
+    assert rendered.count("Traceback (most recent call last):") == 1
 
 
 class TestDatabasePlanResolution:

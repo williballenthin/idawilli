@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import logging
+import math
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -18,8 +20,8 @@ from rich.console import Console, Group
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.pretty import Pretty
-from rich.prompt import Prompt
 from rich.rule import Rule
+from rich.spinner import Spinner
 from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
@@ -124,6 +126,12 @@ def _truncate(text: str, max_chars: int) -> str:
         return text
     omitted = len(text) - max_chars
     return f"{text[:max_chars]}\n\n...[truncated {omitted} chars]"
+
+
+def _configure_logging() -> None:
+    """Silence noisy transport-level logs in interactive CLI output."""
+    for logger_name in ("httpx", "httpcore"):
+        logging.getLogger(logger_name).setLevel(logging.WARNING)
 
 
 def _cache_root() -> Path:
@@ -467,8 +475,8 @@ def _render_evaluate_tool_result(console: Console, tool_name: str, text: str) ->
     header.add_column(style="bold cyan", no_wrap=True)
     header.add_column(ratio=1)
 
-    badge_style = "bold white on green" if status == "ok" else "bold white on red"
-    header.add_row("status:", Text(f" {status.upper()} ", style=badge_style))
+    status_style = "bold green" if status == "ok" else "bold red"
+    header.add_row("status:", Text(status.upper(), style=status_style))
 
     if kind := parsed.get("kind"):
         header.add_row("kind:", Text(kind, style="yellow"))
@@ -479,6 +487,12 @@ def _render_evaluate_tool_result(console: Console, tool_name: str, text: str) ->
 
     stdout = parsed.get("stdout") or parsed.get("stdout-before-error")
     stderr = parsed.get("stderr") or parsed.get("stderr-before-error")
+    error_detail = parsed.get("error-detail")
+
+    if stderr and error_detail and stderr.strip() == error_detail.strip():
+        # Runtime traces can appear both in stderr and structured error-detail.
+        # Prefer a single dedicated error-detail panel.
+        stderr = None
 
     stream_panels: list[Panel] = []
     if stdout:
@@ -494,11 +508,8 @@ def _render_evaluate_tool_result(console: Console, tool_name: str, text: str) ->
     if result := parsed.get("result"):
         sections.append(_render_eval_result_block(result))
 
-    if error_detail := parsed.get("error-detail"):
+    if error_detail:
         sections.append(_render_eval_text_block("error detail", error_detail, border_style="red"))
-
-    if raw := parsed.get("_raw"):
-        sections.append(Text(_truncate(raw, 2_000), style="dim"))
 
     border_style = "green" if status == "ok" else "red"
     console.print(
@@ -528,6 +539,108 @@ def _render_tool_result(console: Console, tool_name: str, result_content: object
             border_style="green",
         )
     )
+
+
+def _serialize_history_for_token_estimate(history: list[Any]) -> str:
+    if not history:
+        return ""
+
+    looks_like_model_messages = all(
+        hasattr(message, "parts") and hasattr(message, "kind") for message in history
+    )
+    if looks_like_model_messages:
+        try:
+            from pydantic_ai.messages import ModelMessagesTypeAdapter
+
+            payload = ModelMessagesTypeAdapter.dump_json(history)
+            if isinstance(payload, bytes):
+                return payload.decode("utf-8", errors="replace")
+            return str(payload)
+        except Exception:
+            pass
+
+    serialized: list[str] = []
+    for message in history:
+        if hasattr(message, "model_dump_json"):
+            try:
+                serialized.append(str(message.model_dump_json()))
+                continue
+            except Exception:
+                pass
+        if hasattr(message, "model_dump"):
+            try:
+                serialized.append(
+                    json.dumps(message.model_dump(), ensure_ascii=False, default=str)  # type: ignore[call-arg]
+                )
+                continue
+            except Exception:
+                pass
+        serialized.append(repr(message))
+
+    return "\n".join(serialized)
+
+
+def _estimate_text_tokens(text: str) -> int:
+    if not text:
+        return 0
+
+    byte_count = len(text.encode("utf-8", errors="ignore"))
+    return max(1, math.ceil(byte_count / 4))
+
+
+def _estimate_context_tokens(agent: Any, history: list[Any]) -> int:
+    system_prompt_parts = getattr(agent, "_system_prompts", ())
+    system_prompt_text = "\n".join(
+        part if isinstance(part, str) else repr(part) for part in system_prompt_parts
+    )
+
+    history_text = _serialize_history_for_token_estimate(history)
+
+    estimate = _estimate_text_tokens(system_prompt_text)
+    estimate += _estimate_text_tokens(history_text)
+
+    # Add lightweight overhead for per-message wrappers and tool schemas.
+    estimate += 32 + (len(history) * 8)
+    return max(estimate, 0)
+
+
+def _format_compact_token_count(tokens: int) -> str:
+    if tokens >= 1_000_000:
+        value = tokens / 1_000_000
+        suffix = "M"
+    elif tokens >= 1_000:
+        value = tokens / 1_000
+        suffix = "k"
+    else:
+        return str(tokens)
+
+    compact = f"{value:.1f}".rstrip("0").rstrip(".")
+    return f"{compact}{suffix}"
+
+
+def _prompt_user_with_context_estimate(console: Console, agent: Any, history: list[Any]) -> str:
+    left_prompt_plain = "user › "
+    left_prompt = Text(left_prompt_plain, style="bold blue")
+
+    token_estimate = _estimate_context_tokens(agent, history)
+    right_label = f"~{_format_compact_token_count(token_estimate)} ctx tokens"
+
+    min_spacing = 2
+    line_width = max(console.width, len(left_prompt_plain) + len(right_label) + min_spacing)
+    spacing = max(min_spacing, line_width - len(left_prompt_plain) - len(right_label))
+
+    header = Text.assemble(
+        (left_prompt_plain, "bold blue"),
+        (" " * spacing, ""),
+        (right_label, "dim"),
+    )
+
+    if console.is_terminal:
+        console.print(header, end="\r")
+    else:
+        console.print(header)
+
+    return console.input(left_prompt).strip()
 
 
 def run_agent_turn(
@@ -567,16 +680,16 @@ def run_agent_turn(
                 if live is not None:
                     live.update(
                         Panel(
-                            Markdown(stream_text["value"] or "_thinking..._"),
+                            Markdown(stream_text["value"] or "_(empty)_"),
                             title="assistant (streaming)",
                             border_style="cyan",
                         )
                     )
 
     with Live(
-        Panel(Markdown("_thinking..._"), title="assistant", border_style="cyan"),
+        Spinner("dots", text="assistant thinking...", style="cyan"),
         console=console,
-        refresh_per_second=10,
+        refresh_per_second=12,
         transient=True,
     ) as live:
         live_ref["value"] = live
@@ -677,7 +790,7 @@ def run_repl(agent: Any, console: Console, session_logger: SessionLogger) -> int
 
     while True:
         try:
-            user_input = Prompt.ask("[bold blue]user[/bold blue]").strip()
+            user_input = _prompt_user_with_context_estimate(console, agent, history)
         except EOFError:
             console.print()
             break
@@ -719,6 +832,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     console = Console()
     error_console = Console(stderr=True)
+
+    _configure_logging()
 
     if args.list_models:
         try:
