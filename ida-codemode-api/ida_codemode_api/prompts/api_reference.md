@@ -2,11 +2,13 @@
 
 Read functions return the success payload shown below or `{error: str}` on failure.
 Mutation functions return `None` on success or `{error: str}` on failure.
-Callers should check for the presence of the `error` key to detect failures.
+Utility helper `expect_ok(result)` returns the original success payload or `None` for ApiError.
+For likely-success reads, prefer `expect_ok(...)`; branch on `None` before field access.
 
 | Function | Returns | Description |
 |----------|---------|-------------|
 | `help(api: str)` | `{documentation: str}` | Extensive documentation for a specific API callback. |
+| `expect_ok(result: ExpectOkPayload)` | `ExpectOkPayload | None` | Return success payloads as-is and normalize ApiError to None. |
 | `get_database_metadata()` | `{input_file_path: str, module: str, architecture: str, bitness: int, format: str, base_address: int, entry_point: int, minimum_ea: int, maximum_ea: int, input_file_size: int, input_file_md5: str, input_file_sha256: str}` | Database-wide metadata for the currently opened database. |
 | `get_functions()` | `{functions: list[{address: int, name: str, size: int, signature: str, flags: {noreturn: bool, library: bool, thunk: bool}, comment: str, repeatable_comment: str}]}` | All discovered function descriptors. |
 | `get_function_by_name(name: str)` | `{address: int, name: str, size: int, signature: str, flags: {noreturn: bool, library: bool, thunk: bool}, comment: str, repeatable_comment: str}` | Function descriptor resolved by exact symbol name. |

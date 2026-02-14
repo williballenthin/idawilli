@@ -8,9 +8,10 @@ cross the sandbox boundary.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 import pydantic_monty
 from ida_codemode_api import (
@@ -30,6 +31,10 @@ _TYPE_GUARD_STUB = (
 
 SANDBOX_FUNCTION_NAMES = [*FUNCTION_NAMES, _TYPE_GUARD_FUNCTION_NAME]
 SANDBOX_TYPE_STUBS = TYPE_STUBS + "\n\n" + _TYPE_GUARD_STUB + "\n"
+
+_DOC_HINT_LINE_LIMIT = 24
+_DOC_HINT_PREFIX = "[api hint]"
+_CALLBACK_NAME_RE = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)`")
 
 
 # ---------------------------------------------------------------------------
@@ -115,6 +120,39 @@ def _is_error(result: object) -> bool:
     return isinstance(value, str)
 
 
+def _error_message_from_result(result: object) -> str | None:
+    if not isinstance(result, dict):
+        return None
+
+    value = result.get("error")
+    if not isinstance(value, str):
+        return None
+
+    return value
+
+
+def _truncate_doc_hint(doc: str, *, max_lines: int = _DOC_HINT_LINE_LIMIT) -> str:
+    lines = [line.rstrip() for line in doc.strip().splitlines()]
+    if len(lines) <= max_lines:
+        return "\n".join(lines)
+
+    hidden = len(lines) - max_lines
+    rendered = lines[:max_lines]
+    rendered.append(f"... ({hidden} more line(s))")
+    return "\n".join(rendered)
+
+
+def _extract_callback_names(text: str) -> list[str]:
+    names: list[str] = []
+    for candidate in _CALLBACK_NAME_RE.findall(text):
+        if candidate not in FUNCTION_NAMES:
+            continue
+        if candidate in names:
+            continue
+        names.append(candidate)
+    return names
+
+
 # ---------------------------------------------------------------------------
 # Error conversion helpers
 # ---------------------------------------------------------------------------
@@ -177,6 +215,10 @@ class IdaSandbox:
         construction time and again on every :meth:`run` call. Type errors
         are returned as ``SandboxResult.error`` with ``kind="typing"``
         instead of raising.
+
+        When an API callback returns ``ApiError``, the sandbox emits a
+        one-time stderr hint containing a truncated ``help("callback")``
+        excerpt for that callback.
     """
 
     def __init__(
@@ -187,8 +229,103 @@ class IdaSandbox:
     ):
         self.db = db
         self.limits = limits if limits is not None else dict(DEFAULT_LIMITS)
-        self._fn_impls = dict(create_api_from_database(db))
+
+        raw_fn_impls = dict(create_api_from_database(db))
+        self._help_fn = cast(Callable[[str], object], raw_fn_impls["help"])
+
+        self._active_print_callback: Callable[[str, str], None] | None = None
+        self._doc_hints_emitted: set[str] = set()
+        self._help_cache: dict[str, str] = {}
+
+        self._fn_impls: dict[str, Callable[..., object]] = {
+            name: self._wrap_api_function(name, fn)
+            for name, fn in raw_fn_impls.items()
+        }
         self._fn_impls[_TYPE_GUARD_FUNCTION_NAME] = _is_error
+
+    def _emit_hint(self, text: str) -> None:
+        if self._active_print_callback is None:
+            return
+
+        self._active_print_callback("stderr", text + "\n")
+
+    def _lookup_callback_doc(self, callback_name: str) -> str | None:
+        cached = self._help_cache.get(callback_name)
+        if cached is not None:
+            return cached
+
+        result = self._help_fn(callback_name)
+        if not isinstance(result, dict):
+            return None
+
+        documentation = result.get("documentation")
+        if not isinstance(documentation, str):
+            return None
+
+        excerpt = _truncate_doc_hint(documentation)
+        self._help_cache[callback_name] = excerpt
+        return excerpt
+
+    def _maybe_emit_api_hint(self, callback_name: str, error_message: str) -> None:
+        if callback_name in self._doc_hints_emitted:
+            return
+
+        self._doc_hints_emitted.add(callback_name)
+
+        excerpt = self._lookup_callback_doc(callback_name)
+        if excerpt is None:
+            self._emit_hint(
+                f"{_DOC_HINT_PREFIX} {callback_name} returned ApiError: {error_message}"
+            )
+            return
+
+        self._emit_hint(
+            f"{_DOC_HINT_PREFIX} {callback_name} returned ApiError: {error_message}\n"
+            f"{_DOC_HINT_PREFIX} help(\"{callback_name}\") excerpt (shown once):\n"
+            f"{excerpt}"
+        )
+
+    def _augment_typing_error_with_callback_hints(self, formatted: str) -> str:
+        callback_names = _extract_callback_names(formatted)
+        if not callback_names:
+            return formatted
+
+        sections: list[str] = []
+        for callback_name in callback_names:
+            if callback_name in self._doc_hints_emitted:
+                continue
+
+            excerpt = self._lookup_callback_doc(callback_name)
+            if excerpt is None:
+                continue
+
+            self._doc_hints_emitted.add(callback_name)
+            sections.append(
+                f"{_DOC_HINT_PREFIX} help(\"{callback_name}\") excerpt (shown once):\n{excerpt}"
+            )
+
+        if not sections:
+            return formatted
+
+        return formatted + "\n\n" + "\n\n".join(sections)
+
+    def _typing_error_with_hints(self, exc: pydantic_monty.MontyTypingError) -> SandboxError:
+        error = _typing_error_to_sandbox_error(exc)
+        error.formatted = self._augment_typing_error_with_callback_hints(error.formatted)
+        return error
+
+    def _wrap_api_function(self, callback_name: str, fn: Callable[..., object]) -> Callable[..., object]:
+        if callback_name == "help":
+            return fn
+
+        def wrapped(*args: object, **kwargs: object) -> object:
+            result = fn(*args, **kwargs)
+            error_message = _error_message_from_result(result)
+            if error_message is not None:
+                self._maybe_emit_api_hint(callback_name, error_message)
+            return result
+
+        return wrapped
 
     def run(self, code: str, print_callback: Callable[[str, str], None] | None = None) -> SandboxResult:
         """Evaluate *code* in the sandbox.
@@ -231,9 +368,10 @@ class IdaSandbox:
         except pydantic_monty.MontySyntaxError as exc:
             return SandboxResult(error=_syntax_error_to_sandbox_error(exc))
         except pydantic_monty.MontyTypingError as exc:
-            return SandboxResult(error=_typing_error_to_sandbox_error(exc))
+            return SandboxResult(error=self._typing_error_with_hints(exc))
 
         # --- Execute
+        self._active_print_callback = _capture
         try:
             output = m.run(
                 external_functions=self._fn_impls,
@@ -246,6 +384,8 @@ class IdaSandbox:
                 stderr=stderr,
                 error=_runtime_error_to_sandbox_error(exc),
             )
+        finally:
+            self._active_print_callback = None
 
         return SandboxResult(output=output, stdout=stdout, stderr=stderr)
 

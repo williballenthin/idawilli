@@ -3,11 +3,13 @@
 Portable analysis APIs for IDA Pro suitable for sandboxed code execution,
 JSON-RPC exposure, and LLM tool use.
 
-For fallible operations, the API follows two conventions:
+For fallible operations, the API follows three conventions:
 
 - Read APIs return ``SuccessPayload | ApiError``. Success payloads do **not**
   include a status discriminator. Failures use ``{"error": "..."}``.
 - Mutation APIs return ``None`` on success or ``{"error": "..."}`` on failure.
+- Utility helper ``expect_ok`` returns the original success payload or ``None``
+  when given ``ApiError``.
 
 Use :func:`create_api_from_database` to build concrete callables bound to an
 open ``ida_domain.Database``.
@@ -18,7 +20,7 @@ from __future__ import annotations
 import inspect
 from pathlib import Path
 from types import NoneType, UnionType
-from typing import Any, Callable, Literal, ParamSpec, TypeVar, Union, get_args, get_origin, get_type_hints
+from typing import Any, Callable, Literal, ParamSpec, TypeVar, Union, cast, get_args, get_origin, get_type_hints
 
 from . import api_types
 
@@ -32,6 +34,7 @@ TYPE_STUBS = TYPE_STUBS_PATH.read_text(encoding="utf-8")
 
 FUNCTION_NAMES: list[str] = [
     "help",
+    "expect_ok",
     "get_database_metadata",
     "get_functions",
     "get_function_by_name",
@@ -117,6 +120,9 @@ def _render_type(annotation: Any) -> str:
 
     if annotation is Any:
         return "Any"
+
+    if isinstance(annotation, TypeVar):
+        return annotation.__name__
 
     if isinstance(annotation, type):
         return annotation.__name__
@@ -369,6 +375,14 @@ def create_api_from_database(db: Any) -> api_types.ApiFunctions:
             "documentation": f"{rendered_signature} -> {rendered_return}\n\n{doc}",
         }
         return payload
+
+    def expect_ok(result: object) -> object | None:
+        if isinstance(result, dict):
+            payload = cast(dict[str, object], result)
+            error_value = payload.get("error")
+            if isinstance(error_value, str):
+                return None
+        return result
 
     def get_database_metadata() -> api_types.GetDatabaseMetadataResult:
         try:
@@ -1259,6 +1273,7 @@ def create_api_from_database(db: Any) -> api_types.ApiFunctions:
 
     api: api_types.ApiFunctions = {
         "help": _with_top_level_error("help", help),
+        "expect_ok": _with_top_level_error("expect_ok", expect_ok),
         "get_database_metadata": _with_top_level_error("get_database_metadata", get_database_metadata),
         "get_functions": _with_top_level_error("get_functions", get_functions),
         "get_function_by_name": _with_top_level_error("get_function_by_name", get_function_by_name),
@@ -1309,7 +1324,8 @@ def api_reference() -> str:
         "",
         "Read functions return the success payload shown below or `{error: str}` on failure.",
         "Mutation functions return `None` on success or `{error: str}` on failure.",
-        "Callers should check for the presence of the `error` key to detect failures.",
+        "Utility helper `expect_ok(result)` returns the original success payload or `None` for ApiError.",
+        "For likely-success reads, prefer `expect_ok(...)`; branch on `None` before field access.",
         "",
         "| Function | Returns | Description |",
         "|----------|---------|-------------|",

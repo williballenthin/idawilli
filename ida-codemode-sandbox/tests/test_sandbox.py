@@ -16,15 +16,6 @@ from ida_codemode_api import FUNCTION_NAMES, api_reference as codemode_api_refer
 from ida_codemode_sandbox import IdaSandbox, SandboxError, SandboxResult
 
 
-EXPECT_OK_HELPER = """\
-def expect_ok(result):
-    if is_error(result):
-        print("API error: " + result["error"])
-        return None
-    return result
-"""
-
-
 class TestMontyBasics:
     def test_simple_expression(self):
         m = pydantic_monty.Monty("1 + 2")
@@ -46,6 +37,7 @@ class TestSandboxExecution:
         sandbox = IdaSandbox(db)
         assert sandbox.db is db
         assert set(FUNCTION_NAMES).issubset(sandbox._fn_impls.keys())
+        assert "expect_ok" in sandbox._fn_impls
         assert "is_error" in sandbox._fn_impls
 
     def test_run_returns_structured_result(self, db):
@@ -84,6 +76,21 @@ class TestSandboxErrors:
         assert not result.ok
         assert result.error.kind == "typing"
 
+    def test_typing_error_includes_one_time_callback_help(self, db):
+        sandbox = IdaSandbox(db)
+
+        first = sandbox.run("get_functions(1)")
+        second = sandbox.run("get_functions(1)")
+
+        assert not first.ok
+        assert not second.ok
+        assert first.error is not None
+        assert second.error is not None
+
+        needle = 'help("get_functions") excerpt (shown once):'
+        assert needle in first.error.formatted
+        assert needle not in second.error.formatted
+
     def test_runtime_error(self, db):
         sandbox = IdaSandbox(db)
         result = sandbox.run("1 / 0")
@@ -98,6 +105,33 @@ class TestSandboxErrors:
         assert not result.ok
         assert result.error.kind == "runtime"
         assert "before" in "".join(result.stdout)
+
+
+class TestApiErrorHints:
+    def test_first_api_error_prints_help_excerpt_to_stderr(self, db):
+        sandbox = IdaSandbox(db)
+        result = sandbox.run("get_function_at(0xDEADDEAD)")
+
+        assert result.ok
+        stderr = "".join(result.stderr)
+        assert "[api hint] get_function_at returned ApiError:" in stderr
+        assert 'help("get_function_at") excerpt (shown once):' in stderr
+        assert "get_function_at(address: int)" in stderr
+
+    def test_api_error_hint_printed_once_per_callback(self, db):
+        sandbox = IdaSandbox(db)
+
+        first = sandbox.run("get_function_at(0xDEADDEAD)\nget_function_at(0xDEADDEAD)")
+        second = sandbox.run("get_function_at(0xDEADDEAD)")
+
+        assert first.ok
+        assert second.ok
+
+        first_stderr = "".join(first.stderr)
+        second_stderr = "".join(second.stderr)
+
+        assert first_stderr.count('help("get_function_at") excerpt (shown once):') == 1
+        assert 'help("get_function_at") excerpt (shown once):' not in second_stderr
 
 
 class TestTypedDictNarrowingRegression:
@@ -262,7 +296,7 @@ else:
 class TestApiSmokeThroughSandbox:
     def test_read_callback_smoke(self, db):
         sandbox = IdaSandbox(db)
-        code = EXPECT_OK_HELPER + """\
+        code = """\
 meta = expect_ok(get_database_metadata())
 if meta is not None:
     print(meta["architecture"])
@@ -273,7 +307,7 @@ if meta is not None:
 
     def test_second_read_callback_smoke(self, db):
         sandbox = IdaSandbox(db)
-        code = EXPECT_OK_HELPER + """\
+        code = """\
 funcs = expect_ok(get_functions())
 if funcs is not None:
     print(str(len(funcs["functions"])))
@@ -313,8 +347,7 @@ class TestExecuteAdapter:
     def test_can_run_api_script(self, db):
         sandbox = IdaSandbox(db)
         output = sandbox.execute(
-            EXPECT_OK_HELPER
-            + 'meta = expect_ok(get_database_metadata())\n'
+            'meta = expect_ok(get_database_metadata())\n'
             + 'if meta is not None:\n'
             + '    print(meta["architecture"])\n'
         )
@@ -352,7 +385,15 @@ class TestPromptHelpers:
         prompt = IdaSandbox.system_prompt()
         assert "get_database_metadata" in prompt
         assert "set_comment_at" in prompt
+        assert "expect_ok" in prompt
         assert "is_error" in prompt
+
+    def test_system_prompt_contains_safe_api_patterns(self):
+        prompt = IdaSandbox.system_prompt()
+        assert "Safe single-call template" in prompt
+        assert "For every `x = expect_ok(...)`" in prompt
+        assert "Prefer `decompile_function_at(...)` when possible" in prompt
+        assert "do not call `.splitlines()`" in prompt
 
     def test_system_prompt_uses_general_wording(self):
         prompt = IdaSandbox.system_prompt()

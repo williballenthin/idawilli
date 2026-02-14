@@ -22,12 +22,6 @@ with Database.open("sample.exe", opts, save_on_close=False) as db:
     sandbox = IdaSandbox(db)
 
     code = '''
-def expect_ok(result):
-    if is_error(result):
-        print("API error: " + result["error"])
-        return None
-    return result
-
 meta = expect_ok(get_database_metadata())
 if meta is not None:
     print("arch: " + meta["architecture"])
@@ -51,16 +45,14 @@ Code inside the sandbox should treat API callbacks as returning either:
 - success payload
 - `{"error": "..."}`
 
-Use `is_error(payload)` before reading payload fields. This helper is
-available in the sandbox and works with Monty's current type checker:
+Use `expect_ok(payload)` as the primary pattern for calls expected to
+succeed. It returns the original payload on success and `None` on error.
 
-```python
-def expect_ok(result):
-    if is_error(result):
-        print("API error: " + result["error"])
-        return None
-    return result
-```
+Use `is_error(payload)` when you need explicit failure-branch handling.
+This helper is available in the sandbox and works with Monty's current type checker.
+
+When a callback returns `{"error": ...}`, the sandbox emits a one-time stderr
+hint with a truncated `help("callback_name")` excerpt for that callback.
 
 ## API docs
 

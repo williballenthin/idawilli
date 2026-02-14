@@ -52,6 +52,18 @@ def test_parse_args_accepts_initial_prompt() -> None:
     assert alias_args.initial_prompt == "Summarize imports"
 
 
+def test_base_system_prompt_reinforces_expect_ok_guard_pattern() -> None:
+    prompt = cli.BASE_SYSTEM_PROMPT
+    assert "for every `x = expect_ok(...)`, guard with `if x is not None:`" in prompt
+    assert "call `help(\"callback_name\")` first" in prompt
+    assert "Prefer `decompile_function_at(...)` pseudocode over raw disassembly" in prompt
+
+
+def test_base_system_prompt_mentions_minimal_retry_on_typing_errors() -> None:
+    prompt = cli.BASE_SYSTEM_PROMPT
+    assert "send a minimal follow-up script" in prompt
+
+
 def test_available_models_contains_test_model() -> None:
     models = _available_models()
     assert "test" in models
@@ -466,12 +478,6 @@ class TestSampleAnalysisIntegration:
 
         result = evaluator.evaluate(
             """
-def expect_ok(payload):
-    if "error" in payload:
-        print("API error")
-        return None
-    return payload
-
 meta = expect_ok(get_database_metadata())
 if meta is not None:
     print("arch=" + meta["architecture"])
@@ -489,12 +495,6 @@ if meta is not None:
 
         result = evaluator.evaluate(
             """
-def expect_ok(payload):
-    if "error" in payload:
-        print("API error")
-        return None
-    return payload
-
 functions = expect_ok(get_functions())
 if functions is not None:
     print("function_count=" + str(len(functions["functions"])))

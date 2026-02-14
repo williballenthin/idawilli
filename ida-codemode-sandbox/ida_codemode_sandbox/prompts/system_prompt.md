@@ -22,32 +22,49 @@ Each callback returns either:
 - a success payload
 - `{"error": "..."}`
 
-Use `is_error(payload)` before reading payload fields.
+Use `expect_ok(payload)` as the primary pattern for API calls that are likely
+to succeed. This helper is provided by the API callback set and returns either
+that success payload or `None` on error.
 
-`is_error` is a built-in helper in the sandbox with a type-guard signature.
-This avoids a known TypedDict narrowing limitation where direct
-`"error" in payload` checks may fail static type checking.
+Use `is_error(payload)` when you need explicit error-branch handling. `is_error`
+is a built-in type-guard helper in the sandbox.
 
-```python
-def expect_ok(result):
-    if is_error(result):
-        print("API error: " + result["error"])
-        return None
-    return result
-```
+Avoid direct `"error" in payload` checks for static type narrowing.
 
 ### Patterns and examples
 
-#### Metadata and function count
+#### Safe single-call template
 
 ```python
 meta = expect_ok(get_database_metadata())
-if meta is not None:
+if meta is None:
+    print("get_database_metadata failed")
+else:
     print("arch: " + meta["architecture"])
+```
 
+#### Safe multi-call template
+
+```python
 funcs = expect_ok(get_functions())
+strings_res = expect_ok(get_strings())
+
 if funcs is not None:
     print("functions: " + str(len(funcs["functions"])))
+if strings_res is not None:
+    print("strings: " + str(len(strings_res["strings"])))
+```
+
+#### Safe chained-call template
+
+```python
+funcs = expect_ok(get_functions())
+if funcs is not None and len(funcs["functions"]) > 0:
+    first = funcs["functions"][0]
+    decomp = expect_ok(decompile_function_at(first["address"]))
+    if decomp is not None:
+        for line in decomp["pseudocode"][:20]:
+            print(line)
 ```
 
 #### Strings and xrefs
@@ -71,15 +88,41 @@ if set_result is not None and is_error(set_result):
     print("mutation failed: " + set_result["error"])
 ```
 
+#### Check callback docs before first use
+
+```python
+help_result = expect_ok(help("decompile_function_at"))
+if help_result is not None:
+    print(help_result["documentation"])
+```
+
+#### Avoid this anti-pattern
+
+```python
+# bad: unsafe, because expect_ok(...) may return None
+funcs = expect_ok(get_functions())
+print(funcs["functions"])  # do not do this
+```
+
+Prefer `decompile_function_at(...)` when possible: pseudocode is usually
+more concise and carries higher-level semantic information than raw assembly.
+Use disassembly when you need exact instruction-level details.
+
+`get_function_disassembly_at(...)["disassembly"]` and
+`decompile_function_at(...)["pseudocode"]` are both `list[str]`.
+Use slicing/iteration directly; do not call `.splitlines()` on them.
+
 ## Function reference
 
 (Inserted dynamically from `ida_codemode_api.api_reference()`.)
 
 ## Tips
 
-- Use `is_error(payload)` before reading payload fields.
+- Prefer `expect_ok(payload)` for likely-success calls; use `is_error(payload)` when branching on failure details.
+- Prefer decompilation (`decompile_function_at`) over disassembly for most analysis tasks: it is usually more concise and higher signal.
+- For every `x = expect_ok(...)`, guard with `if x is not None:` before any `x[...]` access.
 - Read and mutation callbacks are both available; call mutators intentionally.
-- Use `help("callback_name")` for callback-specific details.
+- Use `help("callback_name")` before first use when payload shape is uncertain.
 - Prefer discovery callbacks (`get_functions`, `get_strings`, ...) over
   hardcoded addresses.
 - Keep scripts focused; default timeout is 30 seconds.

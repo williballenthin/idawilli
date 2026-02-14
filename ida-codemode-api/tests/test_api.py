@@ -47,8 +47,8 @@ class TestFunctionNames:
     def test_is_list(self):
         assert isinstance(FUNCTION_NAMES, list)
 
-    def test_has_37_functions(self):
-        assert len(FUNCTION_NAMES) == 37
+    def test_has_38_functions(self):
+        assert len(FUNCTION_NAMES) == 38
 
     def test_no_duplicates(self):
         assert len(FUNCTION_NAMES) == len(set(FUNCTION_NAMES))
@@ -124,7 +124,8 @@ class TestApiReference:
     def test_mentions_global_error_contract(self):
         ref = api_reference()
         assert "{error: str}" in ref
-        assert "presence of the `error` key" in ref
+        assert "expect_ok(result)" in ref
+        assert "prefer `expect_ok(...)`" in ref
 
     def test_mentions_mutator_convention(self):
         ref = api_reference()
@@ -354,6 +355,18 @@ class TestBuildIdaFunctions:
 
     def test_no_extra_functions(self, fns):
         assert set(fns.keys()) == set(FUNCTION_NAMES)
+
+
+class TestExpectOkHelper:
+    def test_returns_payload_for_success(self, fns):
+        meta = fns["expect_ok"](fns["get_database_metadata"]())
+
+        assert isinstance(meta, dict)
+        assert "entry_point" in meta
+
+    def test_returns_none_for_error_payload(self, fns):
+        result = fns["expect_ok"](fns["get_function_at"](0xDEADDEAD))
+        assert result is None
 
 
 class TestDatabaseMetadata:

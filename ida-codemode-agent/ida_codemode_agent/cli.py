@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Callable, Literal, cast, get_args
 
 from rich.columns import Columns
-from rich.console import Console, Group
+from rich.console import Console, Group, RenderableType
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.pretty import Pretty
@@ -40,10 +40,14 @@ Use it to execute sandboxed Python code against the database.
 
 Rules:
 - Ground claims in tool output; do not guess.
-- Use short, focused scripts.
-- When tool output has errors, fix the script and retry.
-- Check API payloads for an `error` key before consuming fields.
-- Prefer iterative discovery over one giant script.
+- Scripts run in a sandbox: do not use `import`, `sys`, `os`, `open`, network, or subprocess access.
+- Use short, focused scripts; prefer iterative discovery over one giant script.
+- Prefer `decompile_function_at(...)` pseudocode over raw disassembly for understanding logic; it is usually more concise and more informative.
+- For likely-success API calls, prefer `expect_ok(...)`; for every `x = expect_ok(...)`, guard with `if x is not None:` before any `x[...]` access.
+- Safe template: `r = expect_ok(api_call(...))`; then `if r is None: ... else: use r[...]`.
+- For explicit failure branches, use `is_error(payload)` (avoid `"error" in payload` for type narrowing).
+- If a callback shape is unclear, call `help("callback_name")` first.
+- If a tool run fails with typing errors, send a minimal follow-up script that only fixes the reported type issue.
 - In final responses, include concrete evidence (addresses, names, snippets).
 """.strip()
 
@@ -485,7 +489,7 @@ def _render_evaluate_tool_result(console: Console, tool_name: str, text: str) ->
     if message := parsed.get("message"):
         header.add_row("message:", Text(message))
 
-    sections: list[object] = [header]
+    sections: list[RenderableType] = [header]
 
     stdout = parsed.get("stdout") or parsed.get("stdout-before-error")
     stderr = parsed.get("stderr") or parsed.get("stderr-before-error")

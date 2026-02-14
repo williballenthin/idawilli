@@ -6,16 +6,17 @@ signatures. It serves two consumers:
 - the runtime implementation (:mod:`ida_codemode_api.api`) via imports
 - Monty static type checking via ``TYPE_STUBS`` (the full file text)
 
-API functions follow two conventions:
+API functions follow three conventions:
 
-- Read APIs return a success payload or :class:`ApiError`. Errors are signaled
-  by presence of the ``error`` key.
+- Read APIs return a success payload or :class:`ApiError`.
 - Mutation APIs return ``None`` on success or :class:`ApiError` on failure.
+- Utility helper ``expect_ok`` returns the original success payload or ``None``
+  when given :class:`ApiError`.
 """
 
 from __future__ import annotations
 
-from typing import Callable, Literal, TypedDict
+from typing import Callable, Literal, TypeVar, TypedDict
 
 
 class DatabaseMetadata(TypedDict):
@@ -231,7 +232,11 @@ class HelpOk(TypedDict):
     documentation: str
 
 
+ExpectOkPayload = TypeVar("ExpectOkPayload")
+
+
 HelpResult = HelpOk | ApiError
+ExpectOkResult = ExpectOkPayload | None
 GetDatabaseMetadataResult = DatabaseMetadata | ApiError
 GetFunctionsResult = GetFunctionsOk | ApiError
 GetFunctionByNameResult = FunctionInfo | ApiError
@@ -270,6 +275,7 @@ SetLocalVariableNameResult = MutatorResult
 SetLocalVariableTypeResult = MutatorResult
 
 HelpFn = Callable[[str], HelpResult]
+ExpectOkFn = Callable[[object], object | None]
 GetDatabaseMetadataFn = Callable[[], GetDatabaseMetadataResult]
 GetFunctionsFn = Callable[[], GetFunctionsResult]
 GetFunctionByNameFn = Callable[[str], GetFunctionByNameResult]
@@ -310,6 +316,7 @@ SetLocalVariableTypeFn = Callable[[int, str, str], SetLocalVariableTypeResult]
 
 class ApiFunctions(TypedDict):
     help: HelpFn
+    expect_ok: ExpectOkFn
     get_database_metadata: GetDatabaseMetadataFn
     get_functions: GetFunctionsFn
     get_function_by_name: GetFunctionByNameFn
@@ -371,6 +378,37 @@ def help(api: str) -> HelpResult:
         {
             "documentation": "get_function_at(address: int) -> {address: int, name: str, size: int}\\n\\nFunction descriptor for a function start address.\\n...",
         }"""
+    raise NotImplementedError
+
+
+def expect_ok(result: ExpectOkPayload | ApiError) -> ExpectOkPayload | None:
+    """Return success payloads as-is and normalize ApiError to None.
+
+    Use this as the primary helper when an API call is expected to succeed.
+    It avoids repetitive branching while keeping scripts resilient to failures.
+    See also `help`, `get_database_metadata`, and `get_functions`.
+
+    Args:
+        result: Callback result shaped as `SuccessPayload | {"error": str}`.
+
+    Returns:
+        The original success payload when `result` is not an API error,
+        otherwise `None`.
+
+    Errors:
+        - None. This helper never returns `ApiError`.
+
+    Example success payload:
+        {
+            "entry_point": 4198400,
+            "architecture": "metapc",
+        }
+
+    Example:
+        meta = expect_ok(get_database_metadata())
+        if meta is not None:
+            print("Entry: " + hex(meta["entry_point"]))
+    """
     raise NotImplementedError
 
 
@@ -445,23 +483,23 @@ def get_functions() -> GetFunctionsResult:
 
     Examples:
         Filter functions by name pattern:
-            result = fns["get_functions"]()
-            if "error" not in result:
+            result = expect_ok(fns["get_functions"]())
+            if result is not None:
                 crypto_funcs = [
                     fn for fn in result["functions"]
                     if "crypt" in fn["name"].lower()
                 ]
 
         Find all callers of a specific function:
-            result = fns["get_functions"]()
-            if "error" not in result:
+            result = expect_ok(fns["get_functions"]())
+            if result is not None:
                 target = next(
                     (fn for fn in result["functions"] if fn["name"] == "_encrypt"),
                     None
                 )
                 if target:
-                    callers_result = fns["get_function_callers"](target["address"])
-                    if "error" not in callers_result:
+                    callers_result = expect_ok(fns["get_function_callers"](target["address"]))
+                    if callers_result is not None:
                         for caller in callers_result["callers"]:
                             print(f"{caller['name']} calls _encrypt")
     """
@@ -931,9 +969,9 @@ def get_names() -> GetNamesResult:
 
     Examples:
         Filter out functions to find global variables:
-            names_result = fns["get_names"]()
-            funcs_result = fns["get_functions"]()
-            if "error" not in names_result and "error" not in funcs_result:
+            names_result = expect_ok(fns["get_names"]())
+            funcs_result = expect_ok(fns["get_functions"]())
+            if names_result is not None and funcs_result is not None:
                 func_addrs = {fn["address"] for fn in funcs_result["functions"]}
                 global_vars = [
                     name for name in names_result["names"]

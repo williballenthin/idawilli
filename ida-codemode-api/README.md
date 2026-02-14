@@ -13,6 +13,7 @@ This package exposes a fixed map of callbacks (plain Python callables) intended 
 - No exceptions in API results: callbacks return either a success payload or `{"error": str}`.
 - Read callbacks return `SuccessPayload | ApiError`.
 - Mutation callbacks return `None | ApiError`.
+- Utility helper `expect_ok(result)` returns the original success payload or `None` for `ApiError`.
 - `api_types.py` is the source of truth for signatures, payload types, and docs.
 - `prompts/api_reference.md` is generated output (do not edit by hand).
 
@@ -27,12 +28,12 @@ options = IdaCommandOptions(auto_analysis=True, new_database=False)
 with Database.open("/path/to/binary", options, save_on_close=False) as db:
     api = create_api_from_database(db)
 
-    meta = api["get_database_metadata"]()
-    if "error" in meta:
-        raise RuntimeError(meta["error"])
+    meta = api["expect_ok"](api["get_database_metadata"]())
+    if meta is None:
+        raise RuntimeError("metadata unavailable")
 
-    funcs = api["get_functions"]()
-    if "error" not in funcs:
+    funcs = api["expect_ok"](api["get_functions"]())
+    if funcs is not None:
         print(funcs["functions"][0]["name"])
 ```
 
