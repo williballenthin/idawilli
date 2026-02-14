@@ -12,8 +12,22 @@ list comprehensions, f-strings, `try`/`except`, and common builtins
 (`len`, `range`, `str`, `int`, `hex`, `print`, `sorted`, `enumerate`,
 `zip`, `isinstance`, …).
 
+For reliability, prefer explicit loops and simple control flow over brittle
+one-liners (`next(...)`, heavy comprehensions, unnecessary `sorted(...)`).
+
 **Not available**: `import`, `open()`, `eval()`, `exec()`,
 `__import__`, `os`, `sys`, `subprocess`, or any I/O.
+
+### Type checker contract (strict)
+
+A strict static type checker runs before execution. Treat typing warnings/errors
+as blocking and fix them before adding more analysis logic.
+
+`expect_ok(payload)` returns either a success payload or `None`. Always guard
+with `if x is None: ... else: ...` before any `x[...]` or method access.
+
+Prefer direct key access after `None` checks (for example `meta["entry_point"]`)
+instead of optional/dynamic access patterns on uncertain values.
 
 ### API call pattern
 
@@ -23,13 +37,15 @@ Each callback returns either:
 - `{"error": "..."}`
 
 Use `expect_ok(payload)` as the primary pattern for API calls that are likely
-to succeed. This helper is provided by the API callback set and returns either
-that success payload or `None` on error.
+to succeed.
 
 Use `is_error(payload)` when you need explicit error-branch handling. `is_error`
 is a built-in type-guard helper in the sandbox.
 
 Avoid direct `"error" in payload` checks for static type narrowing.
+
+Every script should call at least one IDA callback and print concrete evidence.
+Do not send placeholder literals/lists that do not query the database.
 
 ### Patterns and examples
 
@@ -118,13 +134,17 @@ Use slicing/iteration directly; do not call `.splitlines()` on them.
 
 ## Tips
 
+- The static checker is strict: treat typing warnings/errors as blocking.
 - Prefer `expect_ok(payload)` for likely-success calls; use `is_error(payload)` when branching on failure details.
-- Prefer decompilation (`decompile_function_at`) over disassembly for most analysis tasks: it is usually more concise and higher signal.
 - For every `x = expect_ok(...)`, guard with `if x is not None:` before any `x[...]` access.
+- On typing failures, make the smallest possible fix and rerun; do not rewrite the whole script.
+- Prefer decompilation (`decompile_function_at`) over disassembly for most analysis tasks: it is usually more concise and higher signal.
+- Prefer explicit loops over brittle one-liners (`next(...)`, heavy comprehensions, unnecessary `sorted(...)`).
 - Read and mutation callbacks are both available; call mutators intentionally.
 - Use `help("callback_name")` before first use when payload shape is uncertain.
 - Prefer discovery callbacks (`get_functions`, `get_strings`, ...) over
   hardcoded addresses.
+- Every script should print concrete evidence from callback output.
 - Keep scripts focused; default timeout is 30 seconds.
 
 ## Resource limits

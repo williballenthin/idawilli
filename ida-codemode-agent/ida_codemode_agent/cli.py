@@ -37,13 +37,16 @@ Use it to execute sandboxed Python code against the database.
 
 Rules:
 - Ground claims in tool output; do not guess.
+- A strict static type checker runs before execution; treat typing warnings/errors as blocking and fix them first.
 - Scripts run in a sandbox: do not use `import`, `sys`, `os`, `open`, network, or subprocess access.
 - Use short, focused scripts; prefer iterative discovery over one giant script.
 - Prefer `decompile_function_at(...)` pseudocode over raw disassembly for understanding logic; it is usually more concise and more informative.
-- For likely-success API calls, prefer `expect_ok(...)`; for every `x = expect_ok(...)`, guard with `if x is not None:` before any `x[...]` access.
+- For likely-success API calls, prefer `expect_ok(...)`; `expect_ok(...)` returns `T | None`, so guard every result with `if x is None: ... else: ...` before any `x[...]` or method access.
 - Safe template: `r = expect_ok(api_call(...))`; then `if r is None: ... else: use r[...]`.
 - For explicit failure branches, use `is_error(payload)` (avoid `"error" in payload` for type narrowing).
+- Prefer explicit loops and straightforward control flow; avoid brittle one-liners (`next(...)`, heavy comprehensions, unnecessary `sorted(...)`) unless required.
 - If a callback shape is unclear, call `help("callback_name")` first.
+- Every script must call at least one IDA callback and print concrete evidence; never send placeholder literals or schema-only lists.
 - If a tool run fails with typing errors, send a minimal follow-up script that only fixes the reported type issue.
 - In final responses, include concrete evidence (addresses, names, snippets).
 """.strip()
@@ -632,15 +635,9 @@ def run_agent_turn(
     console: Console,
     session_logger: SessionLogger,
 ) -> list[Any]:
-    from pydantic_ai.messages import (
-        FunctionToolCallEvent,
-        FunctionToolResultEvent,
-        PartDeltaEvent,
-        TextPartDelta,
-    )
+    from pydantic_ai.messages import FunctionToolCallEvent, FunctionToolResultEvent
     from rich.live import Live
 
-    stream_text: dict[str, str] = {"value": ""}
     live_ref: dict[str, Live | None] = {"value": None}
 
     async def event_handler(_ctx: Any, events: Any) -> None:
@@ -655,17 +652,6 @@ def run_agent_turn(
             if isinstance(event, FunctionToolResultEvent):
                 _render_tool_result(event_console, event.result.tool_name, event.result.content)
                 continue
-
-            if isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
-                stream_text["value"] += event.delta.content_delta
-                if live is not None:
-                    live.update(
-                        Panel(
-                            Markdown(stream_text["value"] or "_(empty)_"),
-                            title="assistant (streaming)",
-                            border_style="cyan",
-                        )
-                    )
 
     with Live(
         Spinner("dots", text="assistant thinking...", style="cyan"),
