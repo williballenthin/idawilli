@@ -14,6 +14,7 @@ import ida_codemode_agent.cli as cli
 from ida_codemode_agent.cli import (
     DEFAULT_MODEL,
     DEFAULT_PROVIDER,
+    PromptInputResult,
     SessionLogger,
     ScriptEvaluator,
     _available_models,
@@ -26,6 +27,7 @@ from ida_codemode_agent.cli import (
     main,
     parse_args,
     resolve_database_plan,
+    run_repl,
 )
 
 
@@ -40,6 +42,14 @@ def test_parse_args_accepts_list_models_without_path() -> None:
     args = parse_args(["--list-models"])
     assert args.list_models is True
     assert args.idb_path is None
+
+
+def test_parse_args_accepts_initial_prompt() -> None:
+    args = parse_args(["/tmp/fake-input", "--prompt", "Summarize imports"])
+    assert args.initial_prompt == "Summarize imports"
+
+    alias_args = parse_args(["/tmp/fake-input", "--initial-prompt", "Summarize imports"])
+    assert alias_args.initial_prompt == "Summarize imports"
 
 
 def test_available_models_contains_test_model() -> None:
@@ -188,6 +198,204 @@ def test_render_evaluate_error_omits_duplicate_stderr_traceback() -> None:
     rendered = console.export_text()
 
     assert rendered.count("Traceback (most recent call last):") == 1
+
+
+class TestReplInputControls:
+    def test_initial_prompt_runs_before_interactive_input(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        events = iter([PromptInputResult(kind="text", text="/quit")])
+
+        monkeypatch.setattr(
+            cli,
+            "_prompt_user_with_context_estimate",
+            lambda *_args, **_kwargs: next(events),
+        )
+
+        seen_inputs: list[str] = []
+
+        def fake_run_agent_turn(
+            *,
+            agent,
+            user_input: str,
+            history,
+            console,
+            session_logger,
+        ):
+            seen_inputs.append(user_input)
+            return [*history, user_input]
+
+        monkeypatch.setattr(cli, "run_agent_turn", fake_run_agent_turn)
+
+        console = Console(width=120, record=True)
+        logger = SessionLogger(tmp_path / "session.jsonl")
+        try:
+            rc = run_repl(object(), console, logger, initial_prompt="summarize imports")
+        finally:
+            logger.close()
+
+        assert rc == 0
+        assert seen_inputs == ["summarize imports"]
+
+    def test_escape_during_prompt_does_not_exit_repl(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        events = iter(
+            [
+                PromptInputResult(kind="escape"),
+                PromptInputResult(kind="text", text="/quit"),
+            ]
+        )
+
+        monkeypatch.setattr(
+            cli,
+            "_prompt_user_with_context_estimate",
+            lambda *_args, **_kwargs: next(events),
+        )
+
+        monkeypatch.setattr(
+            cli,
+            "run_agent_turn",
+            lambda **_kwargs: pytest.fail("run_agent_turn should not be called for prompt escape + /quit"),
+        )
+
+        console = Console(width=120, record=True)
+        logger = SessionLogger(tmp_path / "session.jsonl")
+        try:
+            rc = run_repl(object(), console, logger)
+        finally:
+            logger.close()
+
+        assert rc == 0
+
+    def test_ctrl_d_twice_exits_repl(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        events = iter(
+            [
+                PromptInputResult(kind="eof"),
+                PromptInputResult(kind="eof"),
+            ]
+        )
+        monkeypatch.setattr(
+            cli,
+            "_prompt_user_with_context_estimate",
+            lambda *_args, **_kwargs: next(events),
+        )
+        monkeypatch.setattr(
+            cli,
+            "run_agent_turn",
+            lambda **_kwargs: pytest.fail("run_agent_turn should not be called on double Ctrl-D exit"),
+        )
+
+        console = Console(width=120, record=True)
+        logger = SessionLogger(tmp_path / "session.jsonl")
+        try:
+            rc = run_repl(object(), console, logger)
+        finally:
+            logger.close()
+
+        assert rc == 0
+        assert "Press Ctrl-D again to exit." in console.export_text()
+
+    def test_ctrl_d_counter_resets_after_real_input(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        events = iter(
+            [
+                PromptInputResult(kind="eof"),
+                PromptInputResult(kind="text", text="hello"),
+                PromptInputResult(kind="text", text="/quit"),
+            ]
+        )
+        monkeypatch.setattr(
+            cli,
+            "_prompt_user_with_context_estimate",
+            lambda *_args, **_kwargs: next(events),
+        )
+
+        seen_inputs: list[str] = []
+
+        def fake_run_agent_turn(
+            *,
+            agent,
+            user_input: str,
+            history,
+            console,
+            session_logger,
+        ):
+            seen_inputs.append(user_input)
+            return [*history, user_input]
+
+        monkeypatch.setattr(cli, "run_agent_turn", fake_run_agent_turn)
+
+        console = Console(width=120, record=True)
+        logger = SessionLogger(tmp_path / "session.jsonl")
+        try:
+            rc = run_repl(object(), console, logger)
+        finally:
+            logger.close()
+
+        assert rc == 0
+        assert seen_inputs == ["hello"]
+
+    def test_keyboard_interrupt_clears_line_without_interrupt_banner(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        events: list[PromptInputResult | BaseException] = [
+            KeyboardInterrupt(),
+            PromptInputResult(kind="text", text="/quit"),
+        ]
+
+        def fake_prompt(*_args, **_kwargs):
+            item = events.pop(0)
+            if isinstance(item, BaseException):
+                raise item
+            return item
+
+        monkeypatch.setattr(cli, "_prompt_user_with_context_estimate", fake_prompt)
+
+        console = Console(width=120, record=True)
+        logger = SessionLogger(tmp_path / "session.jsonl")
+        try:
+            rc = run_repl(object(), console, logger)
+        finally:
+            logger.close()
+
+        assert rc == 0
+        assert "Interrupted. Type /exit to quit." not in console.export_text()
+
+    def test_agent_turn_keyboard_interrupt_returns_to_prompt(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        events = iter(
+            [
+                PromptInputResult(kind="text", text="analyze imports"),
+                PromptInputResult(kind="text", text="/quit"),
+            ]
+        )
+        monkeypatch.setattr(
+            cli,
+            "_prompt_user_with_context_estimate",
+            lambda *_args, **_kwargs: next(events),
+        )
+
+        def fake_run_agent_turn(**_kwargs):
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(cli, "run_agent_turn", fake_run_agent_turn)
+
+        log_path = tmp_path / "session.jsonl"
+        console = Console(width=120, record=True)
+        logger = SessionLogger(log_path)
+        try:
+            rc = run_repl(object(), console, logger)
+        finally:
+            logger.close()
+
+        assert rc == 0
+        assert "assistant turn interrupted" in console.export_text()
+
+        records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+        assert any(record.get("event") == "agent_turn_interrupted" for record in records)
 
 
 class TestDatabasePlanResolution:

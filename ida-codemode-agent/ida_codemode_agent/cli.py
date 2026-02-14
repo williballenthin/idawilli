@@ -5,15 +5,17 @@ from __future__ import annotations
 
 import argparse
 import ast
+import codecs
 import json
 import logging
 import math
 import os
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import cache
 from pathlib import Path
-from typing import Any, Callable, cast, get_args
+from typing import Any, Callable, Literal, cast, get_args
 
 from rich.columns import Columns
 from rich.console import Console, Group
@@ -618,19 +620,125 @@ def _format_compact_token_count(tokens: int) -> str:
     return f"{compact}{suffix}"
 
 
-def _prompt_user_with_context_estimate(console: Console, agent: Any, history: list[Any]) -> str:
-    left_prompt_plain = "user › "
-    left_prompt = Text(left_prompt_plain, style="bold blue")
+PromptInputKind = Literal["text", "eof", "escape"]
 
-    token_estimate = _estimate_context_tokens(agent, history)
-    right_label = f"~{_format_compact_token_count(token_estimate)} ctx tokens"
+
+@dataclass(frozen=True)
+class PromptInputResult:
+    kind: PromptInputKind
+    text: str = ""
+
+
+def _compose_prompt_line(prompt: str, typed: str, right_label: str, width: int) -> str:
+    min_spacing = 2
+    left = f"{prompt}{typed}"
+
+    if not right_label:
+        return left
+
+    line_width = max(width, len(left) + len(right_label) + min_spacing)
+    spacing = max(min_spacing, line_width - len(left) - len(right_label))
+    return f"{left}{' ' * spacing}{right_label}"
+
+
+def _consume_escape_sequence(fd: int) -> bool:
+    import select
+
+    had_sequence = False
+    timeout = 0.03
+    while True:
+        readable, _, _ = select.select([fd], [], [], timeout)
+        if not readable:
+            break
+        had_sequence = True
+        os.read(fd, 1)
+        timeout = 0.0
+
+    return had_sequence
+
+
+def _prompt_user_terminal_input(console: Console, prompt: str, right_label: str) -> PromptInputResult:
+    import termios
+    import tty
+
+    stdin = sys.stdin
+    stream = console.file if hasattr(console.file, "write") else sys.stdout
+    fd = stdin.fileno()
+
+    original_settings = termios.tcgetattr(fd)
+    decoder = codecs.getincrementaldecoder("utf-8")()
+    buffer: list[str] = []
+
+    def redraw() -> None:
+        line = _compose_prompt_line(prompt, "".join(buffer), right_label, console.width)
+        stream.write("\r")
+        stream.write(line)
+        stream.write("\x1b[K")
+        stream.flush()
+
+    tty.setraw(fd)
+    redraw()
+
+    try:
+        while True:
+            raw = os.read(fd, 1)
+            if not raw:
+                stream.write("\r\n")
+                stream.flush()
+                return PromptInputResult(kind="eof")
+
+            decoded = decoder.decode(raw)
+            if not decoded:
+                continue
+
+            for ch in decoded:
+                if ch in ("\r", "\n"):
+                    stream.write("\r\n")
+                    stream.flush()
+                    return PromptInputResult(kind="text", text="".join(buffer).strip())
+
+                if ch == "\x03":
+                    buffer.clear()
+                    redraw()
+                    continue
+
+                if ch == "\x04":
+                    if buffer:
+                        continue
+                    stream.write("\r\n")
+                    stream.flush()
+                    return PromptInputResult(kind="eof")
+
+                if ch == "\x1b":
+                    if _consume_escape_sequence(fd):
+                        redraw()
+                        continue
+                    buffer.clear()
+                    redraw()
+                    continue
+
+                if ch in ("\x08", "\x7f"):
+                    if buffer:
+                        buffer.pop()
+                        redraw()
+                    continue
+
+                if ch.isprintable() or ch == "\t":
+                    buffer.append(ch)
+                    redraw()
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, original_settings)
+
+
+def _prompt_user_fallback_input(console: Console, prompt: str, right_label: str) -> PromptInputResult:
+    left_prompt = Text(prompt, style="bold blue")
 
     min_spacing = 2
-    line_width = max(console.width, len(left_prompt_plain) + len(right_label) + min_spacing)
-    spacing = max(min_spacing, line_width - len(left_prompt_plain) - len(right_label))
+    line_width = max(console.width, len(prompt) + len(right_label) + min_spacing)
+    spacing = max(min_spacing, line_width - len(prompt) - len(right_label))
 
     header = Text.assemble(
-        (left_prompt_plain, "bold blue"),
+        (prompt, "bold blue"),
         (" " * spacing, ""),
         (right_label, "dim"),
     )
@@ -640,7 +748,110 @@ def _prompt_user_with_context_estimate(console: Console, agent: Any, history: li
     else:
         console.print(header)
 
-    return console.input(left_prompt).strip()
+    raw_value = console.input(left_prompt)
+    if raw_value == "\x1b":
+        return PromptInputResult(kind="escape")
+    return PromptInputResult(kind="text", text=raw_value.strip())
+
+
+def _prompt_user_with_context_estimate(
+    console: Console, agent: Any, history: list[Any]
+) -> PromptInputResult:
+    left_prompt_plain = "user › "
+    token_estimate = _estimate_context_tokens(agent, history)
+    right_label = f"~{_format_compact_token_count(token_estimate)} ctx tokens"
+
+    if console.is_terminal and os.name == "posix" and sys.stdin.isatty() and sys.stdout.isatty():
+        return _prompt_user_terminal_input(console, left_prompt_plain, right_label)
+
+    try:
+        return _prompt_user_fallback_input(console, left_prompt_plain, right_label)
+    except EOFError:
+        return PromptInputResult(kind="eof")
+
+
+class _AgentTurnEscapeInterruptMonitor:
+    """Map plain Escape to SIGINT while an agent turn is running."""
+
+    def __init__(self) -> None:
+        self.interrupted = False
+        self._fd: int | None = None
+        self._original_termios: Any = None
+        self._stop_event: Any = None
+        self._thread: Any = None
+
+    @staticmethod
+    def _is_supported() -> bool:
+        return os.name == "posix" and sys.stdin.isatty() and sys.stdout.isatty()
+
+    def __enter__(self) -> "_AgentTurnEscapeInterruptMonitor":
+        if not self._is_supported():
+            return self
+
+        import select
+        import signal
+        import termios
+        import threading
+        import tty
+
+        fd = sys.stdin.fileno()
+        try:
+            original_termios = termios.tcgetattr(fd)
+        except Exception:
+            return self
+
+        self._fd = fd
+        self._original_termios = original_termios
+        stop_event = threading.Event()
+        self._stop_event = stop_event
+
+        # Cbreak mode gives us immediate key events without full raw-mode behavior.
+        tty.setcbreak(fd)
+
+        def monitor() -> None:
+            assert self._fd is not None
+            while not stop_event.is_set():
+                readable, _, _ = select.select([self._fd], [], [], 0.05)
+                if not readable:
+                    continue
+
+                try:
+                    raw = os.read(self._fd, 1)
+                except OSError:
+                    break
+
+                if not raw:
+                    break
+
+                if raw != b"\x1b":
+                    continue
+
+                if _consume_escape_sequence(self._fd):
+                    # Ignore escape-sequence prefixes (e.g. arrow keys).
+                    continue
+
+                self.interrupted = True
+                os.kill(os.getpid(), signal.SIGINT)
+                break
+
+        thread = threading.Thread(target=monitor, name="agent-turn-escape-interrupt", daemon=True)
+        self._thread = thread
+        thread.start()
+        return self
+
+    def __exit__(self, _exc_type: Any, _exc: Any, _tb: Any) -> bool:
+        if self._stop_event is not None:
+            self._stop_event.set()
+
+        if self._thread is not None:
+            self._thread.join(timeout=0.3)
+
+        if self._fd is not None and self._original_termios is not None:
+            import termios
+
+            termios.tcsetattr(self._fd, termios.TCSADRAIN, self._original_termios)
+
+        return False
 
 
 def run_agent_turn(
@@ -686,18 +897,19 @@ def run_agent_turn(
                         )
                     )
 
-    with Live(
-        Spinner("dots", text="assistant thinking...", style="cyan"),
-        console=console,
-        refresh_per_second=12,
-        transient=True,
-    ) as live:
-        live_ref["value"] = live
-        result = agent.run_sync(
-            user_input,
-            message_history=history,
-            event_stream_handler=event_handler,
-        )
+    with _AgentTurnEscapeInterruptMonitor():
+        with Live(
+            Spinner("dots", text="assistant thinking...", style="cyan"),
+            console=console,
+            refresh_per_second=12,
+            transient=True,
+        ) as live:
+            live_ref["value"] = live
+            result = agent.run_sync(
+                user_input,
+                message_history=history,
+                event_stream_handler=event_handler,
+            )
 
     output = str(getattr(result, "output", ""))
     session_logger.log("assistant", content=output)
@@ -778,25 +990,63 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=24_000,
         help="Maximum chars returned from tool output sections",
     )
+    parser.add_argument(
+        "--prompt",
+        "--initial-prompt",
+        dest="initial_prompt",
+        default=None,
+        help="Optional initial prompt to run before entering interactive input",
+    )
     return parser.parse_args(argv)
 
 
-def run_repl(agent: Any, console: Console, session_logger: SessionLogger) -> int:
+def run_repl(
+    agent: Any,
+    console: Console,
+    session_logger: SessionLogger,
+    *,
+    initial_prompt: str | None = None,
+) -> int:
     history: list[Any] = []
+    pending_inputs: list[str] = []
+    consecutive_eof_count = 0
+
+    if initial_prompt is not None:
+        stripped_initial_prompt = initial_prompt.strip()
+        if stripped_initial_prompt:
+            pending_inputs.append(stripped_initial_prompt)
 
     console.print(Rule("ida-codemode-agent"))
     console.print("[bold green]Session ready.[/bold green] Ask reverse engineering questions.")
-    console.print("[dim]Commands: /exit, /quit, /clear[/dim]")
+    console.print(
+        "[dim]Commands: /exit, /quit, /clear | Keys: Esc interrupt turn, Ctrl-C clear line, Ctrl-D twice exit[/dim]"
+    )
 
     while True:
-        try:
-            user_input = _prompt_user_with_context_estimate(console, agent, history)
-        except EOFError:
-            console.print()
-            break
-        except KeyboardInterrupt:
-            console.print("\n[dim]Interrupted. Type /exit to quit.[/dim]")
+        if pending_inputs:
+            prompt_result = PromptInputResult(kind="text", text=pending_inputs.pop(0))
+        else:
+            try:
+                prompt_result = _prompt_user_with_context_estimate(console, agent, history)
+            except KeyboardInterrupt:
+                # In fallback input mode Ctrl-C raises KeyboardInterrupt.
+                # Treat it as "clear current input" and continue prompting.
+                console.print()
+                continue
+
+        if prompt_result.kind == "escape":
+            # Escape is reserved for interrupting active agent turns.
             continue
+
+        if prompt_result.kind == "eof":
+            consecutive_eof_count += 1
+            if consecutive_eof_count >= 2:
+                break
+            console.print("[dim]Press Ctrl-D again to exit.[/dim]")
+            continue
+
+        user_input = prompt_result.text
+        consecutive_eof_count = 0
 
         if not user_input:
             continue
@@ -820,6 +1070,10 @@ def run_repl(agent: Any, console: Console, session_logger: SessionLogger) -> int
                 console=console,
                 session_logger=session_logger,
             )
+        except KeyboardInterrupt:
+            session_logger.log("agent_turn_interrupted")
+            console.print("[dim]assistant turn interrupted[/dim]")
+            continue
         except Exception as exc:  # pragma: no cover
             err = f"model/tool error: {type(exc).__name__}: {exc}"
             session_logger.log("error", stage="agent_turn", message=err)
@@ -896,6 +1150,7 @@ def main(argv: list[str] | None = None) -> int:
         auto_analysis=args.auto_analysis,
         new_database=args.new_database,
         save_on_close=effective_save_on_close,
+        initial_prompt_provided=bool(args.initial_prompt),
     )
 
     console.print(f"[bold]Opening IDA:[/bold] {plan.open_path}")
@@ -922,7 +1177,12 @@ def main(argv: list[str] | None = None) -> int:
                 ),
             )
             agent = build_agent(model, evaluator)
-            return run_repl(agent, console, session_logger)
+            return run_repl(
+                agent,
+                console,
+                session_logger,
+                initial_prompt=args.initial_prompt,
+            )
     except Exception as exc:  # pragma: no cover
         session_logger.log("error", stage="startup", message=f"{type(exc).__name__}: {exc}")
         error_console.print(f"[red]error:[/red] failed to start agent: {exc}")

@@ -29,6 +29,12 @@ pip install -e .
 ida-codemode-agent /path/to/sample.exe
 ```
 
+Run one initial prompt before interactive mode:
+
+```bash
+ida-codemode-agent /path/to/sample.exe --prompt "Summarize imports and likely capabilities"
+```
+
 List known models:
 
 ```bash
@@ -94,6 +100,12 @@ Commands:
 - `/exit`, `/quit`, `exit`, `quit`: leave session
 - `/clear`: clear conversation history
 
+Keyboard controls:
+
+- `Esc`: interrupt an active assistant/tool turn
+- `Ctrl-C`: clear the current input line
+- `Ctrl-D` on an empty line: press once for confirmation, twice to exit
+
 ## CLI options
 
 - positional: `idb_path` (path to IDA database or binary; not needed with `--list-models`)
@@ -103,5 +115,6 @@ Commands:
 - `--[no-]auto-analysis` toggle IDA auto analysis (default: on)
 - `--new-database` request fresh DB creation
 - `--save-on-close` force save on close (newly created DBs are auto-saved)
+- `--prompt` / `--initial-prompt` optional first question to run before interactive prompting
 - `--max-script-chars` max tool script length guard
 - `--max-tool-output-chars` max returned tool-output size guard
