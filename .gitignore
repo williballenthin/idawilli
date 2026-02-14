@@ -148,5 +148,12 @@ __pycache__/
 !.claude/skills/
 !.claude/settings.json
 **/*.DS_Store
-tests/data/Practical Malware Analysis Lab 01-01.exe_.i64
+# IDA Pro temp/database files
+*.i64
+*.idb
+*.id0
+*.id1
+*.id2
+*.nam
+*.til
 .sprites/.sprite
