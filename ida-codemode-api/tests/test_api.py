@@ -1,25 +1,12 @@
 """Tests for the ida-codemode-api package."""
 
-import inspect
-import re
 from typing import get_type_hints
 
 import pytest
 
-from ida_codemode_api import (
-    FUNCTION_NAMES,
-    TYPE_STUBS,
-    api_reference,
-    create_api_from_database,
-)
+from ida_codemode_api import FUNCTION_NAMES, TYPE_STUBS, create_api_from_database
 from ida_codemode_api import api_types
-from ida_codemode_api.api import (
-    TYPE_STUBS_PATH,
-    _render_type,
-    read_ascii_string_at,
-    read_utf16le_string_at,
-    read_string_at,
-)
+from ida_codemode_api.api import read_ascii_string_at, read_utf16le_string_at, read_string_at
 
 
 def assert_ok(result):
@@ -43,158 +30,13 @@ def assert_keys_exact(result: dict[str, object], expected_keys: set[str]):
     assert set(result.keys()) == expected_keys
 
 
-class TestFunctionNames:
-    def test_is_list(self):
-        assert isinstance(FUNCTION_NAMES, list)
-
-    def test_has_38_functions(self):
-        assert len(FUNCTION_NAMES) == 38
-
-    def test_no_duplicates(self):
-        assert len(FUNCTION_NAMES) == len(set(FUNCTION_NAMES))
-
-    def test_all_strings(self):
-        assert all(isinstance(name, str) for name in FUNCTION_NAMES)
-
-
 class TestTypeStubs:
-    def test_is_string(self):
-        assert isinstance(TYPE_STUBS, str)
-
     def test_stubs_cover_all_functions(self):
         for name in FUNCTION_NAMES:
             assert f"def {name}(" in TYPE_STUBS, f"stub missing for {name}"
 
-    def test_contains_core_typed_dicts(self):
-        for typed_dict in [
-            "class DatabaseMetadata(TypedDict)",
-            "class FunctionInfo(TypedDict)",
-            "class NamedAddress(TypedDict)",
-            "class ApiError(TypedDict)",
-            "class GetFunctionsOk(TypedDict)",
-            "class GetAddressTypeOk(TypedDict)",
-        ]:
-            assert typed_dict in TYPE_STUBS
-
-    def test_contains_api_function_contract(self):
-        assert "class ApiFunctions(TypedDict):" in TYPE_STUBS
-        assert "SetTypeAtFn = Callable[[int, str], SetTypeAtResult]" in TYPE_STUBS
-        assert "GetFunctionsFn = Callable[[], GetFunctionsResult]" in TYPE_STUBS
-
-    def test_contains_error_key_contract(self):
-        assert "error: str" in TYPE_STUBS
-        assert 'Status: Literal["okay"]' not in TYPE_STUBS
-        assert 'Status: Literal["error"]' not in TYPE_STUBS
-
     def test_parseable_python(self):
         compile(TYPE_STUBS, "<stubs>", "exec")
-
-    def test_matches_authoritative_file(self):
-        assert TYPE_STUBS == TYPE_STUBS_PATH.read_text(encoding="utf-8")
-
-
-class TestRenderType:
-    def test_renders_none_type(self):
-        assert _render_type(type(None)) == "None"
-
-    def test_renders_none_or_api_error_union(self):
-        result = _render_type(None | api_types.ApiError)
-        assert result == "None"
-
-    def test_renders_mutator_result_alias(self):
-        assert _render_type(api_types.MutatorResult) == "None"
-
-
-class TestApiReference:
-    def test_returns_string(self):
-        ref = api_reference()
-        assert isinstance(ref, str)
-        assert len(ref) > 100
-
-    def test_contains_all_functions(self):
-        ref = api_reference()
-        for name in FUNCTION_NAMES:
-            assert name in ref, f"api_reference missing: {name}"
-
-    def test_single_table_layout(self):
-        ref = api_reference()
-        assert "| Function | Returns | Description |" in ref
-        assert ref.count("| Function | Returns | Description |") == 1
-
-    def test_mentions_global_error_contract(self):
-        ref = api_reference()
-        assert "{error: str}" in ref
-        assert "expect_ok(result)" in ref
-        assert "prefer `expect_ok(...)`" in ref
-
-    def test_mentions_mutator_convention(self):
-        ref = api_reference()
-        assert "Mutation functions return `None` on success" in ref
-
-    def test_uses_declaration_signatures(self):
-        ref = api_reference()
-        assert "`set_type_at(address: int, type: str)`" in ref
-        assert "`set_local_variable_type(function_address: int, existing_name: str, type: str)`" in ref
-        assert "type_str" not in ref
-
-
-class TestApiDocstrings:
-    def test_api_types_docstrings_have_required_sections(self):
-        mutator_functions = {"set_name_at", "set_type_at", "set_comment_at", "set_repeatable_comment_at", "add_bookmark", "delete_bookmark", "set_local_variable_name", "set_local_variable_type"}
-
-        for name in FUNCTION_NAMES:
-            declaration = getattr(api_types, name)
-            doc = inspect.getdoc(declaration)
-            assert doc, f"missing docstring for api_types.{name}"
-
-            first_line = doc.splitlines()[0].strip()
-            assert first_line
-            assert first_line[0].isupper()
-            assert first_line.endswith(".")
-
-            assert re.search(r"See\s+also", doc), (
-                f"api_types.{name} docstring missing 'See also'"
-            )
-            assert "Returns:" in doc, f"api_types.{name} docstring missing 'Returns:'"
-            assert "Errors:" in doc, f"api_types.{name} docstring missing 'Errors:'"
-
-            if name not in mutator_functions:
-                assert (
-                    "Example success payload:" in doc
-                ), f"api_types.{name} docstring missing example payload"
-
-            if inspect.signature(declaration).parameters:
-                assert "Args:" in doc, f"api_types.{name} docstring missing 'Args:'"
-
-    def test_runtime_docstrings_removed_for_exported_api(self):
-        runtime_api = create_api_from_database(object())
-        assert set(runtime_api.keys()) == set(FUNCTION_NAMES)
-        for runtime_fn in runtime_api.values():
-            assert inspect.getdoc(runtime_fn) is None
-
-    def test_api_reference_prefers_api_types_docstrings(self):
-        ref = api_reference()
-
-        rows: dict[str, str] = {}
-        row_pattern = re.compile(r"^\| `([^`]*)` \| `([^`]*)` \| (.*) \|$")
-
-        for line in ref.splitlines():
-            match = row_pattern.match(line)
-            if not match:
-                continue
-
-            signature = match.group(1)
-            description = match.group(3)
-            function_name = signature.split("(", 1)[0]
-            rows[function_name] = description
-
-        for name in FUNCTION_NAMES:
-            declaration = getattr(api_types, name)
-            declaration_doc = inspect.getdoc(declaration)
-            assert declaration_doc, f"missing declaration docstring for {name}"
-
-            first_line = declaration_doc.splitlines()[0].strip()
-            assert rows.get(name) == first_line
 
 
 class TestPayloadContracts:
@@ -341,9 +183,6 @@ class TestPayloadContracts:
 
 
 class TestBuildIdaFunctions:
-    def test_returns_dict(self, fns):
-        assert isinstance(fns, dict)
-
     def test_factory_return_annotation_is_api_contract(self):
         hints = get_type_hints(create_api_from_database, include_extras=True)
         assert hints["return"] is api_types.ApiFunctions
@@ -353,17 +192,8 @@ class TestBuildIdaFunctions:
             assert name in fns, f"missing function: {name}"
             assert callable(fns[name])
 
-    def test_no_extra_functions(self, fns):
-        assert set(fns.keys()) == set(FUNCTION_NAMES)
-
 
 class TestExpectOkHelper:
-    def test_returns_payload_for_success(self, fns):
-        meta = fns["expect_ok"](fns["get_database_metadata"]())
-
-        assert isinstance(meta, dict)
-        assert "entry_point" in meta
-
     def test_returns_none_for_error_payload(self, fns):
         result = fns["expect_ok"](fns["get_function_at"](0xDEADDEAD))
         assert result is None

@@ -45,6 +45,7 @@ Behavior for input paths:
 
 - You must pass an existing `.i64` or `.idb` path.
 - The agent does not create new IDA databases.
+- Database changes are always saved on close.
 
 ## Model defaults
 
