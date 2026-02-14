@@ -582,6 +582,21 @@ def _estimate_text_tokens(text: str) -> int:
     return max(1, math.ceil(byte_count / 4))
 
 
+def _estimate_object_tokens(value: object) -> int:
+    if value is None:
+        return 0
+
+    if isinstance(value, str):
+        text = value
+    else:
+        try:
+            text = json.dumps(value, ensure_ascii=False, default=str)  # type: ignore[call-arg]
+        except Exception:
+            text = repr(value)
+
+    return _estimate_text_tokens(text)
+
+
 def _estimate_context_tokens(agent: Any, history: list[Any]) -> int:
     system_prompt_parts = getattr(agent, "_system_prompts", ())
     system_prompt_text = "\n".join(
@@ -621,17 +636,33 @@ class PromptInputResult:
     text: str = ""
 
 
+def _build_left_right_line(
+    *,
+    left_text: str,
+    right_text: str,
+    line_width: int,
+    left_style: str,
+    right_style: str = "dim",
+) -> Text:
+    min_spacing = 2
+    effective_width = max(line_width, len(left_text) + len(right_text) + min_spacing)
+    spacing = max(min_spacing, effective_width - len(left_text) - len(right_text))
+
+    return Text.assemble(
+        (left_text, left_style),
+        (" " * spacing, ""),
+        (right_text, right_style),
+    )
+
+
 def _prompt_user_fallback_input(console: Console, prompt: str, right_label: str) -> PromptInputResult:
     left_prompt = Text(prompt, style="bold blue")
 
-    min_spacing = 2
-    line_width = max(console.width, len(prompt) + len(right_label) + min_spacing)
-    spacing = max(min_spacing, line_width - len(prompt) - len(right_label))
-
-    header = Text.assemble(
-        (prompt, "bold blue"),
-        (" " * spacing, ""),
-        (right_label, "dim"),
+    header = _build_left_right_line(
+        left_text=prompt,
+        right_text=right_label,
+        line_width=console.width,
+        left_style="bold blue",
     )
 
     if console.is_terminal:
@@ -669,6 +700,25 @@ def run_agent_turn(
 
     live_ref: dict[str, Live | None] = {"value": None}
     pending_tool_calls: dict[str, tuple[str, object]] = {}
+    context_estimate_ref: dict[str, int] = {
+        "value": _estimate_context_tokens(agent, history) + _estimate_text_tokens(user_input)
+    }
+
+    def _build_thinking_spinner() -> Spinner:
+        context_label = f"~{_format_compact_token_count(context_estimate_ref['value'])} ctx tokens"
+        thinking_line = _build_left_right_line(
+            left_text="assistant thinking...",
+            right_text=context_label,
+            line_width=max(console.width - 2, 0),
+            left_style="cyan",
+        )
+        return Spinner("dots", text=thinking_line, style="cyan")
+
+    def _refresh_thinking_spinner() -> None:
+        live = live_ref["value"]
+        if live is None:
+            return
+        live.update(_build_thinking_spinner())
 
     async def event_handler(_ctx: Any, events: Any) -> None:
         async for event in events:
@@ -677,6 +727,9 @@ def run_agent_turn(
 
             if isinstance(event, FunctionToolCallEvent):
                 pending_tool_calls[event.part.tool_call_id] = (event.part.tool_name, event.part.args)
+                context_estimate_ref["value"] += _estimate_text_tokens(event.part.tool_name)
+                context_estimate_ref["value"] += _estimate_object_tokens(event.part.args)
+                _refresh_thinking_spinner()
                 continue
 
             if isinstance(event, FunctionToolResultEvent):
@@ -691,8 +744,12 @@ def run_agent_turn(
                 else:
                     fallback_tool_name = "tool"
 
+                context_estimate_ref["value"] += _estimate_text_tokens(fallback_tool_name)
+                context_estimate_ref["value"] += _estimate_object_tokens(event.result.content)
+
                 if pending is None:
                     _render_tool_result(event_console, fallback_tool_name, event.result.content)
+                    _refresh_thinking_spinner()
                     continue
 
                 call_tool_name, call_args = pending
@@ -703,10 +760,11 @@ def run_agent_turn(
                     call_args,
                     event.result.content,
                 )
+                _refresh_thinking_spinner()
                 continue
 
     with Live(
-        Spinner("dots", text="assistant thinking...", style="cyan"),
+        _build_thinking_spinner(),
         console=console,
         refresh_per_second=12,
         transient=True,

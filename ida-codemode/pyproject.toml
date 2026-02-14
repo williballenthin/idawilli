@@ -1,0 +1,6 @@
+[tool.uv.workspace]
+members = [
+    "packages/ida-codemode-agent",
+    "packages/ida-codemode-api",
+    "packages/ida-codemode-sandbox",
+]

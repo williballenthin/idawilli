@@ -1,36 +1,42 @@
 [project]
-name = "ida-codemode-api"
+name = "ida-codemode-agent"
 authors = [
   {name = "Willi Ballenthin", email = "wballenthin@hex-rays.com"},
 ]
-description = "Portable analysis API for IDA Pro"
-readme = "README.md"
+description = "Interactive reverse engineering agent harness backed by ida-codemode-sandbox"
 version = "0.1.0"
+readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
 dependencies = [
     "ida-domain",
+    "ida-codemode-sandbox",
+    "pydantic-ai",
+    "rich",
 ]
 
 [project.optional-dependencies]
 test = [
-    "ida-domain",
+    "idapro",
     "pytest",
 ]
 
+[project.scripts]
+ida-codemode-agent = "ida_codemode_agent.cli:main"
+
 [project.urls]
-source = "https://github.com/williballenthin/idawilli/tree/master/ida-codemode-api"
+source = "https://github.com/williballenthin/idawilli/tree/master/ida-codemode/packages/ida-codemode-agent"
 repository = "https://github.com/williballenthin/idawilli"
+
+[tool.uv.sources]
+ida-codemode-sandbox = { workspace = true }
 
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["ida_codemode_api*"]
-
-[tool.setuptools.package-data]
-ida_codemode_api = ["prompts/*.md"]
+include = ["ida_codemode_agent*"]
 
 [tool.pytest.ini_options]
 filterwarnings = [

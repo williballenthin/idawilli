@@ -20,8 +20,11 @@ test = [
 ]
 
 [project.urls]
-source = "https://github.com/williballenthin/idawilli/tree/master/ida-codemode-sandbox"
+source = "https://github.com/williballenthin/idawilli/tree/master/ida-codemode/packages/ida-codemode-sandbox"
 repository = "https://github.com/williballenthin/idawilli"
+
+[tool.uv.sources]
+ida-codemode-api = { workspace = true }
 
 [build-system]
 requires = ["setuptools>=61.0"]
