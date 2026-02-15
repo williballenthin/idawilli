@@ -20,9 +20,13 @@ def configure_observability(*, model: str, db_path: str) -> None:
         model: The LLM model identifier (e.g. ``"openrouter:google/gemini-3-flash-preview"``).
         db_path: Path to the IDA database being analyzed.
     """
+    # Disable Logfire's local console renderer so span names/events don't pollute
+    # the interactive CLI output stream.
     logfire.configure(
         service_name="ida-codemode-agent",
         send_to_logfire="if-token-present",
+        console=False,
+        inspect_arguments=False,
         metrics=logfire.MetricsOptions(additional_readers=[]),
     )
 
