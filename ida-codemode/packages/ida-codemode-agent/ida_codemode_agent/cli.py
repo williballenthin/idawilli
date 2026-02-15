@@ -30,6 +30,8 @@ from rich.text import Text
 DEFAULT_MODEL = os.getenv("IDA_CODEMODE_AGENT_MODEL", "openrouter:google/gemini-3-flash-preview")
 IDB_EXTENSIONS = {".i64", ".idb"}
 
+THINKING_LEVELS = ("minimal", "low", "medium", "high", "xhigh")
+
 BASE_SYSTEM_PROMPT = """
 You are an expert reverse engineering assistant operating on a single opened IDA database.
 
@@ -147,6 +149,45 @@ def _build_openai_compatible_model(base_url: str, model_name: str) -> Any:
 def _is_openai_compatible_url(model: str) -> bool:
     """Return ``True`` when *model* looks like an OpenAI-compatible URL spec."""
     return model.startswith(("http://", "https://"))
+
+
+def _build_thinking_model_settings(model_ref: str, thinking: str) -> Any:
+    """Build provider-appropriate model settings for the given thinking level.
+
+    Maps the unified *thinking* level (one of ``THINKING_LEVELS``) to the
+    correct pydantic-ai ``ModelSettings`` subclass based on the provider
+    prefix in *model_ref*.
+
+    Returns ``None`` when the provider is unrecognised – the agent will
+    simply run without thinking configuration in that case.
+    """
+    if model_ref.startswith("openrouter:"):
+        from pydantic_ai.models.openrouter import OpenRouterModelSettings
+
+        return OpenRouterModelSettings(openrouter_reasoning={"effort": thinking})
+
+    if model_ref.startswith("anthropic:"):
+        from pydantic_ai.models.anthropic import AnthropicModelSettings
+
+        _anthropic_effort = {"minimal": "low", "low": "low", "medium": "medium", "high": "high", "xhigh": "max"}
+        return AnthropicModelSettings(
+            anthropic_thinking={"type": "adaptive"},
+            anthropic_effort=_anthropic_effort.get(thinking, "medium"),
+        )
+
+    if model_ref.startswith("openai:"):
+        from pydantic_ai.models.openai import OpenAIChatModelSettings
+
+        _openai_effort = {"minimal": "low", "low": "low", "medium": "medium", "high": "high", "xhigh": "high"}
+        return OpenAIChatModelSettings(openai_reasoning_effort=_openai_effort.get(thinking, "medium"))
+
+    if _is_openai_compatible_url(model_ref):
+        from pydantic_ai.models.openai import OpenAIChatModelSettings
+
+        _openai_effort = {"minimal": "low", "low": "low", "medium": "medium", "high": "high", "xhigh": "high"}
+        return OpenAIChatModelSettings(openai_reasoning_effort=_openai_effort.get(thinking, "medium"))
+
+    return None
 
 
 def _validate_model_name(model: str) -> None:
@@ -333,7 +374,7 @@ def _build_system_prompt() -> str:
     return f"{BASE_SYSTEM_PROMPT}\n\n{IdaSandbox.system_prompt()}"
 
 
-def build_agent(model: Any, evaluator: ScriptEvaluator) -> Any:
+def build_agent(model: Any, evaluator: ScriptEvaluator, model_settings: Any = None) -> Any:
     try:
         from pydantic_ai import Agent
     except ImportError as exc:  # pragma: no cover
@@ -341,12 +382,16 @@ def build_agent(model: Any, evaluator: ScriptEvaluator) -> Any:
             "pydantic-ai is required. Install dependencies for ida-codemode-agent first."
         ) from exc
 
-    agent = Agent(
-        model,
+    kwargs: dict[str, Any] = dict(
+        model=model,
         system_prompt=_build_system_prompt(),
         output_type=str,
         defer_model_check=True,
     )
+    if model_settings is not None:
+        kwargs["model_settings"] = model_settings
+
+    agent = Agent(**kwargs)
 
     if hasattr(agent, "tool_plain"):
 
@@ -936,6 +981,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Optional initial prompt to run before entering interactive input",
     )
+    parser.add_argument(
+        "--thinking",
+        nargs="?",
+        const="medium",
+        default=None,
+        choices=THINKING_LEVELS,
+        metavar="LEVEL",
+        help=(
+            "Enable model thinking/reasoning. "
+            "Levels: minimal, low, medium (default when flag given with no value), high, xhigh. "
+            "Omit flag entirely for no thinking."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -1035,6 +1093,11 @@ def main(argv: list[str] | None = None) -> int:
         error_console.print(f"[red]error:[/red] invalid model '{model}': {type(exc).__name__}: {exc}")
         return 2
 
+    # Build provider-appropriate thinking/reasoning model settings.
+    model_settings: Any = None
+    if args.thinking is not None:
+        model_settings = _build_thinking_model_settings(args.model, args.thinking)
+
     # Resolve URL-based model specs into a concrete pydantic-ai Model object.
     if _is_openai_compatible_url(model):
         parsed = _parse_openai_compatible_url(model)
@@ -1077,6 +1140,7 @@ def main(argv: list[str] | None = None) -> int:
         input_path=str(idb_path.expanduser()),
         open_path=str(plan.open_path),
         model=model,
+        thinking=args.thinking,
         auto_analysis=True,
         new_database=False,
         save_on_close=effective_save_on_close,
@@ -1085,6 +1149,8 @@ def main(argv: list[str] | None = None) -> int:
 
     console.print(f"[bold]Opening IDA:[/bold] {plan.open_path}")
     console.print(f"[bold]Using model:[/bold] {model}")
+    if args.thinking is not None:
+        console.print(f"[bold]Thinking:[/bold] {args.thinking}")
     console.print(f"[dim]Session log: {session_logger.path}[/dim]")
 
     try:
@@ -1114,7 +1180,7 @@ def main(argv: list[str] | None = None) -> int:
                         result=result,
                     ),
                 )
-                agent = build_agent(model, evaluator)
+                agent = build_agent(model, evaluator, model_settings=model_settings)
                 return run_repl(
                     agent,
                     console,

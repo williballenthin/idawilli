@@ -9,8 +9,10 @@ import pytest
 from rich.console import Console
 
 from ida_codemode_agent.cli import (
+    THINKING_LEVELS,
     ScriptEvaluator,
     _build_openai_compatible_model,
+    _build_thinking_model_settings,
     _parse_openai_compatible_url,
     _render_tool_result,
     _validate_model_name,
@@ -146,6 +148,57 @@ class TestBuildOpenAICompatibleModel:
 
         model = _build_openai_compatible_model("http://localhost:1234/v1", "test-model")
         assert isinstance(model, OpenAIChatModel)
+
+
+class TestThinkingArgParsing:
+    def test_default_is_none(self) -> None:
+        args = parse_args(["/tmp/fake.i64"])
+        assert args.thinking is None
+
+    def test_bare_flag_gives_medium(self) -> None:
+        args = parse_args(["/tmp/fake.i64", "--thinking"])
+        assert args.thinking == "medium"
+
+    def test_explicit_level(self) -> None:
+        for level in THINKING_LEVELS:
+            args = parse_args(["/tmp/fake.i64", "--thinking", level])
+            assert args.thinking == level
+
+    def test_invalid_level_rejected(self) -> None:
+        with pytest.raises(SystemExit):
+            parse_args(["/tmp/fake.i64", "--thinking", "turbo"])
+
+
+class TestBuildThinkingModelSettings:
+    def test_openrouter_returns_reasoning_effort(self) -> None:
+        settings = _build_thinking_model_settings("openrouter:google/gemini-3-flash", "high")
+        assert settings is not None
+        assert settings["openrouter_reasoning"] == {"effort": "high"}
+
+    def test_anthropic_returns_adaptive_thinking(self) -> None:
+        settings = _build_thinking_model_settings("anthropic:claude-sonnet-4-20250514", "high")
+        assert settings is not None
+        assert settings["anthropic_thinking"] == {"type": "adaptive"}
+        assert settings["anthropic_effort"] == "high"
+
+    def test_anthropic_maps_xhigh_to_max(self) -> None:
+        settings = _build_thinking_model_settings("anthropic:claude-sonnet-4-20250514", "xhigh")
+        assert settings is not None
+        assert settings["anthropic_effort"] == "max"
+
+    def test_openai_returns_reasoning_effort(self) -> None:
+        settings = _build_thinking_model_settings("openai:gpt-4o", "medium")
+        assert settings is not None
+        assert settings["openai_reasoning_effort"] == "medium"
+
+    def test_url_model_returns_reasoning_effort(self) -> None:
+        settings = _build_thinking_model_settings("http://localhost:1234/v1:my-model", "low")
+        assert settings is not None
+        assert settings["openai_reasoning_effort"] == "low"
+
+    def test_unknown_provider_returns_none(self) -> None:
+        settings = _build_thinking_model_settings("mystery:some-model", "high")
+        assert settings is None
 
 
 class TestSampleAnalysisIntegration:

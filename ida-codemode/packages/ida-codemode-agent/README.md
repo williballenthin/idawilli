@@ -95,10 +95,35 @@ Keyboard controls:
 
 - `Ctrl-D` on an empty line: press once for confirmation, twice to exit
 
+## Thinking / reasoning
+
+By default, the agent does not request model thinking/reasoning tokens.
+Use `--thinking` to enable it:
+
+```bash
+# medium thinking (bare flag)
+ida-codemode-agent sample.i64 --thinking
+
+# explicit level
+ida-codemode-agent sample.i64 --thinking high
+```
+
+Available levels: `minimal`, `low`, `medium` (default when flag given), `high`, `xhigh`.
+
+The flag maps to provider-native settings automatically:
+
+| Provider | Mechanism |
+|---|---|
+| OpenRouter | `reasoning.effort` (works across all underlying models) |
+| Anthropic | adaptive thinking + `effort` |
+| OpenAI | `reasoning_effort` |
+| OpenAI-compatible URL | `reasoning_effort` |
+
 ## CLI options
 
 - positional: `idb_path` (path to an existing IDA `.i64`/`.idb`; not needed with `--list-models`)
 - `--list-models` print known model identifiers and exit (includes OpenRouter catalog entries when reachable)
 - `--model` model name in `provider:model` format
+- `--thinking [LEVEL]` enable model thinking/reasoning (levels: minimal, low, medium, high, xhigh)
 - `--prompt` / `--initial-prompt` optional first question to run before interactive prompting
 - `--max-tool-output-chars` max returned tool-output size guard
