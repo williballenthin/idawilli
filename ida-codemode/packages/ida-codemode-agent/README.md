@@ -101,14 +101,14 @@ By default, the agent does not request model thinking/reasoning tokens.
 Use `--thinking` to enable it:
 
 ```bash
-# medium thinking (bare flag)
+# xhigh thinking (bare flag)
 ida-codemode-agent sample.i64 --thinking
 
 # explicit level
 ida-codemode-agent sample.i64 --thinking high
 ```
 
-Available levels: `minimal`, `low`, `medium` (default when flag given), `high`, `xhigh`.
+Available levels: `minimal`, `low`, `medium`, `high`, `xhigh` (default when flag given).
 
 The flag maps to provider-native settings automatically:
 

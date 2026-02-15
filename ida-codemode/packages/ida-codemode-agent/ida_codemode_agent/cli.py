@@ -984,13 +984,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--thinking",
         nargs="?",
-        const="medium",
+        const="xhigh",
         default=None,
         choices=THINKING_LEVELS,
         metavar="LEVEL",
         help=(
             "Enable model thinking/reasoning. "
-            "Levels: minimal, low, medium (default when flag given with no value), high, xhigh. "
+            "Levels: minimal, low, medium, high, xhigh (default when flag given with no value). "
             "Omit flag entirely for no thinking."
         ),
     )

@@ -155,9 +155,9 @@ class TestThinkingArgParsing:
         args = parse_args(["/tmp/fake.i64"])
         assert args.thinking is None
 
-    def test_bare_flag_gives_medium(self) -> None:
+    def test_bare_flag_gives_xhigh(self) -> None:
         args = parse_args(["/tmp/fake.i64", "--thinking"])
-        assert args.thinking == "medium"
+        assert args.thinking == "xhigh"
 
     def test_explicit_level(self) -> None:
         for level in THINKING_LEVELS:
