@@ -1230,6 +1230,7 @@ source = { editable = "packages/ida-codemode-agent" }
 dependencies = [
     { name = "ida-codemode-sandbox" },
     { name = "ida-domain" },
+    { name = "logfire" },
     { name = "pydantic-ai" },
     { name = "rich" },
 ]
@@ -1245,6 +1246,7 @@ requires-dist = [
     { name = "ida-codemode-sandbox", editable = "packages/ida-codemode-sandbox" },
     { name = "ida-domain" },
     { name = "idapro", marker = "extra == 'test'" },
+    { name = "logfire" },
     { name = "pydantic-ai" },
     { name = "pytest", marker = "extra == 'test'" },
     { name = "rich" },
@@ -1279,6 +1281,7 @@ version = "0.1.0"
 source = { editable = "packages/ida-codemode-sandbox" }
 dependencies = [
     { name = "ida-codemode-api" },
+    { name = "logfire" },
     { name = "pydantic-monty" },
 ]
 
@@ -1292,6 +1295,7 @@ test = [
 requires-dist = [
     { name = "ida-codemode-api", editable = "packages/ida-codemode-api" },
     { name = "idapro", marker = "extra == 'test'" },
+    { name = "logfire" },
     { name = "pydantic-monty" },
     { name = "pytest", marker = "extra == 'test'" },
 ]
