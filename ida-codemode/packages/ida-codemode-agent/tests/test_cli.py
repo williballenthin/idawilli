@@ -10,7 +10,10 @@ from rich.console import Console
 
 from ida_codemode_agent.cli import (
     ScriptEvaluator,
+    _build_openai_compatible_model,
+    _parse_openai_compatible_url,
     _render_tool_result,
+    _validate_model_name,
     main,
     parse_args,
     resolve_database_plan,
@@ -83,6 +86,66 @@ class TestDatabasePlanResolution:
     def test_missing_database_raises(self, tmp_path: Path) -> None:
         with pytest.raises(FileNotFoundError):
             resolve_database_plan(tmp_path / "missing.i64")
+
+
+class TestParseOpenAICompatibleUrl:
+    def test_http_url_with_model(self) -> None:
+        result = _parse_openai_compatible_url("http://localhost:1234/v1:my-model")
+        assert result == ("http://localhost:1234/v1", "my-model")
+
+    def test_https_url_with_model(self) -> None:
+        result = _parse_openai_compatible_url("https://api.example.com/v1:gpt-4o")
+        assert result == ("https://api.example.com/v1", "gpt-4o")
+
+    def test_url_with_slash_in_model_name(self) -> None:
+        result = _parse_openai_compatible_url(
+            "http://localhost:1234/v1:lmstudio-community/Meta-Llama-3.1-8B"
+        )
+        assert result == (
+            "http://localhost:1234/v1",
+            "lmstudio-community/Meta-Llama-3.1-8B",
+        )
+
+    def test_url_without_model_name_returns_none(self) -> None:
+        result = _parse_openai_compatible_url("http://localhost:1234/v1")
+        assert result is None
+
+    def test_url_without_path(self) -> None:
+        result = _parse_openai_compatible_url("http://localhost:1234:my-model")
+        assert result == ("http://localhost:1234", "my-model")
+
+    def test_non_url_returns_none(self) -> None:
+        assert _parse_openai_compatible_url("openrouter:google/gemini") is None
+        assert _parse_openai_compatible_url("anthropic:claude-sonnet-4-20250514") is None
+
+    def test_https_no_port_with_model(self) -> None:
+        result = _parse_openai_compatible_url("https://my-server.com/v1:llama3")
+        assert result == ("https://my-server.com/v1", "llama3")
+
+
+class TestValidateModelNameUrl:
+    def test_valid_url_model_accepted(self) -> None:
+        _validate_model_name("http://localhost:1234/v1:my-model")
+
+    def test_url_without_model_name_rejected(self) -> None:
+        with pytest.raises(ValueError, match="missing a model name suffix"):
+            _validate_model_name("http://localhost:1234/v1")
+
+    def test_url_model_main_validates_before_database(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        rc = main(["/definitely/missing/file.i64", "--model", "http://localhost:1234/v1"])
+        assert rc == 2
+        err = capsys.readouterr().err
+        assert "missing a model name suffix" in err
+
+
+class TestBuildOpenAICompatibleModel:
+    def test_creates_model_object(self) -> None:
+        from pydantic_ai.models.openai import OpenAIChatModel
+
+        model = _build_openai_compatible_model("http://localhost:1234/v1", "test-model")
+        assert isinstance(model, OpenAIChatModel)
 
 
 class TestSampleAnalysisIntegration:

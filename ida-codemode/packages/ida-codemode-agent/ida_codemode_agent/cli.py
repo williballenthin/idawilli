@@ -101,8 +101,72 @@ def _available_models() -> list[str]:
     return sorted(models)
 
 
+def _parse_openai_compatible_url(model: str) -> tuple[str, str] | None:
+    """Parse a URL-based model spec into ``(base_url, model_name)``.
+
+    Returns ``None`` when *model* is not a URL (i.e. a regular
+    ``provider:model`` string).
+
+    The model name is separated from the URL by the **last** colon whose
+    next character is **not** a digit.  This distinguishes port numbers
+    (``http://host:1234/v1``) from model names
+    (``http://host:1234/v1:my-model``).
+
+    Examples::
+
+        http://localhost:1234/v1:my-model  -> ("http://localhost:1234/v1", "my-model")
+        https://api.example.com/v1:gpt-4o  -> ("https://api.example.com/v1", "gpt-4o")
+        http://localhost:1234/v1            -> None  (no model name)
+    """
+    if not model.startswith(("http://", "https://")):
+        return None
+
+    scheme_end = model.index("://") + 3  # position right after "://"
+    rest = model[scheme_end:]
+
+    # Walk backwards to find the model-name separator.
+    for i in range(len(rest) - 1, -1, -1):
+        if rest[i] == ":" and i + 1 < len(rest) and not rest[i + 1].isdigit():
+            base_url = model[: scheme_end + i]
+            model_name = rest[i + 1 :]
+            return base_url, model_name
+
+    return None
+
+
+def _build_openai_compatible_model(base_url: str, model_name: str) -> Any:
+    """Create a pydantic-ai ``OpenAIChatModel`` pointing at *base_url*."""
+    from pydantic_ai.models.openai import OpenAIChatModel
+    from pydantic_ai.providers.openai import OpenAIProvider
+
+    api_key = os.getenv("OPENAI_API_KEY", "no-key-required")
+    provider = OpenAIProvider(base_url=base_url, api_key=api_key)
+    return OpenAIChatModel(model_name, provider=provider)
+
+
+def _is_openai_compatible_url(model: str) -> bool:
+    """Return ``True`` when *model* looks like an OpenAI-compatible URL spec."""
+    return model.startswith(("http://", "https://"))
+
+
 def _validate_model_name(model: str) -> None:
     """Validate that the given provider:model reference can be instantiated."""
+    if _is_openai_compatible_url(model):
+        parsed = _parse_openai_compatible_url(model)
+        if parsed is None:
+            raise ValueError(
+                f"URL model '{model}' is missing a model name suffix; "
+                "append :model-name (for example: http://localhost:1234/v1:my-model)"
+            )
+        # Light validation: ensure both parts are non-empty.
+        base_url, model_name = parsed
+        if not base_url or not model_name:
+            raise ValueError(
+                f"could not parse URL model spec '{model}'; "
+                "expected format: http(s)://host[:port][/path]:model-name"
+            )
+        return
+
     from pydantic_ai.models import infer_model
 
     if ":" not in model:
@@ -847,7 +911,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--model",
         default=DEFAULT_MODEL,
         help=(
-            "Model reference in provider:model format. "
+            "Model reference in provider:model format "
+            "(e.g. openrouter:google/gemini-3-flash-preview) "
+            "or an OpenAI-compatible endpoint URL with a model name suffix "
+            "(e.g. http://localhost:1234/v1:my-model). "
             "Default from $IDA_CODEMODE_AGENT_MODEL or openrouter:google/gemini-3-flash-preview"
         ),
     )
@@ -960,13 +1027,20 @@ def main(argv: list[str] | None = None) -> int:
         error_console.print("[red]error:[/red] missing input path (idb_path)")
         return 2
 
-    model = args.model
+    model: Any = args.model
 
     try:
         _validate_model_name(model)
     except Exception as exc:
         error_console.print(f"[red]error:[/red] invalid model '{model}': {type(exc).__name__}: {exc}")
         return 2
+
+    # Resolve URL-based model specs into a concrete pydantic-ai Model object.
+    if _is_openai_compatible_url(model):
+        parsed = _parse_openai_compatible_url(model)
+        assert parsed is not None  # already validated above
+        base_url, model_name = parsed
+        model = _build_openai_compatible_model(base_url, model_name)
 
     idb_path = args.idb_path
 
