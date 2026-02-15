@@ -230,7 +230,7 @@ def _print_summary(summary: dict[str, Any], console: Console) -> None:
         else:
             table.add_row("Cost (USD)", f"${avg_cost:.4f}")
     else:
-        table.add_row("Cost (USD)", "n/a (generation ID not available)")
+        table.add_row("Cost (USD)", "n/a (not an OpenRouter model?)")
 
     console.print(table)
 

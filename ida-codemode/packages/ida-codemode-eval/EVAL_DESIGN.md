@@ -142,13 +142,14 @@ with effort levels: `xhigh`, `high`, `medium`, `low`, `minimal`, `none`.
 This is cleaner than provider-specific thinking budget integers and works
 uniformly across models.
 
-### 6. Cost tracking via OpenRouter generation stats API
+### 6. Cost tracking via OpenRouter inline usage.cost
 
-PydanticAI does **not** provide cost data — only token counts. We get real
-USD costs by querying OpenRouter's `/api/v1/generation?id=<gen_id>` endpoint
-after each agent run. This returns `total_cost` including cache discounts
-and provider-specific pricing. The generation ID is extracted from the
-agent result's message history.
+OpenRouter returns `usage.cost` (real USD including cache discounts) in
+every chat completion response. PydanticAI's `OpenRouterModel` parses this
+into `ModelResponse.provider_details['cost']`. Since an agentic run may
+involve multiple LLM round-trips (tool call loops), we sum the cost from
+every `ModelResponse` in the conversation history. No separate API calls
+needed — cost data is captured inline with zero additional latency.
 
 ### 7. Results persistence for longitudinal comparison
 
@@ -347,12 +348,11 @@ async def run_eval_task(inputs: EvalInputs) -> str:
     increment_eval_metric("turns", ...)
     increment_eval_metric("tool_calls", ...)
 
-    # Fetch real cost from OpenRouter generation stats API
-    generation_id = _extract_generation_id(result)
-    if generation_id:
-        cost = _fetch_generation_cost(generation_id)
-        if cost is not None:
-            increment_eval_metric("cost_usd", cost)
+    # Sum real cost from OpenRouter's inline usage.cost field
+    # PydanticAI parses this into ModelResponse.provider_details['cost']
+    cost_usd = _extract_cost_from_messages(result.all_messages())
+    if cost_usd > 0:
+        increment_eval_metric("cost_usd", cost_usd)
 
     return output
 ```
@@ -445,7 +445,7 @@ ida-codemode-eval plot results/*.json -o comparison.png
 | `output_tokens` | int | agent usage().output_tokens |
 | `turns` | int | count of response messages |
 | `tool_calls` | int | count of tool-call parts in messages |
-| `cost_usd` | float | OpenRouter `/api/v1/generation` endpoint (real USD) |
+| `cost_usd` | float | OpenRouter inline `usage.cost` via `ModelResponse.provider_details['cost']` |
 | `model_id` | str | eval attribute |
 | `model_label` | str | eval attribute |
 | `reasoning_effort` | str | eval attribute (xhigh/high/medium/low/minimal/none) |

@@ -7,8 +7,6 @@ This is the function that pydantic-evals calls for each case in the dataset.
 from __future__ import annotations
 
 import logging
-import os
-import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -44,76 +42,26 @@ class EvalInputs:
     """Optional system prompt override."""
 
 
-def _fetch_generation_cost(generation_id: str) -> float | None:
-    """Query OpenRouter's generation stats API for the actual cost.
+def _extract_cost_from_messages(all_messages: list[Any]) -> float:
+    """Extract total cost from ModelResponse.provider_details across all messages.
 
-    OpenRouter returns ``total_cost`` in USD for each generation.
-    See: https://openrouter.ai/docs/api/api-reference/generations/get-generation
+    OpenRouter returns ``usage.cost`` (real USD including cache discounts)
+    in every chat completion response. PydanticAI's OpenRouterModel parses
+    this into ``ModelResponse.provider_details['cost']``.
 
-    Returns the cost in USD, or None if the lookup fails.
+    Since an agentic run may involve multiple LLM requests (tool call loops),
+    we sum the cost from every ModelResponse in the conversation.
     """
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    if not api_key:
-        return None
-
-    try:
-        import httpx
-    except ImportError:
-        return None
-
-    # OpenRouter may need a brief delay to finalize generation stats
-    # for streaming responses. For non-streaming this is typically instant.
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            resp = httpx.get(
-                f"https://openrouter.ai/api/v1/generation?id={generation_id}",
-                headers={"Authorization": f"Bearer {api_key}"},
-                timeout=10.0,
-            )
-            if resp.status_code == 404 and attempt < max_retries - 1:
-                # Stats may not be ready yet
-                time.sleep(1.0 * (attempt + 1))
-                continue
-            resp.raise_for_status()
-            data = resp.json().get("data", {})
-            total_cost = data.get("total_cost")
-            if total_cost is not None:
-                return float(total_cost)
-            return None
-        except Exception as exc:
-            logger.debug("Failed to fetch generation cost (attempt %d): %s", attempt + 1, exc)
-            if attempt < max_retries - 1:
-                time.sleep(1.0 * (attempt + 1))
-    return None
-
-
-def _extract_generation_id(result: Any) -> str | None:
-    """Extract the OpenRouter generation ID from the agent result.
-
-    PydanticAI stores the raw response data in the message history.
-    OpenRouter returns the generation ID as the ``id`` field in the
-    chat completion response.
-    """
-    all_messages = result.all_messages()
-    for msg in reversed(all_messages):
-        # Look for model response messages which may carry the response ID
-        if getattr(msg, "kind", None) == "response":
-            parts = getattr(msg, "parts", [])
-            for part in parts:
-                # The model_response_id is sometimes surfaced on parts
-                resp_id = getattr(part, "model_response_id", None)
-                if resp_id and isinstance(resp_id, str):
-                    return resp_id
-
-    # Fallback: check if result itself has the ID
-    # pydantic-ai may store it differently across versions
-    if hasattr(result, "_result_response"):
-        resp = result._result_response
-        if hasattr(resp, "id") and isinstance(resp.id, str):
-            return resp.id
-
-    return None
+    total_cost = 0.0
+    for msg in all_messages:
+        if getattr(msg, "kind", None) != "response":
+            continue
+        provider_details = getattr(msg, "provider_details", None)
+        if provider_details and isinstance(provider_details, dict):
+            cost = provider_details.get("cost")
+            if cost is not None:
+                total_cost += float(cost)
+    return total_cost
 
 
 async def run_eval_task(inputs: EvalInputs) -> str:
@@ -168,12 +116,11 @@ async def run_eval_task(inputs: EvalInputs) -> str:
     increment_eval_metric("input_tokens", input_tokens)
     increment_eval_metric("output_tokens", output_tokens)
 
-    # Count turns (response messages = LLM round-trips)
+    # Count turns and tool calls from the message history
     all_messages = result.all_messages()
     turn_count = sum(1 for m in all_messages if getattr(m, "kind", None) == "response")
     increment_eval_metric("turns", turn_count)
 
-    # Count tool calls
     tool_call_count = 0
     for msg in all_messages:
         parts = getattr(msg, "parts", [])
@@ -182,16 +129,13 @@ async def run_eval_task(inputs: EvalInputs) -> str:
                 tool_call_count += 1
     increment_eval_metric("tool_calls", tool_call_count)
 
-    # Fetch actual cost from OpenRouter generation stats API
-    # This gives us the real USD cost including cache discounts, etc.
-    generation_id = _extract_generation_id(result)
-    if generation_id:
-        cost = _fetch_generation_cost(generation_id)
-        if cost is not None:
-            increment_eval_metric("cost_usd", cost)
-            set_eval_attribute("cost_source", "openrouter_generation_api")
-    else:
-        logger.debug("Could not extract generation ID for cost lookup")
+    # Extract real cost from OpenRouter's inline usage.cost field.
+    # PydanticAI's OpenRouterModel parses this into
+    # ModelResponse.provider_details['cost'] on every response.
+    # This is the actual USD charged, including cache discounts.
+    cost_usd = _extract_cost_from_messages(all_messages)
+    if cost_usd > 0:
+        increment_eval_metric("cost_usd", cost_usd)
 
     return output
 
@@ -199,19 +143,18 @@ async def run_eval_task(inputs: EvalInputs) -> str:
 def _build_model_settings(inputs: EvalInputs) -> Any:
     """Build the appropriate ModelSettings for the model provider.
 
-    Uses OpenRouterModelSettings when reasoning effort is configured
-    and the model is an OpenRouter model. Falls back to base ModelSettings
-    for other providers.
+    Uses OpenRouterModelSettings when the model is an OpenRouter model,
+    configuring reasoning effort and/or extra settings as needed.
+    Falls back to base ModelSettings for other providers.
     """
     has_reasoning = inputs.reasoning_effort is not None
     has_extra = bool(inputs.extra_model_settings)
+    is_openrouter = inputs.model_id.startswith("openrouter:")
 
     if not has_reasoning and not has_extra:
         return None
 
-    is_openrouter = inputs.model_id.startswith("openrouter:")
-
-    if is_openrouter and has_reasoning:
+    if is_openrouter:
         try:
             from pydantic_ai.models.openrouter import OpenRouterModelSettings
 
@@ -219,9 +162,10 @@ def _build_model_settings(inputs: EvalInputs) -> Any:
             if inputs.extra_model_settings:
                 settings_dict.update(inputs.extra_model_settings)
 
-            settings_dict["openrouter_reasoning"] = {
-                "effort": inputs.reasoning_effort,
-            }
+            if has_reasoning:
+                settings_dict["openrouter_reasoning"] = {
+                    "effort": inputs.reasoning_effort,
+                }
 
             return OpenRouterModelSettings(**settings_dict)
         except ImportError:
