@@ -1,0 +1,52 @@
+[project]
+name = "ida-codemode-eval"
+authors = [
+  {name = "Willi Ballenthin", email = "wballenthin@hex-rays.com"},
+]
+description = "Evaluation framework for comparing LLM model performance on IDA reverse engineering tasks"
+version = "0.1.0"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+dependencies = [
+    "ida-codemode-agent",
+    "ida-codemode-sandbox",
+    "pydantic-ai",
+    "pydantic-evals",
+    "logfire",
+    "rich",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+test = [
+    "idapro",
+    "pytest",
+    "pytest-asyncio",
+]
+
+[project.scripts]
+ida-codemode-eval = "ida_codemode_eval.cli:main"
+
+[project.urls]
+source = "https://github.com/williballenthin/idawilli/tree/master/ida-codemode/packages/ida-codemode-eval"
+repository = "https://github.com/williballenthin/idawilli"
+
+[tool.uv.sources]
+ida-codemode-agent = { workspace = true }
+ida-codemode-sandbox = { workspace = true }
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["ida_codemode_eval*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore:builtin type SwigPyPacked has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type SwigPyObject has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type swigvarlink has no __module__ attribute:DeprecationWarning",
+]
