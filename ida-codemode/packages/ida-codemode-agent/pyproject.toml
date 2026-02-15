@@ -13,6 +13,7 @@ dependencies = [
     "ida-codemode-sandbox",
     "pydantic-ai",
     "rich",
+    "logfire",
 ]
 
 [project.optional-dependencies]

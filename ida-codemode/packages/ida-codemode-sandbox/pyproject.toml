@@ -11,6 +11,7 @@ requires-python = ">=3.10"
 dependencies = [
     "ida-codemode-api",
     "pydantic-monty",
+    "logfire",
 ]
 
 [project.optional-dependencies]

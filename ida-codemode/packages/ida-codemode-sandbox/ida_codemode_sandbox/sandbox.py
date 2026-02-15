@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, cast
 
+import logfire
 import pydantic_monty
 from ida_codemode_api import (
     FUNCTION_NAMES,
@@ -346,48 +347,62 @@ class IdaSandbox:
             if result.ok:
                 print("".join(result.stdout))
         """
-        stdout: list[str] = []
-        stderr: list[str] = []
+        with logfire.span("sandbox.run", code_length=len(code)) as run_span:
+            stdout: list[str] = []
+            stderr: list[str] = []
 
-        def _capture(stream: str, text: str) -> None:
-            if stream == "stderr":
-                stderr.append(text)
-            else:
-                stdout.append(text)
-            if print_callback is not None:
-                print_callback(stream, text)
+            def _capture(stream: str, text: str) -> None:
+                if stream == "stderr":
+                    stderr.append(text)
+                else:
+                    stdout.append(text)
+                if print_callback is not None:
+                    print_callback(stream, text)
 
-        # --- Construct the Monty instance (syntax + type errors surface here)
-        try:
-            m = pydantic_monty.Monty(
-                code,
-                external_functions=SANDBOX_FUNCTION_NAMES,
-                type_check=True,
-                type_check_stubs=SANDBOX_TYPE_STUBS,
-            )
-        except pydantic_monty.MontySyntaxError as exc:
-            return SandboxResult(error=_syntax_error_to_sandbox_error(exc))
-        except pydantic_monty.MontyTypingError as exc:
-            return SandboxResult(error=self._typing_error_with_hints(exc))
+            # --- Construct the Monty instance (syntax + type errors surface here)
+            try:
+                with logfire.span("sandbox.monty.construct"):
+                    m = pydantic_monty.Monty(
+                        code,
+                        external_functions=SANDBOX_FUNCTION_NAMES,
+                        type_check=True,
+                        type_check_stubs=SANDBOX_TYPE_STUBS,
+                    )
+            except pydantic_monty.MontySyntaxError as exc:
+                run_span.set_attribute("result_ok", False)
+                run_span.set_attribute("error_kind", "syntax")
+                return SandboxResult(error=_syntax_error_to_sandbox_error(exc))
+            except pydantic_monty.MontyTypingError as exc:
+                run_span.set_attribute("result_ok", False)
+                run_span.set_attribute("error_kind", "typing")
+                return SandboxResult(error=self._typing_error_with_hints(exc))
 
-        # --- Execute
-        self._active_print_callback = _capture
-        try:
-            output = m.run(
-                external_functions=self._fn_impls,
-                print_callback=_capture,
-                limits=self.limits,
-            )
-        except pydantic_monty.MontyRuntimeError as exc:
-            return SandboxResult(
-                stdout=stdout,
-                stderr=stderr,
-                error=_runtime_error_to_sandbox_error(exc),
-            )
-        finally:
-            self._active_print_callback = None
+            # --- Execute
+            self._active_print_callback = _capture
+            try:
+                with logfire.span("sandbox.monty.execute"):
+                    output = m.run(
+                        external_functions=self._fn_impls,
+                        print_callback=_capture,
+                        limits=self.limits,
+                    )
+            except pydantic_monty.MontyRuntimeError as exc:
+                run_span.set_attribute("result_ok", False)
+                run_span.set_attribute("error_kind", "runtime")
+                run_span.set_attribute("stdout_length", sum(len(s) for s in stdout))
+                run_span.set_attribute("stderr_length", sum(len(s) for s in stderr))
+                return SandboxResult(
+                    stdout=stdout,
+                    stderr=stderr,
+                    error=_runtime_error_to_sandbox_error(exc),
+                )
+            finally:
+                self._active_print_callback = None
 
-        return SandboxResult(output=output, stdout=stdout, stderr=stderr)
+            run_span.set_attribute("result_ok", True)
+            run_span.set_attribute("stdout_length", sum(len(s) for s in stdout))
+            run_span.set_attribute("stderr_length", sum(len(s) for s in stderr))
+            return SandboxResult(output=output, stdout=stdout, stderr=stderr)
 
     def execute(self, code: str) -> str:
         """Execute *code* and return output as a plain string.

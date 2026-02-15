@@ -15,6 +15,8 @@ from functools import cache
 from pathlib import Path
 from typing import Any, Callable, Literal, cast, get_args
 
+import logfire
+
 from rich.console import Console, Group, RenderableType
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -209,41 +211,56 @@ class ScriptEvaluator:
         return tool_result
 
     def evaluate(self, script: str) -> str:
-        source = script.strip()
-        if not source:
-            return self._finalize(source, "status: error\nmessage: empty script")
+        with logfire.span(
+            "sandbox.evaluate",
+            script_length=len(script),
+        ) as span:
+            source = script.strip()
+            if not source:
+                span.set_attribute("result_status", "error")
+                span.set_attribute("error_kind", "empty")
+                return self._finalize(source, "status: error\nmessage: empty script")
 
-        result = self.sandbox.run(source)
-        stdout = "".join(result.stdout)
-        stderr = "".join(result.stderr)
+            result = self.sandbox.run(source)
+            stdout = "".join(result.stdout)
+            stderr = "".join(result.stderr)
 
-        if result.ok:
-            out: list[str] = ["status: ok"]
+            if result.ok:
+                out: list[str] = ["status: ok"]
+                if stdout:
+                    out.extend(["stdout:", _truncate(stdout, self.max_output_chars)])
+                if stderr:
+                    out.extend(["stderr:", _truncate(stderr, self.max_output_chars)])
+                if result.output is not None:
+                    out.extend(["result:", _truncate(repr(result.output), self.max_output_chars)])
+                if len(out) == 1:
+                    out.append("no stdout/stderr/result")
+                tool_result = "\n".join(out)
+                span.set_attribute("result_status", "ok")
+                span.set_attribute("result_length", len(tool_result))
+                return self._finalize(source, tool_result)
+
+            error = result.error
+            if error is None:
+                span.set_attribute("result_status", "error")
+                span.set_attribute("error_kind", "unknown")
+                return self._finalize(source, "status: error\nmessage: unknown sandbox error")
+
+            out = [
+                "status: error",
+                f"kind: {error.kind}",
+                f"message: {error.message}",
+            ]
             if stdout:
-                out.extend(["stdout:", _truncate(stdout, self.max_output_chars)])
+                out.extend(["stdout-before-error:", _truncate(stdout, self.max_output_chars)])
             if stderr:
-                out.extend(["stderr:", _truncate(stderr, self.max_output_chars)])
-            if result.output is not None:
-                out.extend(["result:", _truncate(repr(result.output), self.max_output_chars)])
-            if len(out) == 1:
-                out.append("no stdout/stderr/result")
-            return self._finalize(source, "\n".join(out))
-
-        error = result.error
-        if error is None:
-            return self._finalize(source, "status: error\nmessage: unknown sandbox error")
-
-        out = [
-            "status: error",
-            f"kind: {error.kind}",
-            f"message: {error.message}",
-        ]
-        if stdout:
-            out.extend(["stdout-before-error:", _truncate(stdout, self.max_output_chars)])
-        if stderr:
-            out.extend(["stderr-before-error:", _truncate(stderr, self.max_output_chars)])
-        out.extend(["error-detail:", _truncate(error.formatted, self.max_output_chars)])
-        return self._finalize(source, "\n".join(out))
+                out.extend(["stderr-before-error:", _truncate(stderr, self.max_output_chars)])
+            out.extend(["error-detail:", _truncate(error.formatted, self.max_output_chars)])
+            tool_result = "\n".join(out)
+            span.set_attribute("result_status", "error")
+            span.set_attribute("error_kind", error.kind)
+            span.set_attribute("result_length", len(tool_result))
+            return self._finalize(source, tool_result)
 
 
 def _build_system_prompt() -> str:
@@ -694,12 +711,21 @@ def run_agent_turn(
     history: list[Any],
     console: Console,
     session_logger: SessionLogger,
+    turn_number: int = 0,
 ) -> list[Any]:
     from pydantic_ai.messages import FunctionToolCallEvent, FunctionToolResultEvent
     from rich.live import Live
 
+    turn_span_cm = logfire.span(
+        "agent.turn",
+        turn_number=turn_number,
+        user_input_length=len(user_input),
+    )
+    turn_span = turn_span_cm.__enter__()
+
     live_ref: dict[str, Live | None] = {"value": None}
     pending_tool_calls: dict[str, tuple[str, object]] = {}
+    tool_call_count_ref: dict[str, int] = {"value": 0}
     context_estimate_ref: dict[str, int] = {
         "value": _estimate_context_tokens(agent, history) + _estimate_text_tokens(user_input)
     }
@@ -727,6 +753,7 @@ def run_agent_turn(
 
             if isinstance(event, FunctionToolCallEvent):
                 pending_tool_calls[event.part.tool_call_id] = (event.part.tool_name, event.part.args)
+                tool_call_count_ref["value"] += 1
                 context_estimate_ref["value"] += _estimate_text_tokens(event.part.tool_name)
                 context_estimate_ref["value"] += _estimate_object_tokens(event.part.args)
                 _refresh_thinking_spinner()
@@ -763,21 +790,31 @@ def run_agent_turn(
                 _refresh_thinking_spinner()
                 continue
 
-    with Live(
-        _build_thinking_spinner(),
-        console=console,
-        refresh_per_second=12,
-        transient=True,
-    ) as live:
-        live_ref["value"] = live
-        result = agent.run_sync(
-            user_input,
-            message_history=history,
-            event_stream_handler=event_handler,
-        )
+    try:
+        with Live(
+            _build_thinking_spinner(),
+            console=console,
+            refresh_per_second=12,
+            transient=True,
+        ) as live:
+            live_ref["value"] = live
+            result = agent.run_sync(
+                user_input,
+                message_history=history,
+                event_stream_handler=event_handler,
+            )
+    except BaseException:
+        import sys
+
+        turn_span_cm.__exit__(*sys.exc_info())
+        raise
 
     output = str(getattr(result, "output", ""))
     session_logger.log("assistant", content=output)
+
+    turn_span.set_attribute("output_length", len(output))
+    turn_span.set_attribute("tool_calls", tool_call_count_ref["value"])
+    turn_span_cm.__exit__(None, None, None)
 
     console.print(
         Panel(
@@ -845,6 +882,7 @@ def run_repl(
     history: list[Any] = []
     pending_inputs: list[str] = []
     consecutive_eof_count = 0
+    turn_counter = 0
 
     if initial_prompt is not None:
         stripped_initial_prompt = initial_prompt.strip()
@@ -879,6 +917,7 @@ def run_repl(
 
         session_logger.log("user", content=user_input)
 
+        turn_counter += 1
         try:
             history = run_agent_turn(
                 agent=agent,
@@ -886,6 +925,7 @@ def run_repl(
                 history=history,
                 console=console,
                 session_logger=session_logger,
+                turn_number=turn_counter,
             )
         except Exception as exc:  # pragma: no cover
             err = f"model/tool error: {type(exc).__name__}: {exc}"
@@ -944,6 +984,11 @@ def main(argv: list[str] | None = None) -> int:
         error_console.print(f"[red]error:[/red] missing runtime dependency: {exc}")
         return 2
 
+    # --- Logfire observability (no-op when token is absent) ---
+    from ida_codemode_agent.observability import configure_observability
+
+    configure_observability(model=model, db_path=str(plan.open_path))
+
     effective_save_on_close = True
 
     ida_options = IdaCommandOptions(
@@ -969,28 +1014,41 @@ def main(argv: list[str] | None = None) -> int:
     console.print(f"[dim]Session log: {session_logger.path}[/dim]")
 
     try:
-        with Database.open(
-            str(plan.open_path),
-            ida_options,
-            save_on_close=effective_save_on_close,
-        ) as db:
-            sandbox = IdaSandbox(db)
-            evaluator = ScriptEvaluator(
-                sandbox=sandbox,
-                max_output_chars=args.max_tool_output_chars,
-                on_evaluation=lambda script, result: session_logger.log(
-                    "tool_evaluation",
-                    script=script,
-                    result=result,
-                ),
-            )
-            agent = build_agent(model, evaluator)
-            return run_repl(
-                agent,
-                console,
-                session_logger,
-                initial_prompt=args.initial_prompt,
-            )
+        with logfire.span(
+            "session",
+            model=model,
+            db_path=str(plan.open_path),
+            auto_analysis=True,
+            initial_prompt_provided=bool(args.initial_prompt),
+        ):
+            with logfire.span("database.open", db_path=str(plan.open_path)):
+                db_cm = Database.open(
+                    str(plan.open_path),
+                    ida_options,
+                    save_on_close=effective_save_on_close,
+                )
+                db = db_cm.__enter__()
+
+            try:
+                sandbox = IdaSandbox(db)
+                evaluator = ScriptEvaluator(
+                    sandbox=sandbox,
+                    max_output_chars=args.max_tool_output_chars,
+                    on_evaluation=lambda script, result: session_logger.log(
+                        "tool_evaluation",
+                        script=script,
+                        result=result,
+                    ),
+                )
+                agent = build_agent(model, evaluator)
+                return run_repl(
+                    agent,
+                    console,
+                    session_logger,
+                    initial_prompt=args.initial_prompt,
+                )
+            finally:
+                db_cm.__exit__(None, None, None)
     except Exception as exc:  # pragma: no cover
         session_logger.log("error", stage="startup", message=f"{type(exc).__name__}: {exc}")
         error_console.print(f"[red]error:[/red] failed to start agent: {exc}")
