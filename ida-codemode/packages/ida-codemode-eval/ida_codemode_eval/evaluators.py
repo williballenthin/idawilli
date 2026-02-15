@@ -51,19 +51,19 @@ class TokenUsage(Evaluator[Any, str, Any]):
 
 
 @dataclass
-class RequestTokens(Evaluator[Any, str, Any]):
-    """Report request (input) token count as a numeric score."""
+class InputTokens(Evaluator[Any, str, Any]):
+    """Report input (prompt) token count as a numeric score."""
 
     def evaluate(self, ctx: EvaluatorContext[Any, str, Any]) -> float:
-        return float(ctx.metrics.get("request_tokens", 0))
+        return float(ctx.metrics.get("input_tokens", 0))
 
 
 @dataclass
-class ResponseTokens(Evaluator[Any, str, Any]):
-    """Report response (output) token count as a numeric score."""
+class OutputTokens(Evaluator[Any, str, Any]):
+    """Report output (completion) token count as a numeric score."""
 
     def evaluate(self, ctx: EvaluatorContext[Any, str, Any]) -> float:
-        return float(ctx.metrics.get("response_tokens", 0))
+        return float(ctx.metrics.get("output_tokens", 0))
 
 
 @dataclass

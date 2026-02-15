@@ -7,9 +7,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
+
+# OpenRouter reasoning effort levels.
+# See https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
+ReasoningEffort = Literal["xhigh", "high", "medium", "low", "minimal", "none"]
 
 
 @dataclass
@@ -22,8 +26,13 @@ class ModelConfig:
     label: str
     """Human-readable label used in reports and result filenames."""
 
-    thinking_budget: int | None = None
-    """Optional thinking/reasoning token budget. None means use model default."""
+    reasoning_effort: ReasoningEffort | None = None
+    """Optional reasoning effort level for models that support thinking.
+
+    OpenRouter effort levels: xhigh, high, medium, low, minimal, none.
+    Maps to OpenRouter's ``reasoning.effort`` parameter.
+    None means no reasoning configuration is sent (model default).
+    """
 
     model_settings: dict[str, Any] = field(default_factory=dict)
     """Additional pydantic-ai ModelSettings passed to agent.run()."""
@@ -82,7 +91,7 @@ class EvalConfig:
             models.append(ModelConfig(
                 id=m["id"],
                 label=m["label"],
-                thinking_budget=m.get("thinking_budget"),
+                reasoning_effort=m.get("reasoning_effort"),
                 model_settings=m.get("model_settings", {}),
             ))
 

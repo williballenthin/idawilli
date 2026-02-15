@@ -13,8 +13,9 @@ observability stack.
 1. **Model comparison** — Run the same reverse engineering task against many
    models (Claude, Gemini, GPT, GLM, Qwen, DeepSeek, etc.) via OpenRouter and
    compare success rates, cost, latency, and token usage.
-2. **Thinking budget exploration** — For models that support extended thinking
-   / reasoning tokens, vary the thinking budget and measure the effect.
+2. **Reasoning effort exploration** — For models that support extended thinking
+   / reasoning tokens, vary the reasoning effort level (xhigh, high, medium,
+   low, minimal, none) via OpenRouter and measure the effect.
 3. **Statistical robustness** — Run each configuration N times (5, 10, 20) and
    aggregate results (mean, stddev, min, max, percentiles).
 4. **Prompt A/B testing** — Swap system prompts and measure quantitative
@@ -133,13 +134,23 @@ All models are accessed through OpenRouter using the `openrouter:vendor/model`
 naming convention. This gives us a single API key and unified billing. The eval
 config lists model IDs as strings.
 
-### 5. Thinking budget as model settings
+### 5. Reasoning effort via OpenRouter
 
-PydanticAI's `ModelSettings` supports `thinking` configuration. We pass
-different thinking budget values per evaluation run to compare reasoning depth
-impact.
+OpenRouter provides a unified `reasoning.effort` parameter that works across
+providers (Anthropic, OpenAI, Google, etc.). We use `OpenRouterModelSettings`
+with effort levels: `xhigh`, `high`, `medium`, `low`, `minimal`, `none`.
+This is cleaner than provider-specific thinking budget integers and works
+uniformly across models.
 
-### 6. Results persistence for longitudinal comparison
+### 6. Cost tracking via OpenRouter generation stats API
+
+PydanticAI does **not** provide cost data — only token counts. We get real
+USD costs by querying OpenRouter's `/api/v1/generation?id=<gen_id>` endpoint
+after each agent run. This returns `total_cost` including cache discounts
+and provider-specific pricing. The generation ID is extracted from the
+agent result's message history.
+
+### 7. Results persistence for longitudinal comparison
 
 Each evaluation run is saved as a timestamped JSON file in `results/`. A
 comparison script can load two result files and diff them. Logfire's built-in
@@ -148,23 +159,20 @@ comparison view also supports this when experiments are named consistently.
 ## File Structure
 
 ```
-packages/ida-codemode-agent/
-├── ida_codemode_agent/
-│   ├── cli.py                    # existing agent CLI
-│   ├── observability.py          # existing Logfire setup
-│   └── eval/                     # NEW: evaluation framework
-│       ├── __init__.py
-│       ├── runner.py             # evaluation orchestrator
-│       ├── task.py               # task function (wraps agent)
-│       ├── evaluators.py         # custom evaluators
-│       ├── config.py             # EvalConfig schema
-│       └── __main__.py           # CLI entry point
-├── evals/                        # NEW: evaluation definitions
-│   ├── c2_extraction.yaml        # dataset: C2 config extraction
-│   └── eval_config.yaml          # model matrix + run params
-├── results/                      # NEW: saved evaluation results
+packages/ida-codemode-eval/           # standalone workspace package
+├── ida_codemode_eval/
+│   ├── cli.py                        # CLI entry point (run, compare, plot)
+│   ├── config.py                     # EvalConfig schema (loaded from YAML)
+│   ├── evaluators.py                 # custom evaluators (C2 indicator, tokens, cost)
+│   ├── runner.py                     # evaluation orchestrator
+│   ├── task.py                       # task function (wraps agent)
+│   └── compare.py                    # result comparison and plotting
+├── evals/
+│   └── c2_extraction.yaml            # eval config: C2 config extraction
+├── results/                          # saved evaluation results (gitignored)
 │   └── .gitkeep
-└── pyproject.toml                # add pydantic-evals dependency
+├── tests/
+└── pyproject.toml                    # depends on ida-codemode-agent, pydantic-evals
 ```
 
 ## Evaluation Config Schema
@@ -192,7 +200,11 @@ models:
 
   - id: "openrouter:anthropic/claude-sonnet-4-20250514"
     label: "claude-sonnet-4-thinking-high"
-    thinking_budget: 10000
+    reasoning_effort: "high"
+
+  - id: "openrouter:anthropic/claude-sonnet-4-20250514"
+    label: "claude-sonnet-4-thinking-low"
+    reasoning_effort: "low"
 
   - id: "openrouter:google/gemini-2.5-pro-preview-05-06"
     label: "gemini-2.5-pro"
@@ -307,39 +319,40 @@ agent. It wraps `build_agent()` and runs a single non-interactive session:
 async def run_eval_task(inputs: EvalInputs) -> str:
     """Execute a single evaluation run.
 
-    Opens the IDA database, builds the agent with the specified model,
-    runs the prompt, and returns the agent's final text output.
+    Builds the agent with the specified model, runs the prompt,
+    returns the agent's final text output.
     Metrics (tokens, turns, cost, duration) are recorded as eval metrics.
     """
     from pydantic_evals.dataset import set_eval_attribute, increment_eval_metric
 
-    set_eval_attribute("model", inputs.model_id)
+    set_eval_attribute("model_id", inputs.model_id)
     set_eval_attribute("model_label", inputs.model_label)
-    if inputs.thinking_budget is not None:
-        set_eval_attribute("thinking_budget", inputs.thinking_budget)
+    if inputs.reasoning_effort is not None:
+        set_eval_attribute("reasoning_effort", inputs.reasoning_effort)
 
-    # Build model settings
-    model_settings = {}
-    if inputs.thinking_budget is not None:
-        model_settings["thinking"] = {"budget_tokens": inputs.thinking_budget}
+    # Build model settings with OpenRouterModelSettings for reasoning
+    model_settings = _build_model_settings(inputs)
 
-    # Reuse shared database + sandbox (opened once per eval session)
     evaluator = ScriptEvaluator(sandbox=inputs.sandbox)
     agent = build_agent(inputs.model_id, evaluator)
 
-    # Run the agent non-interactively
     result = await agent.run(inputs.prompt, model_settings=model_settings)
     output = result.output
 
-    # Record metrics
+    # Record token usage
     usage = result.usage()
     increment_eval_metric("total_tokens", usage.total_tokens or 0)
-    increment_eval_metric("request_tokens", usage.request_tokens or 0)
-    increment_eval_metric("response_tokens", usage.response_tokens or 0)
-    increment_eval_metric("turns", len([
-        m for m in result.all_messages()
-        if hasattr(m, "parts") and m.kind == "response"
-    ]))
+    increment_eval_metric("input_tokens", usage.input_tokens or 0)
+    increment_eval_metric("output_tokens", usage.output_tokens or 0)
+    increment_eval_metric("turns", ...)
+    increment_eval_metric("tool_calls", ...)
+
+    # Fetch real cost from OpenRouter generation stats API
+    generation_id = _extract_generation_id(result)
+    if generation_id:
+        cost = _fetch_generation_cost(generation_id)
+        if cost is not None:
+            increment_eval_metric("cost_usd", cost)
 
     return output
 ```
@@ -403,18 +416,22 @@ async def run_evaluation(config: EvalConfig) -> None:
 
 ```bash
 # Run full evaluation
-uv run --package ida-codemode-agent python -m ida_codemode_agent.eval \
-  --config evals/eval_config.yaml
+ida-codemode-eval run evals/c2_extraction.yaml
 
 # Run single model
-uv run --package ida-codemode-agent python -m ida_codemode_agent.eval \
-  --config evals/eval_config.yaml \
-  --model "openrouter:anthropic/claude-sonnet-4-20250514"
+ida-codemode-eval run evals/c2_extraction.yaml --model claude-sonnet-4
+
+# Override run count
+ida-codemode-eval run evals/c2_extraction.yaml --runs 10
 
 # Compare two saved results
-uv run --package ida-codemode-agent python -m ida_codemode_agent.eval compare \
-  results/2025-01-15_claude-sonnet-4.json \
-  results/2025-01-22_claude-sonnet-4.json
+ida-codemode-eval compare results/BEFORE.json results/AFTER.json
+
+# Compare many results in a table
+ida-codemode-eval compare-many results/*.json
+
+# Generate comparison plots
+ida-codemode-eval plot results/*.json -o comparison.png
 ```
 
 ## Metrics Captured Per Run
@@ -424,12 +441,14 @@ uv run --package ida-codemode-agent python -m ida_codemode_agent.eval compare \
 | `success` | bool | ContainsC2Indicator evaluator |
 | `duration` | float (seconds) | pydantic-evals built-in |
 | `total_tokens` | int | agent usage().total_tokens |
-| `request_tokens` | int | agent usage().request_tokens |
-| `response_tokens` | int | agent usage().response_tokens |
+| `input_tokens` | int | agent usage().input_tokens |
+| `output_tokens` | int | agent usage().output_tokens |
 | `turns` | int | count of response messages |
-| `cost_usd` | float | computed from token counts + model pricing |
-| `model` | str (label) | eval attribute |
-| `thinking_budget` | int | eval attribute |
+| `tool_calls` | int | count of tool-call parts in messages |
+| `cost_usd` | float | OpenRouter `/api/v1/generation` endpoint (real USD) |
+| `model_id` | str | eval attribute |
+| `model_label` | str | eval attribute |
+| `reasoning_effort` | str | eval attribute (xhigh/high/medium/low/minimal/none) |
 
 ## Aggregation (Per Model Config)
 

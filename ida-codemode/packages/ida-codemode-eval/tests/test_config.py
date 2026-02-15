@@ -30,12 +30,12 @@ def test_from_yaml_minimal(tmp_path: Path) -> None:
     assert len(config.models) == 1
     assert config.models[0].id == "openrouter:test/model"
     assert config.models[0].label == "test-model"
-    assert config.models[0].thinking_budget is None
+    assert config.models[0].reasoning_effort is None
     assert config.runs_per_model == 5  # default
     assert config.max_concurrency == 1  # default
 
 
-def test_from_yaml_with_thinking_budget(tmp_path: Path) -> None:
+def test_from_yaml_with_reasoning_effort(tmp_path: Path) -> None:
     config_file = tmp_path / "test.yaml"
     config_file.write_text(dedent("""\
         name: test-eval
@@ -48,15 +48,19 @@ def test_from_yaml_with_thinking_budget(tmp_path: Path) -> None:
             label: "model-a"
           - id: "openrouter:test/model-b"
             label: "model-b-thinking"
-            thinking_budget: 5000
+            reasoning_effort: "high"
+          - id: "openrouter:test/model-c"
+            label: "model-c-minimal"
+            reasoning_effort: "minimal"
     """))
 
     config = EvalConfig.from_yaml(config_file)
 
     assert config.runs_per_model == 10
-    assert len(config.models) == 2
-    assert config.models[0].thinking_budget is None
-    assert config.models[1].thinking_budget == 5000
+    assert len(config.models) == 3
+    assert config.models[0].reasoning_effort is None
+    assert config.models[1].reasoning_effort == "high"
+    assert config.models[2].reasoning_effort == "minimal"
 
 
 def test_resolve_database_path_relative(tmp_path: Path) -> None:

@@ -20,8 +20,8 @@ from ida_codemode_eval.config import EvalConfig, ModelConfig
 from ida_codemode_eval.evaluators import (
     ContainsC2Indicator,
     EstimatedCost,
-    RequestTokens,
-    ResponseTokens,
+    InputTokens,
+    OutputTokens,
     TokenUsage,
     ToolCallCount,
     TurnCount,
@@ -49,7 +49,7 @@ def _build_dataset_for_model(
             prompt=config.task_prompt,
             model_id=model_config.id,
             model_label=model_config.label,
-            thinking_budget=model_config.thinking_budget,
+            reasoning_effort=model_config.reasoning_effort,
             extra_model_settings=model_config.model_settings or None,
             sandbox=sandbox,
             system_prompt_override=config.system_prompt,
@@ -64,7 +64,7 @@ def _build_dataset_for_model(
                 "model_id": model_config.id,
                 "model_label": model_config.label,
                 "run_index": run_idx,
-                "thinking_budget": model_config.thinking_budget,
+                "reasoning_effort": model_config.reasoning_effort,
             },
         ))
 
@@ -72,8 +72,8 @@ def _build_dataset_for_model(
         ContainsC2Indicator(),
         MaxDuration(seconds=config.timeout_per_run),
         TokenUsage(),
-        RequestTokens(),
-        ResponseTokens(),
+        InputTokens(),
+        OutputTokens(),
         TurnCount(),
         ToolCallCount(),
         EstimatedCost(),
@@ -150,6 +150,7 @@ def _compute_summary(report: Any, model_label: str) -> dict[str, Any]:
         "total_tokens": [],
         "turns": [],
         "tool_calls": [],
+        "cost_usd": [],
     }
 
     if not hasattr(report, "cases"):
@@ -173,6 +174,8 @@ def _compute_summary(report: Any, model_label: str) -> dict[str, Any]:
                 summary["turns"].append(case.scores["TurnCount"])
             if "ToolCallCount" in case.scores:
                 summary["tool_calls"].append(case.scores["ToolCallCount"])
+            if "EstimatedCost" in case.scores and case.scores["EstimatedCost"] > 0:
+                summary["cost_usd"].append(case.scores["EstimatedCost"])
 
     total = summary["total_runs"]
     if total > 0:
@@ -214,6 +217,20 @@ def _print_summary(summary: dict[str, Any], console: Console) -> None:
     _stats_row("Total Tokens", summary["total_tokens"])
     _stats_row("Turns", summary["turns"])
     _stats_row("Tool Calls", summary["tool_calls"])
+
+    # Cost with higher precision formatting
+    cost_values = summary.get("cost_usd", [])
+    if cost_values:
+        avg_cost = sum(cost_values) / len(cost_values)
+        total_cost = sum(cost_values)
+        if len(cost_values) > 1:
+            variance = sum((v - avg_cost) ** 2 for v in cost_values) / (len(cost_values) - 1)
+            stddev = variance**0.5
+            table.add_row("Cost (USD)", f"avg=${avg_cost:.4f}  std=${stddev:.4f}  total=${total_cost:.4f}")
+        else:
+            table.add_row("Cost (USD)", f"${avg_cost:.4f}")
+    else:
+        table.add_row("Cost (USD)", "n/a (generation ID not available)")
 
     console.print(table)
 
@@ -270,8 +287,8 @@ async def run_evaluation(
         for model_config in models_to_eval:
             console.print(f"\n[bold cyan]Evaluating: {model_config.label}[/bold cyan]")
             console.print(f"  Model: {model_config.id}")
-            if model_config.thinking_budget is not None:
-                console.print(f"  Thinking budget: {model_config.thinking_budget}")
+            if model_config.reasoning_effort is not None:
+                console.print(f"  Reasoning effort: {model_config.reasoning_effort}")
             console.print()
 
             dataset = _build_dataset_for_model(
@@ -317,12 +334,18 @@ def _print_comparison(summaries: list[dict[str, Any]], console: Console) -> None
     table.add_column("Avg Tokens", justify="right")
     table.add_column("Avg Turns", justify="right")
     table.add_column("Avg Tool Calls", justify="right")
+    table.add_column("Avg Cost (USD)", justify="right")
 
     for s in sorted(summaries, key=lambda x: x["success_rate"], reverse=True):
         def _avg(values: list[float]) -> str:
             if not values:
                 return "n/a"
             return f"{sum(values) / len(values):.1f}"
+
+        def _avg_cost(values: list[float]) -> str:
+            if not values:
+                return "n/a"
+            return f"${sum(values) / len(values):.4f}"
 
         table.add_row(
             s["model_label"],
@@ -331,6 +354,7 @@ def _print_comparison(summaries: list[dict[str, Any]], console: Console) -> None
             _avg(s["total_tokens"]),
             _avg(s["turns"]),
             _avg(s["tool_calls"]),
+            _avg_cost(s.get("cost_usd", [])),
         )
 
     console.print()
