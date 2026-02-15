@@ -122,12 +122,19 @@ async def run_eval_task(inputs: EvalInputs) -> str:
     increment_eval_metric("turns", turn_count)
 
     tool_call_count = 0
+    tool_call_fail_count = 0
     for msg in all_messages:
         parts = getattr(msg, "parts", [])
         for part in parts:
-            if getattr(part, "part_kind", None) == "tool-call":
+            part_kind = getattr(part, "part_kind", None)
+            if part_kind == "tool-call":
                 tool_call_count += 1
+            elif part_kind == "retry-prompt":
+                # PydanticAI emits a RetryPromptPart when a tool call fails
+                # (e.g. validation error, ModelRetry exception)
+                tool_call_fail_count += 1
     increment_eval_metric("tool_calls", tool_call_count)
+    increment_eval_metric("tool_call_failures", tool_call_fail_count)
 
     # Extract real cost from OpenRouter's inline usage.cost field.
     # PydanticAI's OpenRouterModel parses this into

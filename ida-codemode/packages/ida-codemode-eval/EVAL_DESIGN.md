@@ -445,6 +445,7 @@ ida-codemode-eval plot results/*.json -o comparison.png
 | `output_tokens` | int | agent usage().output_tokens |
 | `turns` | int | count of response messages |
 | `tool_calls` | int | count of tool-call parts in messages |
+| `tool_call_failures` | int | count of retry-prompt parts (failed tool calls) |
 | `cost_usd` | float | OpenRouter inline `usage.cost` via `ModelResponse.provider_details['cost']` |
 | `model_id` | str | eval attribute |
 | `model_label` | str | eval attribute |
