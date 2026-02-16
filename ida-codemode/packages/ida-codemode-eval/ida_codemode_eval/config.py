@@ -69,8 +69,13 @@ class EvalConfig:
     max_concurrency: int = 1
     """Maximum concurrent evaluations.
 
-    Set to 1 for sequential runs (safest with IDA databases).
-    Higher values can speed up evaluation but require care with shared resources.
+    Each trial copies the IDA database to a temporary directory, so higher
+    values are safe.  The main benefit of concurrency > 1 is overlapping LLM
+    API round-trips while one trial waits for a model response.  Note that
+    idalib requires main-thread access; tool callbacks are async so they
+    execute on the event-loop thread (the main thread under ``asyncio.run``),
+    and the synchronous ``sandbox.run()`` call naturally serializes database
+    access even when multiple coroutines are in flight.
     """
 
     system_prompt: str | None = None

@@ -2,12 +2,19 @@
 
 Wraps the ida-codemode-agent to run a single non-interactive evaluation.
 This is the function that pydantic-evals calls for each case in the dataset.
+
+Each trial copies the IDA database to an isolated temporary directory so that
+concurrent trials do not conflict on the same database file.  The temporary
+directory is cleaned up when the trial finishes.
 """
 
 from __future__ import annotations
 
 import logging
+import shutil
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -29,8 +36,11 @@ class EvalInputs:
     model_label: str
     """Human-readable model label for reports."""
 
-    sandbox: Any
-    """Pre-initialized IdaSandbox instance (shared across runs)."""
+    db_path: str
+    """Path to the source IDA database file.
+
+    Each trial copies this to a temporary directory for isolation.
+    """
 
     reasoning_effort: str | None = None
     """OpenRouter reasoning effort level (xhigh, high, medium, low, minimal, none)."""
@@ -82,10 +92,13 @@ async def run_eval_task(inputs: EvalInputs) -> str:
     """Execute a single evaluation run of the ida-codemode agent.
 
     This function:
-    1. Builds the agent with the specified model
-    2. Runs the agent non-interactively with the given prompt
-    3. Records token usage, turn count, and cost as eval metrics
-    4. Returns the agent's final text output
+    1. Copies the IDA database to a temporary directory for isolation
+    2. Opens the database copy and creates a sandbox
+    3. Builds the agent with the specified model
+    4. Runs the agent non-interactively with the given prompt
+    5. Records token usage, turn count, and cost as eval metrics
+    6. Returns the agent's final text output
+    7. Cleans up the temporary directory
 
     The output is then assessed by evaluators (ContainsC2Indicator, etc.)
     to determine success and capture performance metrics.
@@ -106,92 +119,116 @@ async def run_eval_task(inputs: EvalInputs) -> str:
     )
     session_logger.log("user", content=inputs.prompt)
 
+    # Copy the database to an isolated temporary directory so concurrent
+    # trials do not conflict on the same underlying IDA database files.
+    tmp_dir = tempfile.mkdtemp(prefix="ida-codemode-eval-")
     try:
-        # Record model info as eval attributes
-        set_eval_attribute("model_id", inputs.model_id)
-        set_eval_attribute("model_label", inputs.model_label)
-        if inputs.reasoning_effort is not None:
-            set_eval_attribute("reasoning_effort", inputs.reasoning_effort)
+        src_path = Path(inputs.db_path)
+        dst_path = Path(tmp_dir) / src_path.name
+        shutil.copy2(str(src_path), str(dst_path))
 
-        # Build model settings using OpenRouterModelSettings when reasoning is configured
-        model_settings = _build_model_settings(inputs)
+        session_logger.log("db_copy", src=str(src_path), dst=str(dst_path))
 
-        # Build the agent (reuses the same code path as interactive CLI)
-        evaluator = ScriptEvaluator(
-            sandbox=inputs.sandbox,
-            on_evaluation=lambda script, result: session_logger.log(
-                "tool_evaluation",
-                script=script,
-                result=result,
-            ),
-        )
+        from ida_codemode_sandbox import IdaSandbox
+        from ida_domain import Database
+        from ida_domain.database import IdaCommandOptions
 
-        # If a custom system prompt is provided, we need to build the agent differently
-        if inputs.system_prompt_override is not None:
-            agent = _build_agent_with_prompt(inputs.model_id, evaluator, inputs.system_prompt_override)
-        else:
-            agent = build_agent(inputs.model_id, evaluator)
+        ida_options = IdaCommandOptions(auto_analysis=True, new_database=False)
+        db_cm = Database.open(str(dst_path), ida_options, save_on_close=False)
+        db = db_cm.__enter__()
 
-        # Run the agent non-interactively
-        kwargs: dict[str, Any] = {}
-        if model_settings is not None:
-            kwargs["model_settings"] = model_settings
+        try:
+            sandbox = IdaSandbox(db)
 
-        result = await agent.run(inputs.prompt, **kwargs)
-        output = str(result.output) if result.output else ""
+            # Record model info as eval attributes
+            set_eval_attribute("model_id", inputs.model_id)
+            set_eval_attribute("model_label", inputs.model_label)
+            if inputs.reasoning_effort is not None:
+                set_eval_attribute("reasoning_effort", inputs.reasoning_effort)
 
-        session_logger.log("assistant", content=output)
+            # Build model settings using OpenRouterModelSettings when reasoning is configured
+            model_settings = _build_model_settings(inputs)
 
-        # Extract and record usage metrics
-        usage = result.usage()
-        total_tokens = (usage.total_tokens or 0) if usage else 0
-        input_tokens = (usage.input_tokens or 0) if usage else 0
-        output_tokens = (usage.output_tokens or 0) if usage else 0
+            # Build the agent (reuses the same code path as interactive CLI)
+            evaluator = ScriptEvaluator(
+                sandbox=sandbox,
+                on_evaluation=lambda script, result: session_logger.log(
+                    "tool_evaluation",
+                    script=script,
+                    result=result,
+                ),
+            )
 
-        increment_eval_metric("total_tokens", total_tokens)
-        increment_eval_metric("input_tokens", input_tokens)
-        increment_eval_metric("output_tokens", output_tokens)
+            # If a custom system prompt is provided, we need to build the agent differently
+            if inputs.system_prompt_override is not None:
+                agent = _build_agent_with_prompt(inputs.model_id, evaluator, inputs.system_prompt_override)
+            else:
+                agent = build_agent(inputs.model_id, evaluator)
 
-        # Count turns and tool calls from the message history
-        all_messages = result.all_messages()
-        turn_count = sum(1 for m in all_messages if getattr(m, "kind", None) == "response")
-        increment_eval_metric("turns", turn_count)
+            # Run the agent non-interactively
+            kwargs: dict[str, Any] = {}
+            if model_settings is not None:
+                kwargs["model_settings"] = model_settings
 
-        tool_call_count = 0
-        tool_call_fail_count = 0
-        for msg in all_messages:
-            parts = getattr(msg, "parts", [])
-            for part in parts:
-                part_kind = getattr(part, "part_kind", None)
-                if part_kind == "tool-call":
-                    tool_call_count += 1
-                elif part_kind == "retry-prompt":
-                    # PydanticAI emits a RetryPromptPart when a tool call fails
-                    # (e.g. validation error, ModelRetry exception)
-                    tool_call_fail_count += 1
-        increment_eval_metric("tool_calls", tool_call_count)
-        increment_eval_metric("tool_call_failures", tool_call_fail_count)
+            result = await agent.run(inputs.prompt, **kwargs)
+            output = str(result.output) if result.output else ""
 
-        # Extract real cost from OpenRouter's inline usage.cost field.
-        # PydanticAI's OpenRouterModel parses this into
-        # ModelResponse.provider_details['cost'] on every response.
-        # This is the actual USD charged, including cache discounts.
-        cost_usd = _extract_cost_from_messages(all_messages)
-        if cost_usd > 0:
-            increment_eval_metric("cost_usd", cost_usd)
+            session_logger.log("assistant", content=output)
 
-        # Log the full message history so we can replay the entire conversation.
-        session_logger.log("messages", history=_serialize_messages(all_messages))
+            # Extract and record usage metrics
+            usage = result.usage()
+            total_tokens = (usage.total_tokens or 0) if usage else 0
+            input_tokens = (usage.input_tokens or 0) if usage else 0
+            output_tokens = (usage.output_tokens or 0) if usage else 0
 
-        return output
+            increment_eval_metric("total_tokens", total_tokens)
+            increment_eval_metric("input_tokens", input_tokens)
+            increment_eval_metric("output_tokens", output_tokens)
 
-    except Exception as exc:
-        session_logger.log("error", message=f"{type(exc).__name__}: {exc}")
-        raise
+            # Count turns and tool calls from the message history
+            all_messages = result.all_messages()
+            turn_count = sum(1 for m in all_messages if getattr(m, "kind", None) == "response")
+            increment_eval_metric("turns", turn_count)
+
+            tool_call_count = 0
+            tool_call_fail_count = 0
+            for msg in all_messages:
+                parts = getattr(msg, "parts", [])
+                for part in parts:
+                    part_kind = getattr(part, "part_kind", None)
+                    if part_kind == "tool-call":
+                        tool_call_count += 1
+                    elif part_kind == "retry-prompt":
+                        # PydanticAI emits a RetryPromptPart when a tool call fails
+                        # (e.g. validation error, ModelRetry exception)
+                        tool_call_fail_count += 1
+            increment_eval_metric("tool_calls", tool_call_count)
+            increment_eval_metric("tool_call_failures", tool_call_fail_count)
+
+            # Extract real cost from OpenRouter's inline usage.cost field.
+            # PydanticAI's OpenRouterModel parses this into
+            # ModelResponse.provider_details['cost'] on every response.
+            # This is the actual USD charged, including cache discounts.
+            cost_usd = _extract_cost_from_messages(all_messages)
+            if cost_usd > 0:
+                increment_eval_metric("cost_usd", cost_usd)
+
+            # Log the full message history so we can replay the entire conversation.
+            session_logger.log("messages", history=_serialize_messages(all_messages))
+
+            return output
+
+        except Exception as exc:
+            session_logger.log("error", message=f"{type(exc).__name__}: {exc}")
+            raise
+
+        finally:
+            db_cm.__exit__(None, None, None)
+            session_logger.log("session_end")
+            session_logger.close()
 
     finally:
-        session_logger.log("session_end")
-        session_logger.close()
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def _build_model_settings(inputs: EvalInputs) -> Any:

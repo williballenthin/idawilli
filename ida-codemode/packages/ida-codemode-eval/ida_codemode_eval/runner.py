@@ -35,12 +35,15 @@ def _build_dataset_for_model(
     *,
     config: EvalConfig,
     model_config: ModelConfig,
-    sandbox: Any,
+    db_path: str,
 ) -> Dataset[EvalInputs, str, dict[str, Any]]:
     """Build a pydantic-evals Dataset for one model configuration.
 
     Creates N cases (one per run) all using the same model+prompt+config,
     so pydantic-evals can run them and we get N data points for statistics.
+
+    Each case receives the source database path; the task function copies it
+    to a temporary directory for isolation.
     """
     cases: list[Case[EvalInputs, str, dict[str, Any]]] = []
 
@@ -51,7 +54,7 @@ def _build_dataset_for_model(
             model_label=model_config.label,
             reasoning_effort=model_config.reasoning_effort,
             extra_model_settings=model_config.model_settings or None,
-            sandbox=sandbox,
+            db_path=db_path,
             system_prompt_override=config.system_prompt,
         )
 
@@ -257,64 +260,58 @@ async def run_evaluation(
         console = Console()
 
     db_path = config.resolve_database_path(config_dir)
+    if not db_path.exists():
+        console.print(f"[red]error:[/red] database not found: {db_path}")
+        return []
+
     console.print(f"[bold]Database:[/bold] {db_path}")
     console.print(f"[bold]Runs per model:[/bold] {config.runs_per_model}")
+    console.print(f"[bold]Max concurrency:[/bold] {config.max_concurrency}")
     console.print(f"[bold]Magic string:[/bold] {config.magic_string}")
     console.print()
 
-    # Open the IDA database once for the entire evaluation
-    from ida_codemode_sandbox import IdaSandbox
-    from ida_domain import Database
-    from ida_domain.database import IdaCommandOptions
-
-    ida_options = IdaCommandOptions(auto_analysis=True, new_database=False)
-    db_cm = Database.open(str(db_path), ida_options, save_on_close=False)
-    db = db_cm.__enter__()
+    # Each trial copies the database to a temporary directory for isolation,
+    # so we only need the source path here.
+    db_path_str = str(db_path)
 
     results_dir = _results_dir(config_dir)
     summaries: list[dict[str, Any]] = []
 
-    try:
-        sandbox = IdaSandbox(db)
+    models_to_eval = config.models
+    if model_filter:
+        models_to_eval = [m for m in models_to_eval if model_filter in m.label]
+        if not models_to_eval:
+            console.print(f"[yellow]No models match filter '{model_filter}'[/yellow]")
+            return []
 
-        models_to_eval = config.models
-        if model_filter:
-            models_to_eval = [m for m in models_to_eval if model_filter in m.label]
-            if not models_to_eval:
-                console.print(f"[yellow]No models match filter '{model_filter}'[/yellow]")
-                return []
+    for model_config in models_to_eval:
+        console.print(f"\n[bold cyan]Evaluating: {model_config.label}[/bold cyan]")
+        console.print(f"  Model: {model_config.id}")
+        if model_config.reasoning_effort is not None:
+            console.print(f"  Reasoning effort: {model_config.reasoning_effort}")
+        console.print()
 
-        for model_config in models_to_eval:
-            console.print(f"\n[bold cyan]Evaluating: {model_config.label}[/bold cyan]")
-            console.print(f"  Model: {model_config.id}")
-            if model_config.reasoning_effort is not None:
-                console.print(f"  Reasoning effort: {model_config.reasoning_effort}")
-            console.print()
+        dataset = _build_dataset_for_model(
+            config=config,
+            model_config=model_config,
+            db_path=db_path_str,
+        )
 
-            dataset = _build_dataset_for_model(
-                config=config,
-                model_config=model_config,
-                sandbox=sandbox,
-            )
+        experiment_name = f"{config.name}/{model_config.label}"
+        report = await dataset.evaluate(
+            run_eval_task,
+            name=experiment_name,
+            max_concurrency=config.max_concurrency,
+        )
 
-            experiment_name = f"{config.name}/{model_config.label}"
-            report = await dataset.evaluate(
-                run_eval_task,
-                name=experiment_name,
-                max_concurrency=config.max_concurrency,
-            )
+        report.print()
 
-            report.print()
+        saved_path = _save_report(report, model_config.label, results_dir)
+        console.print(f"\n[dim]Results saved to: {saved_path}[/dim]")
 
-            saved_path = _save_report(report, model_config.label, results_dir)
-            console.print(f"\n[dim]Results saved to: {saved_path}[/dim]")
-
-            summary = _compute_summary(report, model_config.label)
-            summaries.append(summary)
-            _print_summary(summary, console)
-
-    finally:
-        db_cm.__exit__(None, None, None)
+        summary = _compute_summary(report, model_config.label)
+        summaries.append(summary)
+        _print_summary(summary, console)
 
     # Print overall comparison table
     if len(summaries) > 1:
