@@ -69,8 +69,13 @@ class EvalConfig:
     max_concurrency: int = 1
     """Maximum concurrent evaluations.
 
-    Set to 1 for sequential runs (safest with IDA databases).
-    Higher values can speed up evaluation but require care with shared resources.
+    Each trial copies the IDA database to a temporary directory, so higher
+    values are safe.  The main benefit of concurrency > 1 is overlapping LLM
+    API round-trips while one trial waits for a model response.  Note that
+    idalib requires main-thread access; tool callbacks are async so they
+    execute on the event-loop thread (the main thread under ``asyncio.run``),
+    and the synchronous ``sandbox.run()`` call naturally serializes database
+    access even when multiple coroutines are in flight.
     """
 
     system_prompt: str | None = None
@@ -84,16 +89,20 @@ class EvalConfig:
             raw = yaml.safe_load(f)
 
         if not isinstance(raw, dict):
-            raise ValueError(f"expected a YAML mapping in {config_path}, got {type(raw).__name__}")
+            raise ValueError(
+                f"expected a YAML mapping in {config_path}, got {type(raw).__name__}"
+            )
 
         models = []
         for m in raw.get("models", []):
-            models.append(ModelConfig(
-                id=m["id"],
-                label=m["label"],
-                reasoning_effort=m.get("reasoning_effort"),
-                model_settings=m.get("model_settings", {}),
-            ))
+            models.append(
+                ModelConfig(
+                    id=m["id"],
+                    label=m["label"],
+                    reasoning_effort=m.get("reasoning_effort"),
+                    model_settings=m.get("model_settings", {}),
+                )
+            )
 
         return EvalConfig(
             name=raw.get("name", config_path.stem),

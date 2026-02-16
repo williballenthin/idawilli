@@ -72,7 +72,9 @@ def _extract_metrics(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def compare_many(paths: list[Path], console: Console | None = None) -> list[dict[str, Any]]:
+def compare_many(
+    paths: list[Path], console: Console | None = None
+) -> list[dict[str, Any]]:
     """Compare multiple result files in a single table.
 
     Args:
@@ -163,8 +165,14 @@ def plot_comparison(
     ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=8)
     ax.set_ylim(0, 105)
     for bar, rate in zip(bars, rates):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1,
-                f"{rate:.0f}%", ha="center", va="bottom", fontsize=8)
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 1,
+            f"{rate:.0f}%",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+        )
 
     # Duration
     ax = axes[0][1]
@@ -253,7 +261,16 @@ def plot_longitudinal(
     ax = axes[0][1]
     means = [m["duration"]["mean"] for m in all_metrics]
     stds = [m["duration"]["stddev"] for m in all_metrics]
-    ax.errorbar(list(x), means, yerr=stds, fmt="o-", color="coral", linewidth=2, markersize=8, capsize=4)
+    ax.errorbar(
+        list(x),
+        means,
+        yerr=stds,
+        fmt="o-",
+        color="coral",
+        linewidth=2,
+        markersize=8,
+        capsize=4,
+    )
     ax.set_ylabel("Duration (s)")
     ax.set_title("Duration Over Time")
     ax.set_xticks(list(x))
@@ -263,7 +280,16 @@ def plot_longitudinal(
     ax = axes[1][0]
     means = [m["tokens"]["mean"] for m in all_metrics]
     stds = [m["tokens"]["stddev"] for m in all_metrics]
-    ax.errorbar(list(x), means, yerr=stds, fmt="o-", color="mediumpurple", linewidth=2, markersize=8, capsize=4)
+    ax.errorbar(
+        list(x),
+        means,
+        yerr=stds,
+        fmt="o-",
+        color="mediumpurple",
+        linewidth=2,
+        markersize=8,
+        capsize=4,
+    )
     ax.set_ylabel("Total Tokens")
     ax.set_title("Token Usage Over Time")
     ax.set_xticks(list(x))
@@ -273,7 +299,16 @@ def plot_longitudinal(
     ax = axes[1][1]
     means = [m["turns"]["mean"] for m in all_metrics]
     stds = [m["turns"]["stddev"] for m in all_metrics]
-    ax.errorbar(list(x), means, yerr=stds, fmt="o-", color="seagreen", linewidth=2, markersize=8, capsize=4)
+    ax.errorbar(
+        list(x),
+        means,
+        yerr=stds,
+        fmt="o-",
+        color="seagreen",
+        linewidth=2,
+        markersize=8,
+        capsize=4,
+    )
     ax.set_ylabel("Turns")
     ax.set_title("Turns Over Time")
     ax.set_xticks(list(x))

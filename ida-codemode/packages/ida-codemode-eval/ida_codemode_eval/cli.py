@@ -48,7 +48,8 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Override runs_per_model from config",
     )
     run_parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="Enable verbose logging",
     )
@@ -78,7 +79,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     # --- plot command ---
-    plot_parser = subparsers.add_parser("plot", help="Generate comparison plots (requires matplotlib)")
+    plot_parser = subparsers.add_parser(
+        "plot", help="Generate comparison plots (requires matplotlib)"
+    )
     plot_parser.add_argument(
         "results",
         type=Path,
@@ -86,7 +89,8 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Result JSON files to plot",
     )
     plot_parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         type=Path,
         default=None,
         help="Save plot to file instead of displaying interactively",
@@ -121,6 +125,7 @@ def _cmd_run(args: argparse.Namespace, console: Console) -> int:
     # Initialize Logfire observability
     try:
         from ida_codemode_agent.observability import configure_observability
+
         configure_observability(model="eval-runner", db_path=config.database)
     except Exception:
         pass
@@ -182,9 +187,11 @@ def _cmd_plot(args: argparse.Namespace, console: Console) -> int:
     try:
         if args.longitudinal:
             from ida_codemode_eval.compare import plot_longitudinal
+
             plot_longitudinal(paths, output_path=args.output)
         else:
             from ida_codemode_eval.compare import plot_comparison
+
             plot_comparison(paths, output_path=args.output)
     except ImportError as exc:
         console.print(f"[red]error:[/red] {exc}")
@@ -199,6 +206,7 @@ def _cmd_list_models(console: Console) -> int:
     """Execute the 'list-models' subcommand."""
     try:
         from ida_codemode_agent.cli import _available_models
+
         models = _available_models()
     except Exception as exc:
         console.print(f"[red]error:[/red] failed to fetch models: {exc}")

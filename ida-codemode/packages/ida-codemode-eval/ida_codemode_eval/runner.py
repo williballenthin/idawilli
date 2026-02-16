@@ -35,12 +35,15 @@ def _build_dataset_for_model(
     *,
     config: EvalConfig,
     model_config: ModelConfig,
-    sandbox: Any,
+    db_path: str,
 ) -> Dataset[EvalInputs, str, dict[str, Any]]:
     """Build a pydantic-evals Dataset for one model configuration.
 
     Creates N cases (one per run) all using the same model+prompt+config,
     so pydantic-evals can run them and we get N data points for statistics.
+
+    Each case receives the source database path; the task function copies it
+    to a temporary directory for isolation.
     """
     cases: list[Case[EvalInputs, str, dict[str, Any]]] = []
 
@@ -51,22 +54,24 @@ def _build_dataset_for_model(
             model_label=model_config.label,
             reasoning_effort=model_config.reasoning_effort,
             extra_model_settings=model_config.model_settings or None,
-            sandbox=sandbox,
+            db_path=db_path,
             system_prompt_override=config.system_prompt,
         )
 
-        cases.append(Case(
-            name=f"{model_config.label}/run-{run_idx:02d}",
-            inputs=inputs,
-            expected_output=None,
-            metadata={
-                "magic_string": config.magic_string,
-                "model_id": model_config.id,
-                "model_label": model_config.label,
-                "run_index": run_idx,
-                "reasoning_effort": model_config.reasoning_effort,
-            },
-        ))
+        cases.append(
+            Case(
+                name=f"{model_config.label}/run-{run_idx:02d}",
+                inputs=inputs,
+                expected_output=None,
+                metadata={
+                    "magic_string": config.magic_string,
+                    "model_id": model_config.id,
+                    "model_label": model_config.label,
+                    "run_index": run_idx,
+                    "reasoning_effort": model_config.reasoning_effort,
+                },
+            )
+        )
 
     evaluators: list[Any] = [
         ContainsC2Indicator(),
@@ -121,21 +126,26 @@ def _save_report(
                 "assertions": {},
             }
 
+            def _unwrap(v: Any) -> Any:
+                return getattr(v, "value", v)
+
             if hasattr(case, "scores"):
                 for k, v in case.scores.items():
-                    case_data["scores"][k] = v
+                    case_data["scores"][k] = _unwrap(v)
             if hasattr(case, "labels"):
                 for k, v in case.labels.items():
-                    case_data["labels"][k] = v
+                    case_data["labels"][k] = _unwrap(v)
             if hasattr(case, "assertions"):
                 for k, v in case.assertions.items():
-                    case_data["assertions"][k] = v
+                    case_data["assertions"][k] = _unwrap(v)
             if hasattr(case, "duration"):
                 case_data["duration"] = case.duration
 
             report_data["cases"].append(case_data)
 
-    filepath.write_text(json.dumps(report_data, indent=2, default=str), encoding="utf-8")
+    filepath.write_text(
+        json.dumps(report_data, indent=2, default=str), encoding="utf-8"
+    )
     return filepath
 
 
@@ -161,21 +171,31 @@ def _compute_summary(report: Any, model_label: str) -> dict[str, Any]:
 
         if hasattr(case, "assertions"):
             c2_result = case.assertions.get("ContainsC2Indicator")
-            if c2_result is True:
+            c2_value = getattr(c2_result, "value", c2_result)
+            if c2_value is True:
                 summary["successful_runs"] += 1
 
         if hasattr(case, "duration") and case.duration is not None:
             summary["durations"].append(case.duration)
 
         if hasattr(case, "scores"):
+
+            def _score_value(score: Any) -> float:
+                """Extract the numeric value from a score (raw float or EvaluationResult)."""
+                if hasattr(score, "value"):
+                    return float(score.value)
+                return float(score)
+
             if "TokenUsage" in case.scores:
-                summary["total_tokens"].append(case.scores["TokenUsage"])
+                summary["total_tokens"].append(_score_value(case.scores["TokenUsage"]))
             if "TurnCount" in case.scores:
-                summary["turns"].append(case.scores["TurnCount"])
+                summary["turns"].append(_score_value(case.scores["TurnCount"]))
             if "ToolCallCount" in case.scores:
-                summary["tool_calls"].append(case.scores["ToolCallCount"])
-            if "EstimatedCost" in case.scores and case.scores["EstimatedCost"] > 0:
-                summary["cost_usd"].append(case.scores["EstimatedCost"])
+                summary["tool_calls"].append(_score_value(case.scores["ToolCallCount"]))
+            if "EstimatedCost" in case.scores:
+                cost = _score_value(case.scores["EstimatedCost"])
+                if cost > 0:
+                    summary["cost_usd"].append(cost)
 
     total = summary["total_runs"]
     if total > 0:
@@ -209,7 +229,9 @@ def _print_summary(summary: dict[str, Any], console: Console) -> None:
         if len(values) > 1:
             variance = sum((v - avg) ** 2 for v in values) / (len(values) - 1)
             stddev = variance**0.5
-            table.add_row(label, f"avg={avg:.1f}  std={stddev:.1f}  min={mn:.1f}  max={mx:.1f}")
+            table.add_row(
+                label, f"avg={avg:.1f}  std={stddev:.1f}  min={mn:.1f}  max={mx:.1f}"
+            )
         else:
             table.add_row(label, f"{avg:.1f}")
 
@@ -224,9 +246,14 @@ def _print_summary(summary: dict[str, Any], console: Console) -> None:
         avg_cost = sum(cost_values) / len(cost_values)
         total_cost = sum(cost_values)
         if len(cost_values) > 1:
-            variance = sum((v - avg_cost) ** 2 for v in cost_values) / (len(cost_values) - 1)
+            variance = sum((v - avg_cost) ** 2 for v in cost_values) / (
+                len(cost_values) - 1
+            )
             stddev = variance**0.5
-            table.add_row("Cost (USD)", f"avg=${avg_cost:.4f}  std=${stddev:.4f}  total=${total_cost:.4f}")
+            table.add_row(
+                "Cost (USD)",
+                f"avg=${avg_cost:.4f}  std=${stddev:.4f}  total=${total_cost:.4f}",
+            )
         else:
             table.add_row("Cost (USD)", f"${avg_cost:.4f}")
     else:
@@ -257,64 +284,58 @@ async def run_evaluation(
         console = Console()
 
     db_path = config.resolve_database_path(config_dir)
+    if not db_path.exists():
+        console.print(f"[red]error:[/red] database not found: {db_path}")
+        return []
+
     console.print(f"[bold]Database:[/bold] {db_path}")
     console.print(f"[bold]Runs per model:[/bold] {config.runs_per_model}")
+    console.print(f"[bold]Max concurrency:[/bold] {config.max_concurrency}")
     console.print(f"[bold]Magic string:[/bold] {config.magic_string}")
     console.print()
 
-    # Open the IDA database once for the entire evaluation
-    from ida_codemode_sandbox import IdaSandbox
-    from ida_domain import Database
-    from ida_domain.database import IdaCommandOptions
-
-    ida_options = IdaCommandOptions(auto_analysis=True, new_database=False)
-    db_cm = Database.open(str(db_path), ida_options, save_on_close=False)
-    db = db_cm.__enter__()
+    # Each trial copies the database to a temporary directory for isolation,
+    # so we only need the source path here.
+    db_path_str = str(db_path)
 
     results_dir = _results_dir(config_dir)
     summaries: list[dict[str, Any]] = []
 
-    try:
-        sandbox = IdaSandbox(db)
+    models_to_eval = config.models
+    if model_filter:
+        models_to_eval = [m for m in models_to_eval if model_filter in m.label]
+        if not models_to_eval:
+            console.print(f"[yellow]No models match filter '{model_filter}'[/yellow]")
+            return []
 
-        models_to_eval = config.models
-        if model_filter:
-            models_to_eval = [m for m in models_to_eval if model_filter in m.label]
-            if not models_to_eval:
-                console.print(f"[yellow]No models match filter '{model_filter}'[/yellow]")
-                return []
+    for model_config in models_to_eval:
+        console.print(f"\n[bold cyan]Evaluating: {model_config.label}[/bold cyan]")
+        console.print(f"  Model: {model_config.id}")
+        if model_config.reasoning_effort is not None:
+            console.print(f"  Reasoning effort: {model_config.reasoning_effort}")
+        console.print()
 
-        for model_config in models_to_eval:
-            console.print(f"\n[bold cyan]Evaluating: {model_config.label}[/bold cyan]")
-            console.print(f"  Model: {model_config.id}")
-            if model_config.reasoning_effort is not None:
-                console.print(f"  Reasoning effort: {model_config.reasoning_effort}")
-            console.print()
+        dataset = _build_dataset_for_model(
+            config=config,
+            model_config=model_config,
+            db_path=db_path_str,
+        )
 
-            dataset = _build_dataset_for_model(
-                config=config,
-                model_config=model_config,
-                sandbox=sandbox,
-            )
+        experiment_name = f"{config.name}/{model_config.label}"
+        report = await dataset.evaluate(
+            run_eval_task,
+            name=experiment_name,
+            max_concurrency=config.max_concurrency,
+        )
 
-            experiment_name = f"{config.name}/{model_config.label}"
-            report = await dataset.evaluate(
-                run_eval_task,
-                name=experiment_name,
-                max_concurrency=config.max_concurrency,
-            )
+        report.print()
 
-            report.print()
+        saved_path = _save_report(report, model_config.label, results_dir)
+        console.print(f"\n[dim]Results saved to: {saved_path}[/dim]")
 
-            saved_path = _save_report(report, model_config.label, results_dir)
-            console.print(f"\n[dim]Results saved to: {saved_path}[/dim]")
-
-            summary = _compute_summary(report, model_config.label)
-            summaries.append(summary)
-            _print_summary(summary, console)
-
-    finally:
-        db_cm.__exit__(None, None, None)
+        summary = _compute_summary(report, model_config.label)
+        summaries.append(summary)
+        _print_summary(summary, console)
 
     # Print overall comparison table
     if len(summaries) > 1:
@@ -337,6 +358,7 @@ def _print_comparison(summaries: list[dict[str, Any]], console: Console) -> None
     table.add_column("Avg Cost (USD)", justify="right")
 
     for s in sorted(summaries, key=lambda x: x["success_rate"], reverse=True):
+
         def _avg(values: list[float]) -> str:
             if not values:
                 return "n/a"
