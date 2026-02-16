@@ -89,16 +89,20 @@ class EvalConfig:
             raw = yaml.safe_load(f)
 
         if not isinstance(raw, dict):
-            raise ValueError(f"expected a YAML mapping in {config_path}, got {type(raw).__name__}")
+            raise ValueError(
+                f"expected a YAML mapping in {config_path}, got {type(raw).__name__}"
+            )
 
         models = []
         for m in raw.get("models", []):
-            models.append(ModelConfig(
-                id=m["id"],
-                label=m["label"],
-                reasoning_effort=m.get("reasoning_effort"),
-                model_settings=m.get("model_settings", {}),
-            ))
+            models.append(
+                ModelConfig(
+                    id=m["id"],
+                    label=m["label"],
+                    reasoning_effort=m.get("reasoning_effort"),
+                    model_settings=m.get("model_settings", {}),
+                )
+            )
 
         return EvalConfig(
             name=raw.get("name", config_path.stem),

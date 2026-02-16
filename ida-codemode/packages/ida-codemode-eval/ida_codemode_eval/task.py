@@ -161,7 +161,9 @@ async def run_eval_task(inputs: EvalInputs) -> str:
 
             # If a custom system prompt is provided, we need to build the agent differently
             if inputs.system_prompt_override is not None:
-                agent = _build_agent_with_prompt(inputs.model_id, evaluator, inputs.system_prompt_override)
+                agent = _build_agent_with_prompt(
+                    inputs.model_id, evaluator, inputs.system_prompt_override
+                )
             else:
                 agent = build_agent(inputs.model_id, evaluator)
 
@@ -187,7 +189,9 @@ async def run_eval_task(inputs: EvalInputs) -> str:
 
             # Count turns and tool calls from the message history
             all_messages = result.all_messages()
-            turn_count = sum(1 for m in all_messages if getattr(m, "kind", None) == "response")
+            turn_count = sum(
+                1 for m in all_messages if getattr(m, "kind", None) == "response"
+            )
             increment_eval_metric("turns", turn_count)
 
             tool_call_count = 0

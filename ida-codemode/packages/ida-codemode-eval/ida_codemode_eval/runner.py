@@ -58,18 +58,20 @@ def _build_dataset_for_model(
             system_prompt_override=config.system_prompt,
         )
 
-        cases.append(Case(
-            name=f"{model_config.label}/run-{run_idx:02d}",
-            inputs=inputs,
-            expected_output=None,
-            metadata={
-                "magic_string": config.magic_string,
-                "model_id": model_config.id,
-                "model_label": model_config.label,
-                "run_index": run_idx,
-                "reasoning_effort": model_config.reasoning_effort,
-            },
-        ))
+        cases.append(
+            Case(
+                name=f"{model_config.label}/run-{run_idx:02d}",
+                inputs=inputs,
+                expected_output=None,
+                metadata={
+                    "magic_string": config.magic_string,
+                    "model_id": model_config.id,
+                    "model_label": model_config.label,
+                    "run_index": run_idx,
+                    "reasoning_effort": model_config.reasoning_effort,
+                },
+            )
+        )
 
     evaluators: list[Any] = [
         ContainsC2Indicator(),
@@ -138,7 +140,9 @@ def _save_report(
 
             report_data["cases"].append(case_data)
 
-    filepath.write_text(json.dumps(report_data, indent=2, default=str), encoding="utf-8")
+    filepath.write_text(
+        json.dumps(report_data, indent=2, default=str), encoding="utf-8"
+    )
     return filepath
 
 
@@ -212,7 +216,9 @@ def _print_summary(summary: dict[str, Any], console: Console) -> None:
         if len(values) > 1:
             variance = sum((v - avg) ** 2 for v in values) / (len(values) - 1)
             stddev = variance**0.5
-            table.add_row(label, f"avg={avg:.1f}  std={stddev:.1f}  min={mn:.1f}  max={mx:.1f}")
+            table.add_row(
+                label, f"avg={avg:.1f}  std={stddev:.1f}  min={mn:.1f}  max={mx:.1f}"
+            )
         else:
             table.add_row(label, f"{avg:.1f}")
 
@@ -227,9 +233,14 @@ def _print_summary(summary: dict[str, Any], console: Console) -> None:
         avg_cost = sum(cost_values) / len(cost_values)
         total_cost = sum(cost_values)
         if len(cost_values) > 1:
-            variance = sum((v - avg_cost) ** 2 for v in cost_values) / (len(cost_values) - 1)
+            variance = sum((v - avg_cost) ** 2 for v in cost_values) / (
+                len(cost_values) - 1
+            )
             stddev = variance**0.5
-            table.add_row("Cost (USD)", f"avg=${avg_cost:.4f}  std=${stddev:.4f}  total=${total_cost:.4f}")
+            table.add_row(
+                "Cost (USD)",
+                f"avg=${avg_cost:.4f}  std=${stddev:.4f}  total=${total_cost:.4f}",
+            )
         else:
             table.add_row("Cost (USD)", f"${avg_cost:.4f}")
     else:
@@ -334,6 +345,7 @@ def _print_comparison(summaries: list[dict[str, Any]], console: Console) -> None
     table.add_column("Avg Cost (USD)", justify="right")
 
     for s in sorted(summaries, key=lambda x: x["success_rate"], reverse=True):
+
         def _avg(values: list[float]) -> str:
             if not values:
                 return "n/a"
