@@ -64,6 +64,20 @@ def _extract_cost_from_messages(all_messages: list[Any]) -> float:
     return total_cost
 
 
+def _serialize_messages(messages: list[Any]) -> list[Any]:
+    """Serialize pydantic-ai message history for JSON session logging."""
+    serialized: list[Any] = []
+    for msg in messages:
+        if hasattr(msg, "model_dump"):
+            try:
+                serialized.append(msg.model_dump(mode="json"))
+                continue
+            except Exception:
+                pass
+        serialized.append(repr(msg))
+    return serialized
+
+
 async def run_eval_task(inputs: EvalInputs) -> str:
     """Execute a single evaluation run of the ida-codemode agent.
 
@@ -78,73 +92,106 @@ async def run_eval_task(inputs: EvalInputs) -> str:
     """
     from pydantic_evals.dataset import increment_eval_metric, set_eval_attribute
 
-    from ida_codemode_agent.cli import ScriptEvaluator, build_agent
+    from ida_codemode_agent.cli import ScriptEvaluator, SessionLogger, build_agent
 
-    # Record model info as eval attributes
-    set_eval_attribute("model_id", inputs.model_id)
-    set_eval_attribute("model_label", inputs.model_label)
-    if inputs.reasoning_effort is not None:
-        set_eval_attribute("reasoning_effort", inputs.reasoning_effort)
+    # Create a session logger for this eval run so traces can be reviewed later.
+    session_logger = SessionLogger.create_for_eval(inputs.model_label)
+    session_logger.log(
+        "session_start",
+        mode="eval",
+        model_id=inputs.model_id,
+        model_label=inputs.model_label,
+        reasoning_effort=inputs.reasoning_effort,
+        system_prompt_override=inputs.system_prompt_override is not None,
+    )
+    session_logger.log("user", content=inputs.prompt)
 
-    # Build model settings using OpenRouterModelSettings when reasoning is configured
-    model_settings = _build_model_settings(inputs)
+    try:
+        # Record model info as eval attributes
+        set_eval_attribute("model_id", inputs.model_id)
+        set_eval_attribute("model_label", inputs.model_label)
+        if inputs.reasoning_effort is not None:
+            set_eval_attribute("reasoning_effort", inputs.reasoning_effort)
 
-    # Build the agent (reuses the same code path as interactive CLI)
-    evaluator = ScriptEvaluator(sandbox=inputs.sandbox)
+        # Build model settings using OpenRouterModelSettings when reasoning is configured
+        model_settings = _build_model_settings(inputs)
 
-    # If a custom system prompt is provided, we need to build the agent differently
-    if inputs.system_prompt_override is not None:
-        agent = _build_agent_with_prompt(inputs.model_id, evaluator, inputs.system_prompt_override)
-    else:
-        agent = build_agent(inputs.model_id, evaluator)
+        # Build the agent (reuses the same code path as interactive CLI)
+        evaluator = ScriptEvaluator(
+            sandbox=inputs.sandbox,
+            on_evaluation=lambda script, result: session_logger.log(
+                "tool_evaluation",
+                script=script,
+                result=result,
+            ),
+        )
 
-    # Run the agent non-interactively
-    kwargs: dict[str, Any] = {}
-    if model_settings is not None:
-        kwargs["model_settings"] = model_settings
+        # If a custom system prompt is provided, we need to build the agent differently
+        if inputs.system_prompt_override is not None:
+            agent = _build_agent_with_prompt(inputs.model_id, evaluator, inputs.system_prompt_override)
+        else:
+            agent = build_agent(inputs.model_id, evaluator)
 
-    result = await agent.run(inputs.prompt, **kwargs)
-    output = str(result.output) if result.output else ""
+        # Run the agent non-interactively
+        kwargs: dict[str, Any] = {}
+        if model_settings is not None:
+            kwargs["model_settings"] = model_settings
 
-    # Extract and record usage metrics
-    usage = result.usage()
-    total_tokens = (usage.total_tokens or 0) if usage else 0
-    input_tokens = (usage.input_tokens or 0) if usage else 0
-    output_tokens = (usage.output_tokens or 0) if usage else 0
+        result = await agent.run(inputs.prompt, **kwargs)
+        output = str(result.output) if result.output else ""
 
-    increment_eval_metric("total_tokens", total_tokens)
-    increment_eval_metric("input_tokens", input_tokens)
-    increment_eval_metric("output_tokens", output_tokens)
+        session_logger.log("assistant", content=output)
 
-    # Count turns and tool calls from the message history
-    all_messages = result.all_messages()
-    turn_count = sum(1 for m in all_messages if getattr(m, "kind", None) == "response")
-    increment_eval_metric("turns", turn_count)
+        # Extract and record usage metrics
+        usage = result.usage()
+        total_tokens = (usage.total_tokens or 0) if usage else 0
+        input_tokens = (usage.input_tokens or 0) if usage else 0
+        output_tokens = (usage.output_tokens or 0) if usage else 0
 
-    tool_call_count = 0
-    tool_call_fail_count = 0
-    for msg in all_messages:
-        parts = getattr(msg, "parts", [])
-        for part in parts:
-            part_kind = getattr(part, "part_kind", None)
-            if part_kind == "tool-call":
-                tool_call_count += 1
-            elif part_kind == "retry-prompt":
-                # PydanticAI emits a RetryPromptPart when a tool call fails
-                # (e.g. validation error, ModelRetry exception)
-                tool_call_fail_count += 1
-    increment_eval_metric("tool_calls", tool_call_count)
-    increment_eval_metric("tool_call_failures", tool_call_fail_count)
+        increment_eval_metric("total_tokens", total_tokens)
+        increment_eval_metric("input_tokens", input_tokens)
+        increment_eval_metric("output_tokens", output_tokens)
 
-    # Extract real cost from OpenRouter's inline usage.cost field.
-    # PydanticAI's OpenRouterModel parses this into
-    # ModelResponse.provider_details['cost'] on every response.
-    # This is the actual USD charged, including cache discounts.
-    cost_usd = _extract_cost_from_messages(all_messages)
-    if cost_usd > 0:
-        increment_eval_metric("cost_usd", cost_usd)
+        # Count turns and tool calls from the message history
+        all_messages = result.all_messages()
+        turn_count = sum(1 for m in all_messages if getattr(m, "kind", None) == "response")
+        increment_eval_metric("turns", turn_count)
 
-    return output
+        tool_call_count = 0
+        tool_call_fail_count = 0
+        for msg in all_messages:
+            parts = getattr(msg, "parts", [])
+            for part in parts:
+                part_kind = getattr(part, "part_kind", None)
+                if part_kind == "tool-call":
+                    tool_call_count += 1
+                elif part_kind == "retry-prompt":
+                    # PydanticAI emits a RetryPromptPart when a tool call fails
+                    # (e.g. validation error, ModelRetry exception)
+                    tool_call_fail_count += 1
+        increment_eval_metric("tool_calls", tool_call_count)
+        increment_eval_metric("tool_call_failures", tool_call_fail_count)
+
+        # Extract real cost from OpenRouter's inline usage.cost field.
+        # PydanticAI's OpenRouterModel parses this into
+        # ModelResponse.provider_details['cost'] on every response.
+        # This is the actual USD charged, including cache discounts.
+        cost_usd = _extract_cost_from_messages(all_messages)
+        if cost_usd > 0:
+            increment_eval_metric("cost_usd", cost_usd)
+
+        # Log the full message history so we can replay the entire conversation.
+        session_logger.log("messages", history=_serialize_messages(all_messages))
+
+        return output
+
+    except Exception as exc:
+        session_logger.log("error", message=f"{type(exc).__name__}: {exc}")
+        raise
+
+    finally:
+        session_logger.log("session_end")
+        session_logger.close()
 
 
 def _build_model_settings(inputs: EvalInputs) -> Any:

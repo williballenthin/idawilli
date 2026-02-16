@@ -230,6 +230,17 @@ class SessionLogger:
         filename = f"{stamp}-{os.getpid()}.jsonl"
         return cls(_sessions_dir() / filename)
 
+    @classmethod
+    def create_for_eval(cls, label: str) -> "SessionLogger":
+        """Create a session logger for an eval run with a unique filename."""
+        import uuid
+
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        safe_label = label.replace("/", "_").replace(":", "_")
+        unique = uuid.uuid4().hex[:8]
+        filename = f"{stamp}-eval-{safe_label}-{unique}.jsonl"
+        return cls(_sessions_dir() / filename)
+
     def log(self, event: str, **payload: Any) -> None:
         record = {
             "ts": datetime.now(timezone.utc).isoformat(),
