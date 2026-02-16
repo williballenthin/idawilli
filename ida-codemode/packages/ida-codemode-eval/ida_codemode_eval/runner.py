@@ -126,15 +126,18 @@ def _save_report(
                 "assertions": {},
             }
 
+            def _unwrap(v: Any) -> Any:
+                return getattr(v, "value", v)
+
             if hasattr(case, "scores"):
                 for k, v in case.scores.items():
-                    case_data["scores"][k] = v
+                    case_data["scores"][k] = _unwrap(v)
             if hasattr(case, "labels"):
                 for k, v in case.labels.items():
-                    case_data["labels"][k] = v
+                    case_data["labels"][k] = _unwrap(v)
             if hasattr(case, "assertions"):
                 for k, v in case.assertions.items():
-                    case_data["assertions"][k] = v
+                    case_data["assertions"][k] = _unwrap(v)
             if hasattr(case, "duration"):
                 case_data["duration"] = case.duration
 
@@ -168,21 +171,31 @@ def _compute_summary(report: Any, model_label: str) -> dict[str, Any]:
 
         if hasattr(case, "assertions"):
             c2_result = case.assertions.get("ContainsC2Indicator")
-            if c2_result is True:
+            c2_value = getattr(c2_result, "value", c2_result)
+            if c2_value is True:
                 summary["successful_runs"] += 1
 
         if hasattr(case, "duration") and case.duration is not None:
             summary["durations"].append(case.duration)
 
         if hasattr(case, "scores"):
+
+            def _score_value(score: Any) -> float:
+                """Extract the numeric value from a score (raw float or EvaluationResult)."""
+                if hasattr(score, "value"):
+                    return float(score.value)
+                return float(score)
+
             if "TokenUsage" in case.scores:
-                summary["total_tokens"].append(case.scores["TokenUsage"])
+                summary["total_tokens"].append(_score_value(case.scores["TokenUsage"]))
             if "TurnCount" in case.scores:
-                summary["turns"].append(case.scores["TurnCount"])
+                summary["turns"].append(_score_value(case.scores["TurnCount"]))
             if "ToolCallCount" in case.scores:
-                summary["tool_calls"].append(case.scores["ToolCallCount"])
-            if "EstimatedCost" in case.scores and case.scores["EstimatedCost"] > 0:
-                summary["cost_usd"].append(case.scores["EstimatedCost"])
+                summary["tool_calls"].append(_score_value(case.scores["ToolCallCount"]))
+            if "EstimatedCost" in case.scores:
+                cost = _score_value(case.scores["EstimatedCost"])
+                if cost > 0:
+                    summary["cost_usd"].append(cost)
 
     total = summary["total_runs"]
     if total > 0:

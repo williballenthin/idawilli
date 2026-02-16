@@ -1,0 +1,32 @@
+# Trivial benchmark: fetch the SHA256 of the input binary
+#
+# Verifies that the agent can call get_database_metadata() and report
+# the input file's SHA256 hash.  This is the simplest possible eval:
+# one tool call, one deterministic answer.
+#
+# Usage:
+#   ida-codemode-eval run evals/sha256_trivial.yaml
+
+name: "sha256-trivial"
+
+database: "data/Lab01-01.exe_.i64"
+
+# SHA256 of the test binary (ground truth)
+magic_string: "58898bd42c5bd3bf9b1389f0eee5b39cd59180e8370eb9ea838a0b327bd6fe47"
+
+runs_per_model: 1
+timeout_per_run: 120
+max_concurrency: 1
+
+task_prompt: |
+  What is the SHA256 hash of the input file loaded in this database?
+  Use get_database_metadata() to retrieve it and report just the hash.
+
+models:
+  - id: "openrouter:z-ai/glm-4.7-flash"
+    label: "glm-4.7-flash"
+
+  - id: "openrouter:qwen/qwen3-coder-next"
+    label: "qwen3-coder-next"
+    model_settings:
+      max_tokens: 4096
