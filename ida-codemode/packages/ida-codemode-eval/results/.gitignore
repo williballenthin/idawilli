@@ -1,0 +1,3 @@
+# Evaluation result JSON files (generated, potentially large)
+*.json
+!.gitkeep

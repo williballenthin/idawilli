@@ -2,5 +2,6 @@
 members = [
     "packages/ida-codemode-agent",
     "packages/ida-codemode-api",
+    "packages/ida-codemode-eval",
     "packages/ida-codemode-sandbox",
 ]

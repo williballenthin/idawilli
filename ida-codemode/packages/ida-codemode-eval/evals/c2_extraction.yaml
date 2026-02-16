@@ -1,0 +1,82 @@
+# Evaluation config: C2 configuration extraction from malware binary
+#
+# This evaluates how well different LLM models can analyze a malware binary
+# using IDA Pro tools, locate encoded C2 configuration data, and extract
+# the hidden command-and-control server address.
+#
+# Usage:
+#   ida-codemode-eval run evals/c2_extraction.yaml
+#   ida-codemode-eval run evals/c2_extraction.yaml --model claude-sonnet
+#   ida-codemode-eval run evals/c2_extraction.yaml --runs 10
+
+name: "c2-extraction"
+
+# Path to binary/database (relative to this file's directory)
+database: "../tests/data/Practical Malware Analysis Lab 01-01.exe_"
+
+# The C2 indicator that a successful analysis must surface.
+# TODO: Replace with the actual C2 string from your test binary.
+magic_string: "PLACEHOLDER_C2_SERVER"
+
+# Number of runs per model+config combo (for statistical robustness)
+runs_per_model: 5
+
+# Max wall-clock time for a single agent run
+timeout_per_run: 300
+
+# Concurrent runs (1 = sequential, safest for shared IDA database)
+max_concurrency: 1
+
+# The analysis prompt sent to the agent
+task_prompt: |
+  Analyze this binary for command-and-control (C2) indicators.
+  The malware contains encoded or hidden C2 configuration data.
+  Use the available IDA analysis tools to:
+  1. Explore the binary's functions and strings
+  2. Identify functions that decode or construct C2 configuration
+  3. Trace the decoding logic and extract the hidden data
+  4. Report all C2 server addresses and configuration you find
+
+  Be thorough: examine string references, look for encoding/decoding
+  routines (XOR, base64, custom algorithms), and trace data flow
+  through the relevant functions.
+
+# Model configurations to evaluate
+models:
+  # --- Anthropic ---
+  - id: "openrouter:anthropic/claude-sonnet-4-20250514"
+    label: "claude-sonnet-4"
+
+  - id: "openrouter:anthropic/claude-sonnet-4-20250514"
+    label: "claude-sonnet-4-thinking-high"
+    reasoning_effort: "high"
+
+  - id: "openrouter:anthropic/claude-sonnet-4-20250514"
+    label: "claude-sonnet-4-thinking-low"
+    reasoning_effort: "low"
+
+  # --- Google ---
+  - id: "openrouter:google/gemini-2.5-pro-preview-05-06"
+    label: "gemini-2.5-pro"
+
+  - id: "openrouter:google/gemini-2.5-flash-preview-05-20"
+    label: "gemini-2.5-flash"
+
+  # --- OpenAI ---
+  - id: "openrouter:openai/gpt-4.1"
+    label: "gpt-4.1"
+
+  - id: "openrouter:openai/o4-mini"
+    label: "o4-mini"
+
+  # --- DeepSeek ---
+  - id: "openrouter:deepseek/deepseek-r1"
+    label: "deepseek-r1"
+
+  # --- Qwen ---
+  - id: "openrouter:qwen/qwen3-235b-a22b"
+    label: "qwen3-235b"
+
+# Uncomment to override the default system prompt:
+# system_prompt: |
+#   You are an expert reverse engineering assistant...
