@@ -1,0 +1,52 @@
+--- Overview: Practical Malware Analysis Lab 01-01.exe_ ----------------
+File: ../tests/data/Practical Malware Analysis Lab 01-01.exe_
+Architecture: metapc (32-bit)
+Image base: 0x400000
+Entry point: start@0x401820
+Functions: 14 total, 9 named
+MD5: bb7425b82141a1c0f7d60e5106676bb1
+SHA256: 58898bd42c5bd3bf9b1389f0eee5b39cd59180e8370eb9ea838a0b327bd6fe47
+--- Segments -----------------------------------------------------------
+.text                  0x401000 -       0x402000 size=0x1000 perms=r-x
+.idata                 0x402000 -       0x40206C size=0x6C perms=r--
+.rdata                 0x40206C -       0x403000 size=0xF94 perms=r--
+.data                  0x403000 -       0x404000 size=0x1000 perms=rw-
+--- Entry points -------------------------------------------------------
+0x401820  start@0x401820 (OEP)
+--- Imports ------------------------------------------------------------
+[KERNEL32]
+CloseHandle@0x402000
+CopyFileA@0x402024
+CreateFileA@0x402014
+CreateFileMappingA@0x402010
+FindClose@0x402018
+FindFirstFileA@0x402020
+FindNextFileA@0x40201C
+IsBadReadPtr@0x402008
+MapViewOfFile@0x40200C
+UnmapViewOfFile@0x402004
+[MSVCRT]
+__getmainargs@0x402040
+__p___initenv@0x40203C
+__p__commode@0x402050
+__p__fmode@0x402054
+__set_app_type@0x402058
+__setusermatherr@0x402048
+_adjust_fdiv@0x40204C
+_controlfp@0x402060
+_except_handler3@0x40205C
+_exit@0x402034
+_initterm@0x402044
+_stricmp@0x402064
+_XcptFilter@0x402038
+exit@0x402030
+malloc@0x40202C
+--- Tips ---------------------------------------------------------------
+• View the entry point.
+    $ idals ../tests/data/Practical Malware Analysis Lab 01-01.exe_ 0x401820
+• This binary imports CloseHandle@0x402000 - view cross references to it.
+    $ python -m idals ../tests/data/Practical Malware Analysis Lab 01-01.exe_ CloseHandle --after=1
+• Explore a named function _main@0x401440.
+    $ idals ../tests/data/Practical Malware Analysis Lab 01-01.exe_ _main
+• Addresses shown as va. Switch mode with --offsets rva or --offsets file.
+    $ idals ../tests/data/Practical Malware Analysis Lab 01-01.exe_ 0x401820 --offsets rva

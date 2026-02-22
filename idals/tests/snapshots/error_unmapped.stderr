@@ -1,0 +1,7 @@
+Error: Address 0xDEAD is not mapped in the binary.
+Valid address ranges:
+  .text 0x401000 - 0x402000
+  .idata 0x402000 - 0x40206C
+  .rdata 0x40206C - 0x403000
+  .data 0x403000 - 0x404000
+Tip: Use `idals <file>` (no address) to see the full memory layout.

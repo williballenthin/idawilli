@@ -1,0 +1,5 @@
+Error: Symbol "CreateFlie" not found.
+Did you mean:
+  CreateFileA@0x402014
+  CreateFileMappingA@0x402010
+Tip: Use `idals <file>` to inspect available imports/exports and names.

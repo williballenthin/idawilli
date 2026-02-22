@@ -1,0 +1,20 @@
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+default: check
+
+lint: lint-ruff lint-ty
+
+lint-ruff:
+    uv run --with ruff ruff check idals.py tests
+
+lint-ty:
+    uv run --with ty ty check --ignore unresolved-import .
+
+test:
+    uv run --with pytest --with idapro --with ida-domain --with rich pytest tests/test_cli_snapshots.py -q
+
+build:
+    uv run --with build --with twine python -m build .
+    uv run --with twine twine check dist/*
+
+check: lint test

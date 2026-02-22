@@ -1,0 +1,29 @@
+[project]
+name = "idals"
+version = "0.1.0.dev0"
+description = "IDA Pro-powered binary inspection from the command line"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [
+  { name = "Willi Ballenthin", email = "wballenthin@hex-rays.com" },
+]
+dependencies = [
+  "idapro>=0.0.7",
+  "ida-domain>=0.4.0",
+  "rich>=13.7.0",
+]
+
+[project.scripts]
+idals = "idals:main"
+
+[project.urls]
+repository = "https://github.com/williballenthin/idawilli"
+source = "https://github.com/williballenthin/idawilli/tree/master/idals"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["idals"]

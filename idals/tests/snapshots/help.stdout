@@ -1,0 +1,49 @@
+idals — IDA Pro-powered binary inspection from the command line
+
+USAGE
+  idals <file>                                  Show binary overview (segments, entry points, imports)
+  idals <file> <address>                        Show disassembly at address (--after defaults to 16)
+  idals <file> <symbol>                         Show disassembly at named symbol
+  idals <file> <address> --after N              Show N instructions/items after address
+  idals <file> <address> --before N             Show N instructions/items before address
+  idals <file> <address> --after N --before M   Show context around address
+
+ADDRESS FORMATS
+  0x140001000                       Hex with prefix
+  140001000                         Bare hex
+  main                              Symbol name
+  CreateFileW                       Import name
+  sub_140001000                     Auto-generated function name
+
+OPTIONS
+  --after N, -A          Instructions/items after target (default: 16)
+  --before N, -B         Instructions/items before target (default: 0)
+  --offsets va|rva|file  Address display mode (default: va)
+  --decompile            Force pseudocode output regardless of length
+  --no-decompile         Suppress pseudocode output entirely
+  --no-color             Disable syntax highlighting
+  -h, --help             Show this help tutorial
+  -v, --version          Show version information
+
+EXAMPLES
+  $ idals suspicious.exe
+  $ idals suspicious.exe 0x140001000
+  $ idals suspicious.exe main
+  $ idals suspicious.exe sub_140001000 --after 128
+  $ idals suspicious.exe 0x14000BEEF --after 8 --before 8
+  $ idals suspicious.exe 0x140001000 --offsets file
+
+COMMON MISTAKES
+  $ idals file.exe 1234
+    If you mean decimal, convert to hex first.
+
+  $ idals file.exe 0xDEAD
+    If unmapped, run `idals file.exe` to inspect valid ranges.
+
+TIPS
+  • Start with `idals <file>` to discover entry points and imports.
+  • Follow xrefs and named symbols to traverse behavior quickly.
+  • Pipe to grep: `idals file.exe main --after 128 | grep -i call`
+  • Pipe to less: `idals file.exe main --after 128 | less -R`
+  • Cache location: ~/.cache/hex-rays/idals/
+

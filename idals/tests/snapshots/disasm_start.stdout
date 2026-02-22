@@ -1,0 +1,39 @@
+               ; =============== S U B R O U T I N E =======================================
+               ; Attributes: library function noreturn bp-based frame hidden
+               public start
+               start           proc near
+               Code            = dword ptr -30h
+               argv            = dword ptr -2Ch
+               var_28          = dword ptr -28h
+               var_24          = dword ptr -24h
+               envp            = dword ptr -20h
+               argc            = dword ptr -1Ch
+               ms_exc          = CPPEH_RECORD ptr -18h
+               ; __unwind { // _except_handler3
+      0x401820 push    ebp  ; <-- target
+      0x401821 mov     ebp, esp
+      0x401823 push    0FFFFFFFFh
+      0x401825 push    offset stru_402070
+      0x40182A push    offset _except_handler3
+      0x40182F mov     eax, large fs:0
+      0x401835 push    eax
+      0x401836 mov     large fs:0, esp
+      0x40183D sub     esp, 20h
+      0x401840 push    ebx
+      0x401841 push    esi
+      0x401842 push    edi
+      0x401843 mov     [ebp+ms_exc.old_esp], esp
+               ;   __try { // __except at loc_401924
+      0x401846 and     [ebp+ms_exc.registration.TryLevel], 0
+      0x40184A push    1; Type
+      0x40184C call    ds:__set_app_type
+               ; ...61 instructions skipped...
+      0x40192A call    ds:_exit
+               ;   } // starts at 401846
+               ; } // starts at 401820
+               start           endp
+--- Tips ---------------------------------------------------------------
+• Show more context.
+    $ idals ../tests/data/Practical Malware Analysis Lab 01-01.exe_ 0x401820 --after 64 --before 16
+• Addresses shown as va. Switch mode with --offsets rva or --offsets file.
+    $ idals ../tests/data/Practical Malware Analysis Lab 01-01.exe_ 0x401820 --offsets rva

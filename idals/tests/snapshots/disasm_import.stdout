@@ -1,0 +1,76 @@
+               ; XREF: 0x4010BB (in sub_4010A0@0x4010A0)
+               ; XREF: 0x4014AC (in _main@0x401440)
+               ; XREF: 0x4014F0 (in _main@0x401440)
+               ; XREF: 0x401495 (in _main@0x401440)
+               ; HANDLE (__stdcall *CreateFileA)(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
+               extrn CreateFileA:dword ; CODE XREF: sub_4010A0+1B↑p
+      0x402014 extrn CreateFileA:dword  ; <-- target
+               ; XREF: 0x40142E (in sub_4011E0@0x4011E0)
+               ; BOOL (__stdcall *FindClose)(HANDLE hFindFile)
+               extrn FindClose:dword   ; CODE XREF: sub_4011E0+24E↑p
+      0x402018 extrn FindClose:dword
+               ; XREF: 0x40141D (in sub_4011E0@0x4011E0)
+               ; BOOL (__stdcall *FindNextFileA)(HANDLE hFindFile, LPWIN32_FIND_DATAA lpFindFileData)
+      0x40201C extrn FindNextFileA:dword
+               ; CODE XREF: sub_4011E0+23D↑p
+               ; DATA XREF: sub_4011E0+23D↑r
+               ; XREF: 0x401204 (in sub_4011E0@0x4011E0)
+               ; HANDLE (__stdcall *FindFirstFileA)(LPCSTR lpFileName, LPWIN32_FIND_DATAA lpFindFileData)
+      0x402020 extrn FindFirstFileA:dword
+               ; CODE XREF: sub_4011E0+24↑p
+               ; DATA XREF: sub_4011E0+24↑r
+               ; XREF: 0x4017F4 (in _main@0x401440)
+               ; BOOL (__stdcall *CopyFileA)(LPCSTR lpExistingFileName, LPCSTR lpNewFileName, BOOL bFailIfExists)
+               extrn CopyFileA:dword   ; CODE XREF: _main+3B4↑p
+      0x402024 extrn CopyFileA:dword
+               ; XREF: 0x4012BF (in sub_4011E0@0x4011E0)
+               ; XREF: 0x40138B (in sub_4011E0@0x4011E0)
+               ; XREF: 0x4020A0 (in 0x4020A0)
+               ;
+               ; Imports from MSVCRT.dll
+               ;
+               ; void *(__cdecl *malloc)(size_t Size)
+               extrn malloc:dword      ; CODE XREF: sub_4011E0+DF↑p
+               ; sub_4011E0+1AB↑p
+      0x40202C extrn malloc:dword
+               ; XREF: 0x4014FD (in _main@0x401440)
+               ; XREF: 0x401515 (in _main@0x401440)
+               ; XREF: 0x401532 (in _main@0x401440)
+               ; XREF: 0x401800 (in _main@0x401440)
+               ; XREF: 0x40190A (in start@0x401820)
+               ; void (__cdecl __noreturn *exit)(int Code)
+               extrn exit:dword        ; CODE XREF: _main+BD↑p
+      0x402030 extrn exit:dword
+               ; XREF: 0x40192A (in start@0x401820)
+               ; void (__cdecl __noreturn *exit)(int Code)
+               extrn _exit:dword       ; CODE XREF: start+10A↑p
+      0x402034 extrn _exit:dword
+               ; XREF: 0x401930 (in _XcptFilter@0x401930)
+      0x402038 extrn __imp__XcptFilter:dword
+               ; DATA XREF: _XcptFilter↑r
+               ; XREF: 0x4018EA (in start@0x401820)
+               extrn __p___initenv:dword ; CODE XREF: start+CA↑p
+      0x40203C extrn __p___initenv:dword
+               ; XREF: 0x4018D5 (in start@0x401820)
+               extrn __getmainargs:dword ; CODE XREF: start+B5↑p
+      0x402040 extrn __getmainargs:dword
+               ; XREF: 0x401936 (in _initterm@0x401936)
+               ; void (__cdecl *_initterm)(_PVFV *First, _PVFV *Last)
+      0x402044 extrn __imp__initterm:dword
+               ; DATA XREF: _initterm↑r
+               ; XREF: 0x40189C (in start@0x401820)
+               ; void (__cdecl *_setusermatherr)(_UserMathErrorFunctionPointer UserMathErrorFunction)
+      0x402048 extrn __setusermatherr:dword
+               ; CODE XREF: start+7C↑p
+               ; DATA XREF: start+7C↑r
+               ; XREF: 0x40187D (in start@0x401820)
+      0x40204C extrn _adjust_fdiv:dword
+               ; XREF: 0x40186F (in start@0x401820)
+               ; int *(__cdecl *_p__commode)()
+               extrn __p__commode:dword ; CODE XREF: start+4F↑p
+      0x402050 extrn __p__commode:dword
+--- Tips ---------------------------------------------------------------
+• Show more context.
+    $ idals ../tests/data/Practical Malware Analysis Lab 01-01.exe_ 0x402014 --after 64 --before 16
+• Addresses shown as va. Switch mode with --offsets rva or --offsets file.
+    $ idals ../tests/data/Practical Malware Analysis Lab 01-01.exe_ 0x402014 --offsets rva

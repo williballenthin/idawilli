@@ -1,0 +1,22 @@
+               ; ...11 instructions skipped...
+      0x401842 push    edi
+      0x401843 mov     [ebp+ms_exc.old_esp], esp
+               ;   __try { // __except at loc_401924
+      0x401846 and     [ebp+ms_exc.registration.TryLevel], 0
+      0x40184A push    1; Type
+      0x40184C call    ds:__set_app_type  ; <-- target
+      0x401852 pop     ecx
+      0x401853 or      dword_4030F0, 0FFFFFFFFh
+      0x40185A or      dword_4030F4, 0FFFFFFFFh
+               ; ...58 instructions skipped...
+      0x40192A call    ds:_exit
+               ;   } // starts at 401846
+               ; } // starts at 401820
+               start           endp
+--- Tips ---------------------------------------------------------------
+• View the full function from the start, including its xrefs.
+    $ idals ../tests/data/Practical Malware Analysis Lab 01-01.exe_ 0x401820 --after 77
+• Show more context.
+    $ idals ../tests/data/Practical Malware Analysis Lab 01-01.exe_ 0x40184C --after 64 --before 16
+• Addresses shown as va. Switch mode with --offsets rva or --offsets file.
+    $ idals ../tests/data/Practical Malware Analysis Lab 01-01.exe_ 0x40184C --offsets rva
