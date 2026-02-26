@@ -22,6 +22,8 @@ OPTIONS
   --decompile            Force pseudocode output regardless of length
   --no-decompile         Suppress pseudocode output entirely
   --no-color             Disable syntax highlighting
+  --verbose              Enable debug logging to stderr
+  --quiet                Show only errors on stderr
   -h, --help             Show this help tutorial
   -v, --version          Show version information
 

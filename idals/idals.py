@@ -14,24 +14,22 @@ import argparse
 import contextlib
 import difflib
 import hashlib
+import logging
 import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Callable, Iterator
 
 import idapro
 import ida_auto
-import ida_ida
 import ida_idaapi
-import ida_lines
 import ida_loader
-import ida_nalt
-import idc
-import ida_hexrays
 from ida_domain import Database
+from ida_domain.comments import CommentKind, ExtraCommentKind
 from ida_domain.database import IdaCommandOptions
 from rich.console import Console
+from rich.logging import RichHandler
 from rich.padding import Padding
 from rich.syntax import Syntax
 from rich.table import Table
@@ -70,7 +68,6 @@ NOTABLE_IMPORTS = (
     "NtCreateThreadEx",
 )
 HEX_ADDRESS_RE = re.compile(r"^(?:0x)?[0-9a-fA-F]+$")
-LISTING_PREFIX_RE = re.compile(r"^[^:]+:[0-9A-Fa-f]{8,16}\s*")
 INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 LABEL_PREFIX_RE = re.compile(r"^([A-Za-z_.$?@][\w.$?@]*:)(.*)$")
 ASSIGN_PREFIX_RE = re.compile(r"^([A-Za-z_.$?@][\w.$?@]*)(\s*=.*)$")
@@ -138,7 +135,7 @@ class ExportInfo:
 @dataclass
 class ListingLine:
     ea: int
-    tagged_line: str
+    disassembly: str
     anterior_lines: list[str]
     posterior_lines: list[str]
 
@@ -149,7 +146,27 @@ class TipSuggestion:
     command: str | None = None
 
 
-_NAME_CACHE: list[tuple[int, str]] | None = None
+@dataclass(frozen=True)
+class OffsetFormatter:
+    mode: str
+    image_base: int
+    bad_address: int
+    file_offset_resolver: Callable[[int], int]
+
+    def format_address(self, ea: int) -> str:
+        """Render an address in the configured mode.
+        """
+        if self.mode == "va":
+            return f"0x{ea:X}"
+        if self.mode == "rva":
+            return f"0x{ea - self.image_base:X}"
+        offset = int(self.file_offset_resolver(ea))
+        if offset < 0 or offset == self.bad_address:
+            return "N/A"
+        return f"0x{offset:X}"
+
+
+logger = logging.getLogger(__name__)
 
 
 def print_help_and_tutorial(use_rich: bool) -> None:
@@ -180,6 +197,8 @@ OPTIONS
   --decompile            Force pseudocode output regardless of length
   --no-decompile         Suppress pseudocode output entirely
   --no-color             Disable syntax highlighting
+  --verbose              Enable debug logging to stderr
+  --quiet                Show only errors on stderr
   -h, --help             Show this help tutorial
   -v, --version          Show version information
 
@@ -287,6 +306,8 @@ TIPS
             ("--decompile", "Force pseudocode output regardless of length"),
             ("--no-decompile", "Suppress pseudocode output entirely"),
             ("--no-color", "Disable syntax highlighting"),
+            ("--verbose", "Enable debug logging to stderr"),
+            ("--quiet", "Show only errors on stderr"),
             ("-h, --help", "Show this help tutorial"),
             ("-v, --version", "Show version information"),
         ],
@@ -356,9 +377,35 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--decompile", action="store_true")
     parser.add_argument("--no-decompile", action="store_true")
     parser.add_argument("--no-color", action="store_true")
+    parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--quiet", action="store_true")
     parser.add_argument("-h", "--help", action="store_true")
     parser.add_argument("-v", "--version", action="store_true")
     return parser
+
+
+def configure_logging(verbose: bool, quiet: bool, stderr_console: Console) -> None:
+    """Configure stderr logging.
+    """
+    level = logging.WARNING
+    if verbose:
+        level = logging.DEBUG
+    elif quiet:
+        level = logging.ERROR
+
+    handler = RichHandler(
+        console=stderr_console,
+        rich_tracebacks=verbose,
+        show_path=False,
+        show_time=False,
+        markup=False,
+    )
+    handler.setFormatter(logging.Formatter("%(message)s"))
+
+    logger.handlers.clear()
+    logger.propagate = False
+    logger.setLevel(level)
+    logger.addHandler(handler)
 
 
 def compute_file_hashes(file_path: Path) -> tuple[str, str]:
@@ -386,14 +433,17 @@ def resolve_database(file_path: Path, stderr_console: Console) -> Path:
     """
     suffix = file_path.suffix.lower()
     if suffix in {".i64", ".idb"}:
+        logger.debug("Using existing database: %s", file_path)
         return file_path
 
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     _, file_sha256 = compute_file_hashes(file_path)
     cache_path = CACHE_DIR / f"{file_sha256}.i64"
     if cache_path.exists():
+        logger.debug("Cache hit for %s -> %s", file_path, cache_path)
         return cache_path
 
+    logger.debug("Cache miss for %s; analyzing to %s", file_path, cache_path)
     stderr_console.print(f"Analyzing {file_path.name} (this may take a moment)...")
     ida_options = IdaCommandOptions(
         auto_analysis=True,
@@ -409,6 +459,7 @@ def resolve_database(file_path: Path, stderr_console: Console) -> Path:
 
     if not cache_path.exists():
         raise AnalysisError(f"Analysis failed for {file_path}: did not create {cache_path}")
+    logger.debug("Analysis completed: %s", cache_path)
     return cache_path
 
 
@@ -421,6 +472,7 @@ def open_database_session(db_path: Path, auto_analysis: bool = False) -> Iterato
 
     """
     ida_options = IdaCommandOptions(auto_analysis=auto_analysis, new_database=False)
+    logger.debug("Opening database session: %s (auto_analysis=%s)", db_path, auto_analysis)
     try:
         database = Database.open(str(db_path), ida_options, save_on_close=False)
     except Exception as exc:
@@ -430,6 +482,7 @@ def open_database_session(db_path: Path, auto_analysis: bool = False) -> Iterato
         if auto_analysis:
             ida_auto.auto_wait()
         yield database
+    logger.debug("Closed database session: %s", db_path)
 
 
 def get_permissions_string(db: Database, perm: int) -> str:
@@ -508,7 +561,6 @@ def parse_pe_characteristics(path: Path) -> int | None:
 def is_dll_binary(db: Database, file_path: Path, dll_exports: list[ExportInfo]) -> bool:
     """Determine whether the analyzed input is a DLL.
     """
-    _ = db
     if file_path.suffix.lower() == ".dll":
         return True
 
@@ -516,8 +568,8 @@ def is_dll_binary(db: Database, file_path: Path, dll_exports: list[ExportInfo]) 
     if characteristics is not None:
         return bool(characteristics & 0x2000)
 
-    root_filename = str(ida_nalt.get_root_filename() or "")
-    if root_filename.lower().endswith(".dll"):
+    module_name = str(db.module or "")
+    if module_name.lower().endswith(".dll"):
         return True
 
     return bool(dll_exports)
@@ -527,18 +579,12 @@ def get_import_infos(db: Database) -> tuple[dict[str, list[ImportInfo]], int]:
     """Collect imported symbols grouped by module.
     """
     imports: list[ImportInfo] = []
-    module_quantity = ida_nalt.get_import_module_qty()
-    for index in range(module_quantity):
-        module_name = ida_nalt.get_import_module_name(index) or f"module_{index}"
+    for item in db.imports.get_all_imports():
+        module = str(item.module_name or f"module_{item.module_index}")
+        name = str(item.name or f"ord_{item.ordinal}")
+        imports.append(ImportInfo(name=name, module=module, ea=int(item.address)))
 
-        def callback(ea: int, name: str | None, ordinal: int, module: str = module_name) -> bool:
-            import_name = name or f"ord_{ordinal}"
-            imports.append(ImportInfo(name=import_name, module=module, ea=int(ea)))
-            return True
-
-        ida_nalt.enum_import_names(index, callback)
-
-    imports.sort(key=lambda item: (item.module.lower(), item.name.lower(), item.ea))
+    imports.sort(key=lambda entry: (entry.module.lower(), entry.name.lower(), entry.ea))
     total = len(imports)
     visible = imports[:MAX_IMPORTS]
     grouped: dict[str, list[ImportInfo]] = {}
@@ -592,26 +638,23 @@ def is_mapped_address(db: Database, ea: int) -> bool:
     return int(db.minimum_ea) <= ea < int(db.maximum_ea)
 
 
-def get_name_cache(db: Database) -> list[tuple[int, str]]:
-    """Build and cache list of names for fuzzy matching.
+def get_name_entries(db: Database) -> list[tuple[int, str]]:
+    """Collect names for fuzzy matching.
     """
-    global _NAME_CACHE
-    if _NAME_CACHE is None:
-        cache: list[tuple[int, str]] = []
-        for ea, name in db.names.get_all():
-            if name:
-                cache.append((int(ea), str(name)))
-        _NAME_CACHE = cache
-    return _NAME_CACHE
+    entries: list[tuple[int, str]] = []
+    for ea, name in db.names.get_all():
+        if name:
+            entries.append((int(ea), str(name)))
+    return entries
 
 
-def resolve_name_ea(db: Database, name: str) -> int | None:
+def resolve_name_ea(name_entries: list[tuple[int, str]], name: str) -> int | None:
     """Resolve symbol name to address from the name list.
     """
     exact_match: int | None = None
     folded_match: int | None = None
     folded_query = name.lower()
-    for ea, candidate in get_name_cache(db):
+    for ea, candidate in name_entries:
         if candidate == name:
             exact_match = ea
             break
@@ -633,16 +676,15 @@ def build_unmapped_error(db: Database, ea: int) -> str:
     return "\n".join(lines)
 
 
-def build_symbol_not_found_error(db: Database, symbol: str) -> str:
+def build_symbol_not_found_error(name_entries: list[tuple[int, str]], symbol: str) -> str:
     """Create symbol-not-found message with suggestions.
     """
-    name_cache = get_name_cache(db)
-    names = [name for _, name in name_cache]
+    names = [name for _, name in name_entries]
     close = difflib.get_close_matches(symbol, names, n=5, cutoff=0.6)
     lines = [f"Error: Symbol \"{symbol}\" not found."]
     if close:
         lines.append("Did you mean:")
-        by_name = {name: ea for ea, name in name_cache}
+        by_name = {name: ea for ea, name in name_entries}
         for candidate in close:
             lines.append(f"  {candidate}@0x{by_name[candidate]:X}")
     lines.append("Tip: Use `idals <file>` to inspect available imports/exports and names.")
@@ -676,20 +718,24 @@ def resolve_address(db: Database, address_str: str) -> int:
         if numeric_candidate is not None and is_mapped_address(db, numeric_candidate):
             return numeric_candidate
 
-    ea = resolve_name_ea(db, text)
+    name_entries = get_name_entries(db)
+    ea = resolve_name_ea(name_entries, text)
     if ea is not None and is_mapped_address(db, ea):
         return ea
 
     if numeric_candidate is not None:
         raise AddressError(build_unmapped_error(db, numeric_candidate))
-    raise AddressError(build_symbol_not_found_error(db, text))
+    raise AddressError(build_symbol_not_found_error(name_entries, text))
 
 
 def get_function_signature(db: Database, func_ea: int) -> str | None:
     """Get a function signature string when available.
     """
+    func = db.functions.get_at(func_ea)
+    if func is None:
+        return None
     with contextlib.suppress(Exception):
-        signature = idc.get_type(func_ea)
+        signature = db.functions.get_signature(func)
         if signature:
             return str(signature)
     return None
@@ -826,45 +872,15 @@ def normalize_match_line(value: str) -> str:
     return " ".join(value.strip().split())
 
 
-def strip_listing_prefix(line: str) -> str:
-    """Remove the segment:address prefix from an IDA disassembly line.
+def normalize_comment_line(value: str) -> str:
+    """Normalize a comment line for display.
     """
-    return LISTING_PREFIX_RE.sub("", line, count=1)
-
-
-def get_head_listing_lines(db: Database, ea: int) -> list[str]:
-    """Get all disassembly lines generated for a single head.
-    """
-    _ = db
-    result = ida_lines.generate_disassembly(ea, 256, True, True, True)
-
-    generated_lines: list[str] = []
-    if isinstance(result, tuple) and len(result) >= 2 and isinstance(result[1], list):
-        generated_lines = [str(line) for line in result[1]]
-    elif isinstance(result, list):
-        generated_lines = [str(line) for line in result]
-
-    output_lines: list[str] = []
-    for generated_line in generated_lines:
-        cleaned_line = strip_listing_prefix(generated_line).rstrip()
-        if cleaned_line:
-            output_lines.append(cleaned_line)
-    return output_lines
-
-
-def get_extra_comment_lines(db: Database, ea: int, where: int) -> list[str]:
-    """Get IDA extra comment lines for a head.
-    """
-    _ = db
-    output_lines: list[str] = []
-    for index in range(where, where + 256):
-        value = ida_lines.get_extra_cmt(ea, index)
-        if not value:
-            break
-        line = str(value).rstrip()
-        if line:
-            output_lines.append(line)
-    return output_lines
+    comment = value.strip()
+    if not comment:
+        return ""
+    if comment.startswith(";"):
+        return comment
+    return f"; {comment}"
 
 
 def merge_unique_lines(primary: list[str], secondary: list[str]) -> list[str]:
@@ -881,42 +897,50 @@ def merge_unique_lines(primary: list[str], secondary: list[str]) -> list[str]:
     return merged
 
 
+def get_extra_comment_lines(db: Database, ea: int, kind: ExtraCommentKind) -> list[str]:
+    """Get extra comments for a head.
+    """
+    output_lines: list[str] = []
+    with contextlib.suppress(Exception):
+        for raw_line in db.comments.get_all_extra_at(ea, kind):
+            line = normalize_comment_line(str(raw_line))
+            if line:
+                output_lines.append(line)
+    return output_lines
+
+
+def get_item_comment_lines(db: Database, ea: int) -> list[str]:
+    """Get regular and repeatable comments for an item.
+    """
+    lines: list[str] = []
+    for kind in (CommentKind.REGULAR, CommentKind.REPEATABLE):
+        info = db.comments.get_at(ea, kind)
+        if info is None:
+            continue
+        line = normalize_comment_line(str(info.comment))
+        if line:
+            lines.append(line)
+    return lines
+
+
 def generate_listing_lines(db: Database, heads: list[int]) -> list[ListingLine]:
     """Generate disassembly lines for heads.
     """
     lines: list[ListingLine] = []
     for ea in heads:
-        text = ida_lines.generate_disasm_line(ea, 0)
-        if not text:
+        disassembly = str(db.bytes.get_disassembly_at(ea) or "").rstrip()
+        if not disassembly:
             continue
 
-        tagged_line = str(text)
-        all_head_lines = get_head_listing_lines(db, ea)
-        main_plain = strip_tagged_line(db, tagged_line)
-        main_index: int | None = None
-        normalized_main = normalize_match_line(main_plain)
-        for index, line in enumerate(all_head_lines):
-            if normalize_match_line(line) == normalized_main:
-                main_index = index
-        if main_index is None:
-            main_index = len(all_head_lines) - 1
-
-        if main_index >= 0:
-            anterior_lines = all_head_lines[:main_index]
-            posterior_lines = all_head_lines[main_index + 1 :]
-        else:
-            anterior_lines = []
-            posterior_lines = []
-
-        extra_pre = get_extra_comment_lines(db, ea, int(ida_lines.E_PREV))
-        extra_post = get_extra_comment_lines(db, ea, int(ida_lines.E_NEXT))
-        anterior_lines = merge_unique_lines(extra_pre, anterior_lines)
-        posterior_lines = merge_unique_lines(posterior_lines, extra_post)
+        anterior_lines = get_extra_comment_lines(db, ea, ExtraCommentKind.ANTERIOR)
+        posterior_lines = get_extra_comment_lines(db, ea, ExtraCommentKind.POSTERIOR)
+        comment_lines = [] if ";" in disassembly else get_item_comment_lines(db, ea)
+        posterior_lines = merge_unique_lines(posterior_lines, comment_lines)
 
         lines.append(
             ListingLine(
                 ea=ea,
-                tagged_line=tagged_line,
+                disassembly=disassembly,
                 anterior_lines=anterior_lines,
                 posterior_lines=posterior_lines,
             )
@@ -937,7 +961,7 @@ def get_last_function_line(db: Database, func_ctx: FunctionContext) -> ListingLi
     return lines[0] if lines else None
 
 
-def get_xref_context(db: Database, from_ea: int, offsets_mode: str) -> str:
+def get_xref_context(db: Database, from_ea: int, formatter: OffsetFormatter) -> str:
     """Resolve the most useful xref context for a source address.
     """
     caller_func = db.functions.get_at(from_ea)
@@ -945,16 +969,16 @@ def get_xref_context(db: Database, from_ea: int, offsets_mode: str) -> str:
         caller_ea = int(caller_func.start_ea)
         caller_name = db.functions.get_name(caller_func)
         if caller_name:
-            return format_symbol_ref(db, caller_name, caller_ea, offsets_mode)
+            return format_symbol_ref(caller_name, caller_ea, formatter)
 
     fallback_name = db.names.get_at(from_ea)
     if fallback_name:
-        return format_symbol_ref(db, fallback_name, from_ea, offsets_mode)
+        return format_symbol_ref(str(fallback_name), from_ea, formatter)
 
-    return format_address(db, from_ea, offsets_mode)
+    return formatter.format_address(from_ea)
 
 
-def get_data_xref_annotations(db: Database, ea: int, offsets_mode: str) -> list[str]:
+def get_data_xref_annotations(db: Database, ea: int, formatter: OffsetFormatter) -> list[str]:
     """Get data xrefs annotation lines for non-code items.
     """
     if db.bytes.is_code_at(ea):
@@ -969,8 +993,8 @@ def get_data_xref_annotations(db: Database, ea: int, offsets_mode: str) -> list[
         seen_from.add(from_ea)
 
         refs.append(
-            f"; XREF: {format_address(db, from_ea, offsets_mode)} "
-            f"(in {get_xref_context(db, from_ea, offsets_mode)})"
+            f"; XREF: {formatter.format_address(from_ea)} "
+            f"(in {get_xref_context(db, from_ea, formatter)})"
         )
 
     if not refs:
@@ -983,186 +1007,50 @@ def get_data_xref_annotations(db: Database, ea: int, offsets_mode: str) -> list[
 def get_pseudocode_lines(db: Database, func_ea: int) -> list[str] | None:
     """Try to decompile a function.
     """
-    _ = db
-    try:
-        if not ida_hexrays.init_hexrays_plugin():
-            return None
-    except Exception:
-        return None
-
     func = db.functions.get_at(func_ea)
     if func is None or int(func.start_ea) != func_ea:
         return None
 
     try:
-        cfunc = ida_hexrays.decompile(func_ea)
-    except ida_hexrays.DecompilationFailure:
-        return None
+        pseudocode = db.functions.get_pseudocode(func, remove_tags=True)
     except Exception:
         return None
 
-    if cfunc is None:
-        return None
-
-    pseudocode = cfunc.get_pseudocode()
-    lines: list[str] = []
-    for source_line in pseudocode:
-        lines.append(str(source_line.line))
+    lines = [str(line) for line in pseudocode]
     return lines if lines else None
 
 
-def get_tag_code(value: Any, default: int) -> int:
-    """Normalize IDA tag constants to int byte values.
+def get_file_offset(ea: int) -> int:
+    """Resolve file offset for an address.
     """
-    if value is None:
-        return default
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        return ord(value[0])
-    if isinstance(value, bytes):
-        return int(value[0])
-    return default
+    return int(ida_loader.get_fileregion_offset(ea))
 
 
-def get_tag_constants(db: Database) -> tuple[int, int, int, int, int, int]:
-    """Read tag marker constants from ida_lines.
+def build_offset_formatter(db: Database, mode: str) -> OffsetFormatter:
+    """Build an address formatter for one output pass.
     """
-    _ = db
-    lines_mod = ida_lines
-    color_on = get_tag_code(lines_mod.SCOLOR_ON, 0x01)
-    color_off = get_tag_code(lines_mod.SCOLOR_OFF, 0x02)
-    color_esc = get_tag_code(lines_mod.SCOLOR_ESC, 0x03)
-    color_inv = get_tag_code(lines_mod.SCOLOR_INV, 0x04)
-    color_addr = get_tag_code(lines_mod.SCOLOR_ADDR, 0x05)
-    badaddr = int(ida_idaapi.BADADDR)
-    address_len = 16 if badaddr > 0xFFFFFFFF else 8
-    return color_on, color_off, color_esc, color_inv, color_addr, address_len
+    image_base = int(db.metadata.base_address or db.base_address or 0)
+    return OffsetFormatter(
+        mode=mode,
+        image_base=image_base,
+        bad_address=int(ida_idaapi.BADADDR),
+        file_offset_resolver=get_file_offset,
+    )
 
 
-def build_tag_style_map(db: Database) -> dict[int, str]:
-    """Build mapping from IDA color tags to rich styles.
-    """
-    _ = db
-    style_map = {
-        get_tag_code(ida_lines.SCOLOR_INSN, -1): "bold blue",
-        get_tag_code(ida_lines.SCOLOR_REG, -1): "cyan",
-        get_tag_code(ida_lines.SCOLOR_NUMBER, -1): "bright_red",
-        get_tag_code(ida_lines.SCOLOR_STRING, -1): "green",
-        get_tag_code(ida_lines.SCOLOR_DNAME, -1): "yellow",
-        get_tag_code(ida_lines.SCOLOR_CNAME, -1): "yellow",
-        get_tag_code(ida_lines.SCOLOR_ASMDIR, -1): "magenta",
-        get_tag_code(ida_lines.SCOLOR_AUTOCMT, -1): "bright_black",
-        get_tag_code(ida_lines.SCOLOR_REGCMT, -1): "bright_black",
-        get_tag_code(ida_lines.SCOLOR_RPTCMT, -1): "bright_black",
-        get_tag_code(ida_lines.SCOLOR_SEGNAME, -1): "magenta",
-        get_tag_code(ida_lines.SCOLOR_ADDR, -1): "bright_black",
-        get_tag_code(ida_lines.SCOLOR_OPND1, -1): "white",
-        get_tag_code(ida_lines.SCOLOR_OPND2, -1): "white",
-    }
-    return {code: style for code, style in style_map.items() if code >= 0}
-
-
-def skip_address_payload(tagged_line: str, index: int, address_len: int) -> int:
-    """Skip encoded payload following a COLOR_ADDR marker.
-    """
-    max_len = min(len(tagged_line), index + max(address_len * 2, address_len))
-    cursor = index
-    while cursor < max_len and tagged_line[cursor] in "0123456789abcdefABCDEF":
-        cursor += 1
-    if cursor - index >= address_len:
-        return cursor
-    return min(len(tagged_line), index + address_len)
-
-
-def line_has_tags(line: str) -> bool:
-    """Check whether a line contains IDA color control bytes.
-    """
-    return any(token in line for token in ("\x01", "\x02", "\x03", "\x04"))
-
-
-def strip_tagged_line(db: Database, tagged_line: str) -> str:
-    """Remove IDA tags from a line.
-    """
-    _ = db
-    return str(ida_lines.tag_remove(tagged_line))
-
-
-def tagged_line_to_rich(db: Database, tagged_line: str, style_map: dict[int, str]) -> Text:
-    """Convert an IDA tagged line to rich Text.
-    """
-    color_on, color_off, color_esc, color_inv, color_addr, address_len = get_tag_constants(db)
-    output = Text()
-    style_stack: list[str] = []
-    index = 0
-    while index < len(tagged_line):
-        byte = ord(tagged_line[index])
-        if byte == color_on and index + 1 < len(tagged_line):
-            tag_type = ord(tagged_line[index + 1])
-            index += 2
-            if tag_type == color_addr:
-                index = skip_address_payload(tagged_line, index, address_len)
-                continue
-            style = style_map.get(tag_type, style_stack[-1] if style_stack else "")
-            style_stack.append(style)
-            continue
-        if byte == color_off and index + 1 < len(tagged_line):
-            index += 2
-            if style_stack:
-                style_stack.pop()
-            continue
-        if byte == color_esc:
-            index += 1
-            if index < len(tagged_line):
-                output.append(tagged_line[index], style=style_stack[-1] if style_stack else "")
-                index += 1
-            continue
-        if byte == color_inv:
-            index += 1
-            continue
-        output.append(tagged_line[index], style=style_stack[-1] if style_stack else "")
-        index += 1
-    return output
-
-
-def format_address(db: Database, ea: int, mode: str) -> str:
-    """Format address according to selected mode.
-    """
-    if mode == "va":
-        return f"0x{ea:X}"
-    image_base = int(ida_nalt.get_imagebase())
-    if mode == "rva":
-        return f"0x{ea - image_base:X}"
-    offset = int(ida_loader.get_fileregion_offset(ea))
-    if offset < 0 or offset == ida_idaapi.BADADDR:
-        return "N/A"
-    return f"0x{offset:X}"
-
-
-def format_symbol_ref(db: Database, name: str, ea: int, offsets_mode: str) -> str:
+def format_symbol_ref(name: str, ea: int, formatter: OffsetFormatter) -> str:
     """Format symbol reference as name@address.
     """
-    return f"{name}@{format_address(db, ea, offsets_mode)}"
+    return f"{name}@{formatter.format_address(ea)}"
 
 
-def format_at_address(db: Database, ea: int, offsets_mode: str) -> str:
+def format_at_address(ea: int, formatter: OffsetFormatter) -> str:
     """Format address for xref at-sites.
     """
-    rendered = format_address(db, ea, offsets_mode)
+    rendered = formatter.format_address(ea)
     if rendered.startswith("0x"):
         return rendered[2:]
     return rendered
-
-
-def get_function_stack_summary(db: Database, func_ea: int) -> str | None:
-    """Get stack frame summary for a function when available.
-    """
-    _ = db
-    with contextlib.suppress(Exception):
-        frame_size = int(idc.get_frame_size(func_ea))
-        if frame_size >= 0:
-            return f"frame=0x{frame_size:X}"
-    return None
 
 
 def output_rule(console: Console, use_rich: bool, title: str) -> None:
@@ -1256,6 +1144,9 @@ def output_overview(
 ) -> None:
     """Render file overview mode.
     """
+    formatter = build_offset_formatter(db, offsets_mode)
+    va_formatter = build_offset_formatter(db, "va")
+
     segments = get_segment_infos(db)
     entry_infos = get_export_infos(db)
     dll_exports = split_dll_exports(entry_infos)
@@ -1264,28 +1155,23 @@ def output_overview(
     sample_function = get_sample_named_function(db)
     interesting_import = get_interesting_import(imports_grouped)
 
-    image_base = int(ida_nalt.get_imagebase())
-    entry_ea = int(ida_ida.inf_get_start_ea())
-    entry_name = db.names.get_at(entry_ea) or "(unnamed)"
+    image_base = int(db.metadata.base_address or db.base_address or 0)
+    entry_ea = int(db.start_ip if db.start_ip is not None else db.minimum_ea)
+    entry_name = str(db.names.get_at(entry_ea) or "(unnamed)")
     is_dll = is_dll_binary(db, file_path, dll_exports)
 
-    procname = str(ida_ida.inf_get_procname())
-
-    if bool(ida_ida.inf_is_64bit()):
-        bitness = "64-bit"
-    elif bool(ida_ida.inf_is_32bit_exactly()):
-        bitness = "32-bit"
-    else:
-        bitness = "16-bit"
+    architecture = str(db.metadata.architecture or db.architecture or "unknown")
+    bitness_value = int(db.metadata.bitness or db.bitness or 0)
+    bitness = f"{bitness_value}-bit" if bitness_value else "unknown"
 
     md5_hash, sha256_hash = compute_file_hashes(file_path)
 
     output_rule(console, use_rich, f"Overview: {file_path.name}")
     metadata_rows = [
         ("File", str(file_path)),
-        ("Architecture", f"{procname} ({bitness})"),
+        ("Architecture", f"{architecture} ({bitness})"),
         ("Image base", f"0x{image_base:X}"),
-        ("Entry point", format_symbol_ref(db, entry_name, entry_ea, offsets_mode)),
+        ("Entry point", format_symbol_ref(entry_name, entry_ea, formatter)),
         ("Functions", f"{total_functions} total, {named_functions} named"),
         ("MD5", md5_hash),
         ("SHA256", sha256_hash),
@@ -1312,8 +1198,8 @@ def output_overview(
         for segment in segments:
             table.add_row(
                 segment.name,
-                format_address(db, segment.start_ea, offsets_mode),
-                format_address(db, segment.end_ea, offsets_mode),
+                formatter.format_address(segment.start_ea),
+                formatter.format_address(segment.end_ea),
                 f"0x{segment.end_ea - segment.start_ea:X}",
                 segment.permissions,
             )
@@ -1321,8 +1207,8 @@ def output_overview(
     else:
         for segment in segments:
             console.print(
-                f"{segment.name:16} {format_address(db, segment.start_ea, offsets_mode):>14} - "
-                f"{format_address(db, segment.end_ea, offsets_mode):>14} "
+                f"{segment.name:16} {formatter.format_address(segment.start_ea):>14} - "
+                f"{formatter.format_address(segment.end_ea):>14} "
                 f"size=0x{segment.end_ea - segment.start_ea:X} perms={segment.permissions}"
             )
 
@@ -1330,14 +1216,14 @@ def output_overview(
 
     output_rule(console, use_rich, "Entry points")
     console.print(
-        f"{format_address(db, entry_ea, offsets_mode)}  "
-        f"{format_symbol_ref(db, entry_name, entry_ea, offsets_mode)} "
+        f"{formatter.format_address(entry_ea)}  "
+        f"{format_symbol_ref(entry_name, entry_ea, formatter)} "
         "(OEP)"
     )
     for export in visible_exports:
         console.print(
-            f"{format_address(db, export.ea, offsets_mode)}  "
-            f"{format_symbol_ref(db, export.name, export.ea, offsets_mode)} "
+            f"{formatter.format_address(export.ea)}  "
+            f"{format_symbol_ref(export.name, export.ea, formatter)} "
             f"(export, ordinal {export.ordinal})"
         )
     skipped_entry_points = max(0, len(dll_exports) - len(visible_exports))
@@ -1355,7 +1241,7 @@ def output_overview(
             else:
                 console.print(f"[{module}]")
             for entry in entries:
-                console.print(format_symbol_ref(db, entry.name, entry.ea, offsets_mode))
+                console.print(format_symbol_ref(entry.name, entry.ea, formatter))
     skipped_imports = max(0, total_imports - visible_imports)
     if skipped_imports > 0:
         console.print(f"... {skipped_imports} imports skipped")
@@ -1363,14 +1249,14 @@ def output_overview(
     tips: list[TipSuggestion] = [
         TipSuggestion(
             "View the entry point.",
-            f"idals {file_path} {format_address(db, entry_ea, 'va')}",
+            f"idals {file_path} {va_formatter.format_address(entry_ea)}",
         ),
     ]
     if interesting_import is not None:
         tips.append(
             TipSuggestion(
                 "This binary imports "
-                f"`{format_symbol_ref(db, interesting_import.name, interesting_import.ea, offsets_mode)}` "
+                f"`{format_symbol_ref(interesting_import.name, interesting_import.ea, formatter)}` "
                 "- view cross references to it.",
                 f"python -m idals {file_path} {interesting_import.name} --after=1",
             )
@@ -1379,14 +1265,14 @@ def output_overview(
         tips.append(
             TipSuggestion(
                 "Explore a named function "
-                f"`{format_symbol_ref(db, sample_function[1], sample_function[0], offsets_mode)}`.",
+                f"`{format_symbol_ref(sample_function[1], sample_function[0], formatter)}`.",
                 f"idals {file_path} {sample_function[1]}",
             )
         )
     tips.append(
         TipSuggestion(
             f"Addresses shown as `{offsets_mode}`. Switch mode with `--offsets rva` or `--offsets file`.",
-            f"idals {file_path} {format_address(db, entry_ea, 'va')} --offsets rva",
+            f"idals {file_path} {va_formatter.format_address(entry_ea)} --offsets rva",
         )
     )
 
@@ -1423,13 +1309,10 @@ def render_untagged_aux_body(body: str) -> Text:
     return Text(body)
 
 
-def render_listing_aux_line(db: Database, raw_line: str, style_map: dict[int, str]) -> Text:
-    """Render a non-main listing line with optional tag processing.
+def render_listing_aux_line(raw_line: str) -> Text:
+    """Render a non-main listing line.
     """
-    if line_has_tags(raw_line):
-        return tagged_line_to_rich(db, raw_line, style_map)
-
-    plain = strip_tagged_line(db, raw_line)
+    plain = raw_line.rstrip()
     if plain.lstrip().startswith(";"):
         if SIGNATURE_COMMENT_RE.match(plain.lstrip()):
             return Text(plain, style="yellow")
@@ -1442,10 +1325,20 @@ def render_listing_aux_line(db: Database, raw_line: str, style_map: dict[int, st
     return text
 
 
+def render_disassembly_line(raw_line: str) -> Text:
+    """Render a main disassembly line.
+    """
+    body, separator, comment = raw_line.partition(";")
+    text = Text(body.rstrip())
+    if separator:
+        text.append(separator + comment, style="bright_black")
+    return text
+
+
 def output_xrefs_section(
     db: Database,
     func_ctx: FunctionContext,
-    offsets_mode: str,
+    formatter: OffsetFormatter,
     use_rich: bool,
     console: Console,
 ) -> None:
@@ -1458,13 +1351,13 @@ def output_xrefs_section(
     visible = xrefs[:MAX_XREFS_INLINE]
     for xref in visible:
         if xref.from_func_name and xref.from_func_ea is not None:
-            source = format_symbol_ref(db, xref.from_func_name, xref.from_func_ea, offsets_mode)
+            source = format_symbol_ref(xref.from_func_name, xref.from_func_ea, formatter)
         else:
-            source = get_xref_context(db, xref.from_addr, offsets_mode)
+            source = get_xref_context(db, xref.from_addr, formatter)
         output_comment_line(
             console,
             use_rich,
-            f"; XREF: {format_address(db, xref.from_addr, offsets_mode)} (in {source})",
+            f"; XREF: {formatter.format_address(xref.from_addr)} (in {source})",
             indent=15,
         )
 
@@ -1481,54 +1374,50 @@ def output_listing_lines(
     db: Database,
     lines: list[ListingLine],
     target_head: int,
-    offsets_mode: str,
+    formatter: OffsetFormatter,
     use_rich: bool,
     console: Console,
-    style_map: dict[int, str],
 ) -> None:
     """Render listing lines.
     """
     for line in lines:
-        for annotation in get_data_xref_annotations(db, line.ea, offsets_mode):
+        for annotation in get_data_xref_annotations(db, line.ea, formatter):
             output_comment_line(console, use_rich, annotation, indent=15)
 
         for anterior_line in line.anterior_lines:
             if use_rich:
-                rendered_anterior = render_listing_aux_line(db, anterior_line, style_map)
+                rendered_anterior = render_listing_aux_line(anterior_line)
                 text = Text(" " * 15)
                 text.append_text(rendered_anterior)
                 console.print(text)
             else:
-                console.print(f"{'':>14} {strip_tagged_line(db, anterior_line)}")
+                console.print(f"{'':>14} {anterior_line}")
 
-        prefix = format_address(db, line.ea, offsets_mode)
+        prefix = formatter.format_address(line.ea)
         if use_rich:
             text = Text(f"{prefix:>14} ", style="bright_black")
-            text.append_text(tagged_line_to_rich(db, line.tagged_line, style_map))
+            text.append_text(render_disassembly_line(line.disassembly))
             if line.ea == target_head:
                 text.append("  ; <-- target", style="yellow")
             console.print(text)
         else:
-            plain = strip_tagged_line(db, line.tagged_line)
             marker = "  ; <-- target" if line.ea == target_head else ""
-            console.print(f"{prefix:>14} {plain}{marker}")
+            console.print(f"{prefix:>14} {line.disassembly}{marker}")
 
         for posterior_line in line.posterior_lines:
             if use_rich:
-                rendered_posterior = render_listing_aux_line(db, posterior_line, style_map)
+                rendered_posterior = render_listing_aux_line(posterior_line)
                 text = Text(" " * 15)
                 text.append_text(rendered_posterior)
                 console.print(text)
             else:
-                console.print(f"{'':>14} {strip_tagged_line(db, posterior_line)}")
+                console.print(f"{'':>14} {posterior_line}")
 
 
 def output_pseudocode(
-    db: Database,
     pseudocode_lines: list[str],
     use_rich: bool,
     console: Console,
-    style_map: dict[int, str],
 ) -> None:
     """Render pseudocode lines.
     """
@@ -1538,9 +1427,9 @@ def output_pseudocode(
         console.print("Pseudocode:")
     for line in pseudocode_lines:
         if use_rich:
-            console.print(tagged_line_to_rich(db, line, style_map))
+            console.print(render_disassembly_line(line))
         else:
-            console.print(strip_tagged_line(db, line))
+            console.print(line)
 
 
 def output_address_view(
@@ -1557,7 +1446,7 @@ def output_address_view(
 ) -> None:
     """Render file+address mode.
     """
-    style_map = build_tag_style_map(db)
+    formatter = build_offset_formatter(db, offsets_mode)
     func_ctx = get_function_context(db, ea)
     heads = generate_listing_heads(db, ea, before, after, func_ctx)
     lines = generate_listing_lines(db, heads)
@@ -1572,7 +1461,7 @@ def output_address_view(
             else:
                 console.print(f"{'':>14} {signature_line}")
         if func_ctx.is_func_start:
-            output_xrefs_section(db, func_ctx, offsets_mode, use_rich, console)
+            output_xrefs_section(db, func_ctx, formatter, use_rich, console)
 
     if func_ctx is not None and heads:
         first_head = heads[0]
@@ -1585,10 +1474,9 @@ def output_address_view(
         db,
         lines,
         target_head,
-        offsets_mode,
+        formatter,
         use_rich,
         console,
-        style_map,
     )
 
     if func_ctx is not None and heads:
@@ -1602,17 +1490,16 @@ def output_address_view(
                 db,
                 [last_func_line],
                 target_head,
-                offsets_mode,
+                formatter,
                 use_rich,
                 console,
-                style_map,
             )
 
     if not suppress_decompile and func_ctx is not None and func_ctx.is_func_start:
         pseudocode_lines = get_pseudocode_lines(db, func_ctx.start_ea)
         if pseudocode_lines:
             if force_decompile or len(pseudocode_lines) <= MAX_PSEUDOCODE_LINES:
-                output_pseudocode(db, pseudocode_lines, use_rich, console, style_map)
+                output_pseudocode(pseudocode_lines, use_rich, console)
             else:
                 console.print(
                     f"Pseudocode: {len(pseudocode_lines)} lines "
@@ -1678,16 +1565,21 @@ def run(argv: list[str]) -> int:
 
     if args.decompile and args.no_decompile:
         raise UsageError("--decompile and --no-decompile cannot be used together")
+    if args.verbose and args.quiet:
+        raise UsageError("--verbose and --quiet cannot be used together")
     if args.after < 0:
         raise UsageError("--after must be >= 0")
     if args.before < 0:
         raise UsageError("--before must be >= 0")
 
+    stderr_console = Console(file=sys.stderr, markup=False, highlight=False)
+    configure_logging(verbose=bool(args.verbose), quiet=bool(args.quiet), stderr_console=stderr_console)
+
     file_path = Path(args.file)
     if not file_path.exists():
         raise AddressError(f"Error: File not found: {file_path}")
 
-    stderr_console = Console(file=sys.stderr, markup=False, highlight=False)
+    logger.debug("Starting run for file: %s", file_path)
     db_path = resolve_database(file_path, stderr_console)
 
     use_rich = bool(sys.stdout.isatty()) and not args.no_color
@@ -1703,10 +1595,12 @@ def run(argv: list[str]) -> int:
 
     with open_database_session(db_path, auto_analysis=False) as db:
         if args.address is None:
+            logger.debug("Rendering overview")
             output_overview(db, file_path, args.offsets, use_rich, console)
             return 0
 
         ea = resolve_address(db, args.address)
+        logger.debug("Rendering address view at 0x%X", ea)
         output_address_view(
             db=db,
             file_path=file_path,

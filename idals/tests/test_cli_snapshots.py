@@ -7,7 +7,6 @@ from pathlib import Path
 
 import idals
 import pytest
-from rich.console import Console
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = PROJECT_ROOT / "idals.py"
@@ -117,11 +116,32 @@ def test_conflict_error_snapshot() -> None:
     assert result.stderr == read_snapshot("error_conflict.stderr")
 
 
-def test_address_tag_width_uses_ea_size() -> None:
-    file_path = (PROJECT_ROOT / SAMPLE_BINARY_ARG).resolve()
-    stderr_console = Console(file=sys.stderr, markup=False, highlight=False)
-    db_path = idals.resolve_database(file_path, stderr_console)
-    with idals.open_database_session(db_path, auto_analysis=False) as db:
-        *_, address_len = idals.get_tag_constants(db)
-        assert not bool(idals.ida_ida.inf_is_64bit())
-        assert address_len == 16
+def test_offset_formatter_va_mode() -> None:
+    formatter = idals.OffsetFormatter(
+        mode="va",
+        image_base=0x400000,
+        bad_address=0xFFFFFFFF,
+        file_offset_resolver=lambda ea: ea - 0x400000,
+    )
+    assert formatter.format_address(0x401820) == "0x401820"
+
+
+def test_offset_formatter_rva_mode() -> None:
+    formatter = idals.OffsetFormatter(
+        mode="rva",
+        image_base=0x400000,
+        bad_address=0xFFFFFFFF,
+        file_offset_resolver=lambda ea: ea - 0x400000,
+    )
+    assert formatter.format_address(0x401820) == "0x1820"
+
+
+def test_offset_formatter_file_mode_handles_unmapped() -> None:
+    formatter = idals.OffsetFormatter(
+        mode="file",
+        image_base=0x400000,
+        bad_address=0xFFFFFFFF,
+        file_offset_resolver=lambda ea: -1 if ea == 0xDEAD else 0x123,
+    )
+    assert formatter.format_address(0x401820) == "0x123"
+    assert formatter.format_address(0xDEAD) == "N/A"

@@ -929,3 +929,17 @@ Documented here for context, not for implementation:
 - **Struct/type rendering** — show resolved structure layouts for data items.
 - **MCP server mode** — expose `idals` capabilities as MCP tools for tighter agent integration.
 
+
+## 11. Implementation updates (2026-02-26)
+
+This revision updates the implementation to reduce low-level SDK coupling and align with ida-domain surfaces.
+
+- Imports are collected via `db.imports.get_all_imports()`.
+- Overview metadata uses domain fields (`db.metadata`, `db.start_ip`, `db.architecture`, `db.bitness`) instead of direct `ida_ida`/`ida_nalt` queries.
+- Function signatures use `db.functions.get_signature(func)`; legacy `idc.get_type` usage is removed.
+- Legacy `idc.get_frame_size` helper code is removed.
+- Listing rendering no longer imports or calls `ida_lines` directly. The renderer now uses `db.bytes.get_disassembly_at()` plus `db.comments` extra/comment APIs.
+- Address formatting is isolated behind an `OffsetFormatter` abstraction (`va`/`rva`/`file`) with dedicated unit tests.
+- Name resolution no longer uses global name caching (`NAME_CACHE` removed); names are resolved from current database state per request.
+- Logging hooks were added: `--verbose` enables DEBUG logs, `--quiet` suppresses non-error logs, both via Rich logging to stderr.
+

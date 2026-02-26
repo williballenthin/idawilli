@@ -94,7 +94,7 @@ Tips should be tailored to the specific binary where possible (referencing actua
 $ idals <file> <address>
 ```
 
-This is the primary mode. Given a file and an address, `idals` renders the IDA listing output (via the lines API) for that location.
+This is the primary mode. Given a file and an address, `idals` renders disassembly for that location using ida-domain instruction/bytes surfaces.
 
 #### Address Input Formats
 
@@ -106,7 +106,7 @@ The `<address>` argument accepts:
 
 #### Default Context
 
-By default, the tool shows **16 instructions/items** forward from the given address and **0 instructions/items** backward. Each instruction/item may produce multiple output lines (due to comments, labels, cross-reference annotations, etc.). For each head, render lines in this order: anterior lines, main disassembly line, posterior lines. Use the IDA lines APIs to enumerate these lines.
+By default, the tool shows **16 instructions/items** forward from the given address and **0 instructions/items** backward. Each head emits a primary disassembly line and may include comment lines (anterior/posterior extra comments and regular/repeatable comments) when available. Render in this order: anterior lines, main disassembly line, posterior lines.
 
 #### Context Flags
 
@@ -158,7 +158,7 @@ Pseudocode: 142 lines (use --decompile to force display)
 
 A `--decompile` flag can be provided to force pseudocode output regardless of length. A `--no-decompile` flag suppresses pseudocode entirely.
 
-The pseudocode should use the same tag-stripping or rich-markup rendering as the disassembly (see §3).
+The pseudocode should use the same plain/rich rendering pipeline as the disassembly (see §3).
 
 
 ## 3. Output Rendering
@@ -167,25 +167,17 @@ The pseudocode should use the same tag-stripping or rich-markup rendering as the
 
 When stdout is not a TTY (i.e., output is piped to another program, captured by an agent, or redirected to a file), all output is **plain text**:
 
-- IDA's binary tag markers (COLOR_ON = `\x01`, COLOR_OFF = `\x02`, plus the type byte) are stripped using `ida_lines.tag_remove()` or equivalent logic.
-- The embedded address tag (`SCOLOR_ADDR`) is handled specially: skip the encoded address payload (derived from IDA EA width; typically 16 hex chars in IDA64) and retain only the visible operand text.
+- Disassembly and pseudocode lines are emitted as plain strings from ida-domain APIs.
 - No ANSI escape codes or rich markup in the output.
 
 ### 3.2 Rich Terminal Mode (Interactive)
 
-When stdout is a TTY (human at a terminal), the output is syntax-highlighted using the `rich` library:
+When stdout is a TTY (human at a terminal), output uses `rich`:
 
-- IDA's binary tags are translated to `rich` markup. Each tag type maps to a color/style. The exact color scheme is implementation-defined and can be tuned, but a reasonable starting point:
-  - **Instructions/mnemonics** (`COLOR_INSN`): bold blue
-  - **Registers**: cyan
-  - **Numeric constants** (`COLOR_NUMBER`): light red / salmon
-  - **Strings** (`COLOR_STRING`): green
-  - **Names/labels** (`COLOR_DNAME`, `COLOR_CNAME`, etc.): yellow
-  - **Comments** (`COLOR_AUTOCMT`, `COLOR_REGCMT`): gray / dim
-  - **Addresses** in the prefix: dim white
-  - **Segment names**: magenta
-- The address tag requires special handling: after the tag-on sentinel and address tag type byte, skip the encoded address payload based on IDA EA width (commonly 16 hex chars), then continue parsing the visible text that follows.
-- The `rich` Console should be used for output, allowing automatic terminal width detection and proper handling of wide content.
+- Address prefixes use muted styling.
+- Comments are dimmed.
+- Section headers/rules match the overview style used elsewhere in the tool.
+- The `rich` Console handles terminal width and wrapping.
 
 ### 3.3 Structural Elements
 
@@ -358,6 +350,8 @@ Options:
   --decompile         Force pseudocode output regardless of length
   --no-decompile      Suppress pseudocode output entirely
   --no-color          Force plain text output even in a TTY
+  --verbose           Enable debug logging to stderr
+  --quiet             Show only errors on stderr
   -h, --help          Show help message (same as no arguments)
   -v, --version       Show version information
 ```
