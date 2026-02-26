@@ -2,7 +2,7 @@
 
 > **Version:** 0.1.0.dev0
 > **Status:** Ready for implementation
-> **Last updated:** 2026-02-23
+> **Last updated:** 2026-02-26
 
 ## 1. Overview
 

@@ -3,7 +3,7 @@
 > **Version:** 0.1.0-draft
 > **Status:** Ready for implementation
 > **Companion document:** SPEC.md (behavioral specification)
-> **Last updated:** 2026-02-22
+> **Last updated:** 2026-02-26
 
 ## 1. Project Structure
 
