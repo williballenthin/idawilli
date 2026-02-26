@@ -14,13 +14,31 @@ import argparse
 import contextlib
 import difflib
 import hashlib
-import importlib
 import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Any, Iterator
 
+import idapro
+import ida_auto
+import ida_bytes
+import ida_entry
+import ida_funcs
+import ida_ida
+import ida_idaapi
+import ida_lines
+import ida_loader
+import ida_nalt
+import ida_name
+import ida_segment
+import ida_typeinf
+import ida_xref
+import idautils
+import idc
+import ida_hexrays
+from ida_domain import Database
+from ida_domain.database import IdaCommandOptions
 from rich.console import Console
 from rich.padding import Padding
 from rich.syntax import Syntax
@@ -370,40 +388,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
 
 
 def load_ida_runtime() -> IdaRuntime:
-    """Load IDA modules lazily.
-
-    Raises:
-        AnalysisError: If one or more IDA modules cannot be imported.
-
+    """Build the runtime view over imported IDA modules.
     """
-
-    def load_module(name: str) -> Any:
-        try:
-            return importlib.import_module(name)
-        except Exception as exc:
-            raise AnalysisError(f"Failed to import {name}: {exc}") from exc
-
-    idapro = load_module("idapro")
-    ida_auto = load_module("ida_auto")
-    ida_lines = load_module("ida_lines")
-    ida_funcs = load_module("ida_funcs")
-    ida_segment = load_module("ida_segment")
-    ida_entry = load_module("ida_entry")
-    ida_name = load_module("ida_name")
-    ida_bytes = load_module("ida_bytes")
-    ida_nalt = load_module("ida_nalt")
-    ida_xref = load_module("ida_xref")
-    ida_ida = load_module("ida_ida")
-    ida_loader = load_module("ida_loader")
-    ida_idaapi = load_module("ida_idaapi")
-    ida_typeinf = load_module("ida_typeinf")
-    idautils = load_module("idautils")
-    ida_hexrays: Any | None = None
-    try:
-        ida_hexrays = importlib.import_module("ida_hexrays")
-    except Exception:
-        ida_hexrays = None
-
     return IdaRuntime(
         idapro=idapro,
         ida_auto=ida_auto,
@@ -422,87 +408,6 @@ def load_ida_runtime() -> IdaRuntime:
         ida_typeinf=ida_typeinf,
         idautils=idautils,
     )
-
-
-def call_open_database(runtime: IdaRuntime, path: Path, auto_analysis: bool, new_database: bool) -> None:
-    """Open an IDA database or binary using best-effort signature matching.
-
-    Raises:
-        AnalysisError: If opening fails.
-
-    """
-    load_args = "-R" if new_database else None
-    attempts: list[Callable[[], Any]] = [
-        lambda: runtime.idapro.open_database(str(path), auto_analysis, load_args, False),
-        lambda: runtime.idapro.open_database(
-            file_name=str(path), run_auto_analysis=auto_analysis, args=load_args, enable_history=False
-        ),
-        lambda: runtime.idapro.open_database(str(path), auto_analysis, load_args),
-        lambda: runtime.idapro.open_database(str(path), auto_analysis),
-        lambda: runtime.idapro.open_database(
-            file_name=str(path), run_auto_analysis=auto_analysis
-        ),
-        lambda: runtime.idapro.open_database(str(path), auto_analysis, None, False),
-        lambda: runtime.idapro.open_database(str(path)),
-    ]
-    last_type_error: Exception | None = None
-    for attempt in attempts:
-        try:
-            attempt()
-            return
-        except TypeError as exc:
-            last_type_error = exc
-            continue
-        except Exception as exc:
-            raise AnalysisError(f"Failed to open {path}: {exc}") from exc
-    raise AnalysisError(f"Failed to open {path}: incompatible API ({last_type_error})")
-
-
-def call_save_database(runtime: IdaRuntime, path: Path) -> None:
-    """Save current IDA database.
-
-    Raises:
-        AnalysisError: If saving fails.
-
-    """
-    attempts: list[Callable[[], Any]] = [
-        lambda: runtime.ida_loader.save_database(str(path), 0),
-        lambda: runtime.ida_loader.save_database(str(path)),
-    ]
-
-    with contextlib.suppress(Exception):
-        idc = importlib.import_module("idc")
-        attempts.extend(
-            [
-                lambda: idc.save_database(str(path), 0),
-                lambda: idc.save_database(str(path)),
-            ]
-        )
-
-    last_type_error: Exception | None = None
-    for attempt in attempts:
-        try:
-            result = attempt()
-            if result is False:
-                continue
-            return
-        except TypeError as exc:
-            last_type_error = exc
-            continue
-        except Exception as exc:
-            raise AnalysisError(f"Failed to save database to {path}: {exc}") from exc
-    raise AnalysisError(f"Failed to save database to {path}: incompatible API ({last_type_error})")
-
-
-def call_close_database(runtime: IdaRuntime) -> None:
-    """Close currently open IDA database.
-    """
-    close_fn = getattr(runtime.idapro, "close_database", None)
-    if callable(close_fn):
-        for args in ((False,), tuple()):
-            with contextlib.suppress(Exception):
-                close_fn(*args)
-                return
 
 
 def compute_file_hashes(file_path: Path) -> tuple[str, str]:
@@ -539,15 +444,20 @@ def resolve_database(file_path: Path, stderr_console: Console) -> Path:
         return cache_path
 
     stderr_console.print(f"Analyzing {file_path.name} (this may take a moment)...")
-    runtime = load_ida_runtime()
+    ida_options = IdaCommandOptions(
+        auto_analysis=True,
+        new_database=True,
+        output_database=str(cache_path),
+        load_resources=True,
+    )
     try:
-        call_open_database(runtime, file_path, auto_analysis=True, new_database=True)
-        runtime.ida_auto.auto_wait()
-        call_save_database(runtime, cache_path)
+        with Database.open(str(file_path), ida_options, save_on_close=True):
+            ida_auto.auto_wait()
     except Exception as exc:
         raise AnalysisError(f"Analysis failed for {file_path}: {exc}") from exc
-    finally:
-        call_close_database(runtime)
+
+    if not cache_path.exists():
+        raise AnalysisError(f"Analysis failed for {file_path}: did not create {cache_path}")
     return cache_path
 
 
@@ -560,13 +470,16 @@ def open_database_session(db_path: Path, auto_analysis: bool = False) -> Iterato
 
     """
     runtime = load_ida_runtime()
-    call_open_database(runtime, db_path, auto_analysis=auto_analysis, new_database=False)
-    if auto_analysis:
-        runtime.ida_auto.auto_wait()
+    ida_options = IdaCommandOptions(auto_analysis=auto_analysis, new_database=False)
     try:
+        database = Database.open(str(db_path), ida_options, save_on_close=False)
+    except Exception as exc:
+        raise AnalysisError(f"Failed to open {db_path}: {exc}") from exc
+
+    with database:
+        if auto_analysis:
+            runtime.ida_auto.auto_wait()
         yield runtime
-    finally:
-        call_close_database(runtime)
 
 
 def get_permissions_string(runtime: IdaRuntime, perm: int) -> str:
@@ -817,13 +730,10 @@ def resolve_address(runtime: IdaRuntime, address_str: str) -> int:
 def get_function_signature(runtime: IdaRuntime, func_ea: int) -> str | None:
     """Get a function signature string when available.
     """
-    try:
-        idc = importlib.import_module("idc")
+    with contextlib.suppress(Exception):
         signature = idc.get_type(func_ea)
         if signature:
             return str(signature)
-    except Exception:
-        return None
     return None
 
 
@@ -1335,11 +1245,6 @@ def format_at_address(runtime: IdaRuntime, ea: int, offsets_mode: str) -> str:
 def get_function_stack_summary(runtime: IdaRuntime, func_ea: int) -> str | None:
     """Get stack frame summary for a function when available.
     """
-    try:
-        idc = importlib.import_module("idc")
-    except Exception:
-        return None
-
     get_frame_size = getattr(idc, "get_frame_size", None)
     if not callable(get_frame_size):
         return None

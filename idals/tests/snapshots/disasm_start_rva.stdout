@@ -32,6 +32,35 @@
                ;   } // starts at 401846
                ; } // starts at 401820
                start           endp
+Pseudocode:
+void __noreturn start()
+{
+  char **argv; // [esp+10h] [ebp-2Ch] BYREF
+  int v1; // [esp+14h] [ebp-28h] BYREF
+  int v2; // [esp+18h] [ebp-24h]
+  char **envp; // [esp+1Ch] [ebp-20h] BYREF
+  int argc; // [esp+20h] [ebp-1Ch] BYREF
+  CPPEH_RECORD ms_exc; // [esp+24h] [ebp-18h]
+
+  ms_exc.registration.TryLevel = 0;
+  _set_app_type(_crt_console_app);
+  dword_4030F0 = -1;
+  dword_4030F4 = -1;
+  *_p__fmode() = dword_4030EC;
+  *_p__commode() = dword_4030E8;
+  dword_4030F8 = adjust_fdiv;
+  nullsub_1();
+  if ( !dword_4030D8 )
+    _setusermatherr(UserMathErrorFunction);
+  _setdefaultprecision();
+  initterm(&First, &Last);
+  v1 = dword_4030E4;
+  _getmainargs(&argc, &argv, &envp, dword_4030E0, &v1);
+  initterm(&dword_403000, &dword_403004);
+  *(_DWORD *)_p___initenv() = envp;
+  v2 = main(argc, (const char **)argv, (const char **)envp);
+  exit(v2);
+}
 --- Tips ---------------------------------------------------------------
 • Show more context.
     $ idals ../tests/data/Practical Malware Analysis Lab 01-01.exe_ 0x401820 --after 64 --before 16

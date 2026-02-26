@@ -82,7 +82,9 @@ main()
 
 ### 3.2 IDA Python Modules Used
 
-Prefer `ida-domain` where it provides the needed functionality. Fall back to these lower-level modules as needed:
+Prefer `ida-domain` where it provides the needed functionality. Fall back to these lower-level modules as needed.
+
+Implementation decision: import `idapro`, `ida-domain`, and `ida_*` modules at module load time (top-level imports). Do not use lazy import wrappers for these modules.
 
 | Module | Purpose |
 |---|---|
@@ -209,20 +211,25 @@ def compute_file_hash(file_path: Path) -> str:
 **Analysis flow (cache miss):**
 
 ```python
-import idapro
+from ida_domain import Database
+from ida_domain.database import IdaCommandOptions
 
 # Print progress to stderr (not stdout)
 print(f"Analyzing {file_path.name} (this may take a moment)...", file=sys.stderr)
 
-# Open and analyze (include -R so resources are loaded)
-idapro.open_database(str(file_path), auto_analysis=True, args="-R")
-ida_auto.auto_wait()
+options = IdaCommandOptions(
+    auto_analysis=True,
+    new_database=True,
+    output_database=str(cache_path),
+    load_resources=True,
+)
 
-# Save to cache location
-idapro.save_database(str(cache_path))
+# Open/analyze/save in one ida-domain context manager
+with Database.open(str(file_path), options, save_on_close=True):
+    ida_auto.auto_wait()
 ```
 
-Note: The exact `idapro` / `ida-domain` API for opening and saving databases should be confirmed against the `ida-domain` `Database.open()` interface. The `ida-domain` `Database` context manager with `IdaCommandOptions(auto_analysis=True, new_database=True)` is preferred.
+Implementation decision: `idals` uses `Database.open()` directly for both cache generation and regular session access. It does not probe multiple `idapro.open_database()` signatures.
 
 
 ### 4.4 Database Access
@@ -906,7 +913,7 @@ While not part of the initial single-file deliverable, the implementer should co
 | `idalib` analysis on large binaries may be slow | The caching strategy mitigates this for repeat invocations; print progress to stderr |
 | Hex-Rays decompiler may not be available | Detect at runtime via `ida_hexrays.init_hexrays_plugin()`, gracefully degrade |
 | Large binaries may have thousands of imports/entry records | Cap listings with a note about total count |
-| `ida-domain` `Database.open()` vs `idapro.open_database()` lifecycle management | Follow `ida-domain` examples; test both paths |
+| `ida-domain` `Database.open()` lifecycle edge cases across IDA versions | Keep all database opens in `Database.open()` context managers and validate with snapshot tests |
 
 
 ## 10. Future Extensions (Out of Scope for v0.1)
