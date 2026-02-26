@@ -157,6 +157,7 @@ class TipSuggestion:
 
 @dataclass
 class IdaRuntime:
+    db: Database
     idapro: Any
     ida_auto: Any
     ida_lines: Any
@@ -387,10 +388,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def load_ida_runtime() -> IdaRuntime:
+def load_ida_runtime(db: Database) -> IdaRuntime:
     """Build the runtime view over imported IDA modules.
     """
     return IdaRuntime(
+        db=db,
         idapro=idapro,
         ida_auto=ida_auto,
         ida_lines=ida_lines,
@@ -469,7 +471,6 @@ def open_database_session(db_path: Path, auto_analysis: bool = False) -> Iterato
         AnalysisError: If opening fails.
 
     """
-    runtime = load_ida_runtime()
     ida_options = IdaCommandOptions(auto_analysis=auto_analysis, new_database=False)
     try:
         database = Database.open(str(db_path), ida_options, save_on_close=False)
@@ -477,6 +478,7 @@ def open_database_session(db_path: Path, auto_analysis: bool = False) -> Iterato
         raise AnalysisError(f"Failed to open {db_path}: {exc}") from exc
 
     with database:
+        runtime = load_ida_runtime(database)
         if auto_analysis:
             runtime.ida_auto.auto_wait()
         yield runtime
@@ -485,9 +487,9 @@ def open_database_session(db_path: Path, auto_analysis: bool = False) -> Iterato
 def get_permissions_string(runtime: IdaRuntime, perm: int) -> str:
     """Format segment permissions as rwx triplet.
     """
-    read_mask = int(getattr(runtime.ida_segment, "SEGPERM_READ", 4))
-    write_mask = int(getattr(runtime.ida_segment, "SEGPERM_WRITE", 2))
-    exec_mask = int(getattr(runtime.ida_segment, "SEGPERM_EXEC", 1))
+    read_mask = 4
+    write_mask = 2
+    exec_mask = 1
     return f"{'r' if perm & read_mask else '-'}{'w' if perm & write_mask else '-'}{'x' if perm & exec_mask else '-'}"
 
 
@@ -495,12 +497,8 @@ def get_segment_infos(runtime: IdaRuntime) -> list[SegmentInfo]:
     """Collect segment information.
     """
     segments: list[SegmentInfo] = []
-    quantity = runtime.ida_segment.get_segm_qty()
-    for index in range(quantity):
-        segment = runtime.ida_segment.getnseg(index)
-        if segment is None:
-            continue
-        name = runtime.ida_segment.get_segm_name(segment) or f"seg_{index}"
+    for index, segment in enumerate(runtime.db.segments.get_all()):
+        name = runtime.db.segments.get_name(segment) or f"seg_{index}"
         segments.append(
             SegmentInfo(
                 name=name,
@@ -516,15 +514,15 @@ def get_export_infos(runtime: IdaRuntime) -> list[ExportInfo]:
     """Collect entry records from IDA's entry table.
     """
     exports: list[ExportInfo] = []
-    quantity = runtime.ida_entry.get_entry_qty()
-    for index in range(quantity):
-        ordinal = int(runtime.ida_entry.get_entry_ordinal(index))
-        ea = int(runtime.ida_entry.get_entry(ordinal))
-        if ea == runtime.ida_idaapi.BADADDR:
+    badaddr = int(runtime.ida_idaapi.BADADDR)
+    for entry in runtime.db.entries.get_all():
+        ordinal = int(entry.ordinal)
+        ea = int(entry.address)
+        if ea == badaddr:
             continue
-        name = runtime.ida_entry.get_entry_name(ordinal) or runtime.ida_name.get_name(ea) or f"ord_{ordinal}"
+        name = str(entry.name or runtime.db.names.get_at(ea) or f"ord_{ordinal}")
         exports.append(ExportInfo(name=name, ea=ea, ordinal=ordinal))
-    exports.sort(key=lambda entry: (entry.ea, entry.ordinal, entry.name.lower()))
+    exports.sort(key=lambda item: (item.ea, item.ordinal, item.name.lower()))
     return exports
 
 
@@ -607,9 +605,9 @@ def get_function_counts(runtime: IdaRuntime) -> tuple[int, int]:
     """
     total = 0
     named = 0
-    for ea in runtime.idautils.Functions():
+    for func in runtime.db.functions.get_all():
         total += 1
-        func_name = runtime.ida_funcs.get_func_name(ea) or ""
+        func_name = runtime.db.functions.get_name(func) or ""
         if not func_name.startswith("sub_"):
             named += 1
     return total, named
@@ -618,10 +616,10 @@ def get_function_counts(runtime: IdaRuntime) -> tuple[int, int]:
 def get_sample_named_function(runtime: IdaRuntime) -> tuple[int, str] | None:
     """Pick one named function for tips.
     """
-    for ea in runtime.idautils.Functions():
-        name = runtime.ida_funcs.get_func_name(ea) or ""
+    for func in runtime.db.functions.get_all():
+        name = runtime.db.functions.get_name(func) or ""
         if name and not name.startswith("sub_"):
-            return int(ea), name
+            return int(func.start_ea), name
     return None
 
 
@@ -641,12 +639,10 @@ def is_mapped_address(runtime: IdaRuntime, ea: int) -> bool:
     """
     if ea == runtime.ida_idaapi.BADADDR:
         return False
-    get_segment = getattr(runtime.ida_segment, "getseg", None)
-    if callable(get_segment):
-        return get_segment(ea) is not None
-    min_ea = int(runtime.ida_ida.inf_get_min_ea())
-    max_ea = int(runtime.ida_ida.inf_get_max_ea())
-    return min_ea <= ea < max_ea
+    with contextlib.suppress(Exception):
+        if runtime.db.segments.get_at(ea) is not None:
+            return True
+    return int(runtime.db.minimum_ea) <= ea < int(runtime.db.maximum_ea)
 
 
 def get_name_cache(runtime: IdaRuntime) -> list[tuple[int, str]]:
@@ -655,11 +651,26 @@ def get_name_cache(runtime: IdaRuntime) -> list[tuple[int, str]]:
     global _NAME_CACHE
     if _NAME_CACHE is None:
         cache: list[tuple[int, str]] = []
-        for ea, name in runtime.idautils.Names():
+        for ea, name in runtime.db.names.get_all():
             if name:
                 cache.append((int(ea), str(name)))
         _NAME_CACHE = cache
     return _NAME_CACHE
+
+
+def resolve_name_ea(runtime: IdaRuntime, name: str) -> int | None:
+    """Resolve symbol name to address from the name list.
+    """
+    exact_match: int | None = None
+    folded_match: int | None = None
+    folded_query = name.lower()
+    for ea, candidate in get_name_cache(runtime):
+        if candidate == name:
+            exact_match = ea
+            break
+        if folded_match is None and candidate.lower() == folded_query:
+            folded_match = ea
+    return exact_match if exact_match is not None else folded_match
 
 
 def build_unmapped_error(runtime: IdaRuntime, ea: int) -> str:
@@ -718,8 +729,8 @@ def resolve_address(runtime: IdaRuntime, address_str: str) -> int:
         if numeric_candidate is not None and is_mapped_address(runtime, numeric_candidate):
             return numeric_candidate
 
-    ea = int(runtime.ida_name.get_name_ea(runtime.ida_idaapi.BADADDR, text))
-    if ea != runtime.ida_idaapi.BADADDR and is_mapped_address(runtime, ea):
+    ea = resolve_name_ea(runtime, text)
+    if ea is not None and is_mapped_address(runtime, ea):
         return ea
 
     if numeric_candidate is not None:
@@ -742,13 +753,15 @@ def count_heads_in_range(runtime: IdaRuntime, start_ea: int, end_ea: int) -> int
     """
     count = 0
     ea = start_ea
-    bad = runtime.ida_idaapi.BADADDR
-    while ea != bad and ea < end_ea:
+    while ea < end_ea:
         count += 1
-        next_ea = runtime.ida_bytes.next_head(ea, end_ea)
-        if next_ea == bad or next_ea <= ea:
+        next_ea = runtime.db.bytes.get_next_head(ea)
+        if next_ea is None:
             break
-        ea = next_ea
+        next_int = int(next_ea)
+        if next_int <= ea or next_int >= end_ea:
+            break
+        ea = next_int
     return count
 
 
@@ -756,18 +769,19 @@ def get_xrefs_to_function(runtime: IdaRuntime, func_ea: int) -> list[XrefInfo]:
     """Collect xrefs to a function, capped.
     """
     xrefs: list[XrefInfo] = []
-    for xref in runtime.idautils.XrefsTo(func_ea, 0):
+    for xref in runtime.db.xrefs.to_ea(func_ea):
         if len(xrefs) >= MAX_XREFS:
             break
-        caller_func = runtime.ida_funcs.get_func(xref.frm)
+        from_ea = int(xref.from_ea)
+        caller_func = runtime.db.functions.get_at(from_ea)
         caller_name: str | None = None
         caller_ea: int | None = None
         if caller_func is not None:
             caller_ea = int(caller_func.start_ea)
-            caller_name = runtime.ida_funcs.get_func_name(caller_func.start_ea) or None
+            caller_name = runtime.db.functions.get_name(caller_func) or None
         xrefs.append(
             XrefInfo(
-                from_addr=int(xref.frm),
+                from_addr=from_ea,
                 from_func_name=caller_name,
                 from_func_ea=caller_ea,
                 xref_type=int(xref.type),
@@ -779,15 +793,15 @@ def get_xrefs_to_function(runtime: IdaRuntime, func_ea: int) -> list[XrefInfo]:
 def get_function_context(runtime: IdaRuntime, ea: int) -> FunctionContext | None:
     """Find function context for address.
     """
-    func = runtime.ida_funcs.get_func(ea)
+    func = runtime.db.functions.get_at(ea)
     if func is None:
         return None
 
     start_ea = int(func.start_ea)
     end_ea = int(func.end_ea)
-    name = runtime.ida_funcs.get_func_name(start_ea) or f"sub_{start_ea:X}"
+    name = runtime.db.functions.get_name(func) or f"sub_{start_ea:X}"
     signature = get_function_signature(runtime, start_ea)
-    comment = runtime.ida_funcs.get_func_cmt(func, False) or runtime.ida_funcs.get_func_cmt(func, True)
+    comment = runtime.db.functions.get_comment(func, False) or runtime.db.functions.get_comment(func, True)
     xrefs = get_xrefs_to_function(runtime, start_ea)
     instruction_count = count_heads_in_range(runtime, start_ea, end_ea)
 
@@ -803,6 +817,17 @@ def get_function_context(runtime: IdaRuntime, ea: int) -> FunctionContext | None
     )
 
 
+def resolve_head_ea(runtime: IdaRuntime, ea: int) -> int:
+    """Resolve an address to its containing item head.
+    """
+    if runtime.db.bytes.is_head_at(ea):
+        return ea
+    previous_head = runtime.db.bytes.get_previous_head(ea)
+    if previous_head is None:
+        return ea
+    return int(previous_head)
+
+
 def generate_listing_heads(
     runtime: IdaRuntime,
     target_ea: int,
@@ -812,36 +837,38 @@ def generate_listing_heads(
 ) -> list[int]:
     """Get list of heads around target, with function-boundary clamping.
     """
-    head = target_ea
-    get_head = getattr(runtime.ida_bytes, "get_item_head", None)
-    if callable(get_head):
-        head = int(get_head(target_ea))
+    head = resolve_head_ea(runtime, target_ea)
 
-    min_ea = int(runtime.ida_ida.inf_get_min_ea())
-    max_ea = int(runtime.ida_ida.inf_get_max_ea())
+    min_ea = int(runtime.db.minimum_ea)
+    max_ea = int(runtime.db.maximum_ea)
     lower_bound = func_ctx.start_ea if func_ctx else min_ea
     upper_bound = func_ctx.end_ea if func_ctx else max_ea
 
-    bad = runtime.ida_idaapi.BADADDR
     before_heads: list[int] = []
     cursor = head
     for _ in range(before):
-        previous = int(runtime.ida_bytes.prev_head(cursor, lower_bound))
-        if previous == bad or previous < lower_bound:
+        previous = runtime.db.bytes.get_previous_head(cursor)
+        if previous is None:
             break
-        before_heads.append(previous)
-        cursor = previous
+        previous_ea = int(previous)
+        if previous_ea < lower_bound:
+            break
+        before_heads.append(previous_ea)
+        cursor = previous_ea
     before_heads.reverse()
 
     after_heads: list[int] = [head]
     cursor = head
     requested_after = max(after, 1)
     for _ in range(requested_after - 1):
-        next_ea = int(runtime.ida_bytes.next_head(cursor, upper_bound))
-        if next_ea == bad or next_ea >= upper_bound:
+        next_ea = runtime.db.bytes.get_next_head(cursor)
+        if next_ea is None:
             break
-        after_heads.append(next_ea)
-        cursor = next_ea
+        next_head = int(next_ea)
+        if next_head >= upper_bound:
+            break
+        after_heads.append(next_head)
+        cursor = next_head
 
     return before_heads + after_heads
 
@@ -966,24 +993,27 @@ def generate_listing_lines(runtime: IdaRuntime, heads: list[int]) -> list[Listin
 def get_last_function_line(runtime: IdaRuntime, func_ctx: FunctionContext) -> ListingLine | None:
     """Get the final instruction/data line in a function.
     """
-    last_head = int(runtime.ida_bytes.prev_head(func_ctx.end_ea, func_ctx.start_ea))
-    if last_head == runtime.ida_idaapi.BADADDR:
+    last_head = runtime.db.bytes.get_previous_head(func_ctx.end_ea)
+    if last_head is None:
         return None
-    lines = generate_listing_lines(runtime, [last_head])
+    last_head_ea = int(last_head)
+    if last_head_ea < func_ctx.start_ea:
+        return None
+    lines = generate_listing_lines(runtime, [last_head_ea])
     return lines[0] if lines else None
 
 
 def get_xref_context(runtime: IdaRuntime, from_ea: int, offsets_mode: str) -> str:
     """Resolve the most useful xref context for a source address.
     """
-    caller_func = runtime.ida_funcs.get_func(from_ea)
+    caller_func = runtime.db.functions.get_at(from_ea)
     if caller_func is not None:
         caller_ea = int(caller_func.start_ea)
-        caller_name = runtime.ida_funcs.get_func_name(caller_ea)
+        caller_name = runtime.db.functions.get_name(caller_func)
         if caller_name:
             return format_symbol_ref(runtime, caller_name, caller_ea, offsets_mode)
 
-    fallback_name = runtime.ida_name.get_name(from_ea)
+    fallback_name = runtime.db.names.get_at(from_ea)
     if fallback_name:
         return format_symbol_ref(runtime, fallback_name, from_ea, offsets_mode)
 
@@ -993,14 +1023,13 @@ def get_xref_context(runtime: IdaRuntime, from_ea: int, offsets_mode: str) -> st
 def get_data_xref_annotations(runtime: IdaRuntime, ea: int, offsets_mode: str) -> list[str]:
     """Get data xrefs annotation lines for non-code items.
     """
-    flags = runtime.ida_bytes.get_flags(ea)
-    if runtime.ida_bytes.is_code(flags):
+    if runtime.db.bytes.is_code_at(ea):
         return []
 
     refs: list[str] = []
     seen_from: set[int] = set()
-    for xref in runtime.idautils.XrefsTo(ea, 0):
-        from_ea = int(xref.frm)
+    for xref in runtime.db.xrefs.to_ea(ea):
+        from_ea = int(xref.from_ea)
         if from_ea in seen_from:
             continue
         seen_from.add(from_ea)
@@ -1030,7 +1059,7 @@ def get_pseudocode_lines(runtime: IdaRuntime, func_ea: int) -> list[str] | None:
     except Exception:
         return None
 
-    func = runtime.ida_funcs.get_func(func_ea)
+    func = runtime.db.functions.get_at(func_ea)
     if func is None or int(func.start_ea) != func_ea:
         return None
 
@@ -1356,7 +1385,7 @@ def output_overview(
 
     image_base = int(runtime.ida_nalt.get_imagebase())
     entry_ea = int(runtime.ida_ida.inf_get_start_ea())
-    entry_name = runtime.ida_name.get_name(entry_ea) or "(unnamed)"
+    entry_name = runtime.db.names.get_at(entry_ea) or "(unnamed)"
     is_dll = is_dll_binary(runtime, file_path, dll_exports)
 
     procname = "unknown"
@@ -1655,10 +1684,7 @@ def output_address_view(
     heads = generate_listing_heads(runtime, ea, before, after, func_ctx)
     lines = generate_listing_lines(runtime, heads)
 
-    target_head = ea
-    get_head = getattr(runtime.ida_bytes, "get_item_head", None)
-    if callable(get_head):
-        target_head = int(get_head(ea))
+    target_head = resolve_head_ea(runtime, ea)
 
     if func_ctx is not None:
         if not func_ctx.is_func_start and func_ctx.signature:

@@ -168,10 +168,10 @@ def resolve_address(db, address_str: str) -> int:
 
 1. If the string starts with `0x` or `0X`, parse as hex.
 2. Try parsing as hex integer. If it succeeds and the resulting address is within the database's mapped range, use it.
-3. Look up as a symbol name via `ida_name.get_name_ea(ida_idaapi.BADADDR, address_str)`.
+3. Look up as a symbol name via `db.names.get_all()` (exact match first, then case-insensitive fallback).
 4. If all fail, raise an error with fuzzy-match suggestions.
 
-**Fuzzy matching for symbol suggestions:** Use `difflib.get_close_matches()` against a list of known names. To build the name list efficiently, iterate `idautils.Names()` — this yields `(ea, name)` pairs. Cache this list during the session. Limit suggestions to 5 matches.
+**Fuzzy matching for symbol suggestions:** Use `difflib.get_close_matches()` against a list of known names. To build the name list efficiently, iterate `db.names.get_all()` — this yields `(ea, name)` pairs. Cache this list during the session. Limit suggestions to 5 matches.
 
 
 ### 4.3 Database Resolution & Caching
@@ -263,17 +263,16 @@ md5, sha256 = compute_file_hashes(input_path)
 
 Render metadata as aligned key/value rows using a borderless table in rich mode.
 
-**Segments** — via `ida_segment`:
+**Segments** — via `db.segments`:
 ```python
-for i in range(ida_segment.get_segm_qty()):
-    seg = ida_segment.getnseg(i)
-    name = ida_segment.get_segm_name(seg)
+for seg in db.segments.get_all():
+    name = db.segments.get_name(seg)
     start = seg.start_ea
     end = seg.end_ea
     perms = seg.perm  # bitmask: 1=exec, 2=write, 4=read
 ```
 
-**Entry points** — via `ida_ida.inf_get_start_ea()` plus `ida_entry` enumeration.
+**Entry points** — via `ida_ida.inf_get_start_ea()` plus `db.entries` enumeration.
 
 Implementation detail:
 - The first displayed row is always the original entry point (`inf_get_start_ea`) and is labeled `OEP`.
@@ -284,10 +283,10 @@ Implementation detail:
 ```python
 entry_ea = ida_ida.inf_get_start_ea()
 
-for i in range(ida_entry.get_entry_qty()):
-    ordinal = ida_entry.get_entry_ordinal(i)
-    ea = ida_entry.get_entry(ordinal)
-    name = ida_entry.get_entry_name(ordinal)
+for entry in db.entries.get_all():
+    ordinal = entry.ordinal
+    ea = entry.address
+    name = entry.name
 ```
 
 **Imports** — via `ida_nalt` import enumeration callback pattern:
@@ -303,11 +302,11 @@ for i in range(ida_nalt.get_import_module_qty()):
     ida_nalt.enum_import_names(i, imp_cb)
 ```
 
-**Function count** — via `idautils.Functions()`:
+**Function count** — via `db.functions`:
 ```python
-functions = list(idautils.Functions())
+functions = list(db.functions.get_all())
 total = len(functions)
-named = sum(1 for ea in functions if not ida_funcs.get_func_name(ea).startswith("sub_"))
+named = sum(1 for func in functions if not db.functions.get_name(func).startswith("sub_"))
 ```
 
 
@@ -321,9 +320,8 @@ For each head (item) in the requested range, generate all associated output line
 
 ```python
 import ida_lines
-import ida_bytes
 
-def generate_lines(start_ea: int, num_items_before: int, num_items_after: int,
+def generate_lines(db, start_ea: int, num_items_before: int, num_items_after: int,
                    func_start: int | None, func_end: int | None) -> list[tuple[int, str]]:
     """Generate tagged lines for a range of instructions/items.
 
@@ -335,9 +333,10 @@ def generate_lines(start_ea: int, num_items_before: int, num_items_after: int,
     ea = start_ea
     before_items = []
     for _ in range(num_items_before):
-        ea = ida_bytes.prev_head(ea, func_start or 0)
-        if ea == ida_idaapi.BADADDR:
+        prev_ea = db.bytes.get_previous_head(ea)
+        if prev_ea is None:
             break
+        ea = int(prev_ea)
         if func_start is not None and ea < func_start:
             break
         before_items.append(ea)
@@ -346,9 +345,10 @@ def generate_lines(start_ea: int, num_items_before: int, num_items_after: int,
     after_items = [start_ea]
     ea = start_ea
     for _ in range(num_items_after - 1):
-        ea = ida_bytes.next_head(ea, func_end or ida_idaapi.BADADDR)
-        if ea == ida_idaapi.BADADDR:
+        next_ea = db.bytes.get_next_head(ea)
+        if next_ea is None:
             break
+        ea = int(next_ea)
         if func_end is not None and ea >= func_end:
             break
         after_items.append(ea)
@@ -464,40 +464,40 @@ def tagged_line_to_rich(tagged_line: str) -> Text:
 ### 4.7 Function Context Detection
 
 ```python
-def get_function_context(ea: int) -> FunctionContext | None:
+def get_function_context(db, ea: int) -> FunctionContext | None:
     """Determine the function context for a given address.
 
     Returns None if the address is not within a function.
     """
-    func = ida_funcs.get_func(ea)
+    func = db.functions.get_at(ea)
     if func is None:
         return None
 
     return FunctionContext(
         start_ea=func.start_ea,
         end_ea=func.end_ea,
-        name=ida_funcs.get_func_name(func.start_ea),
+        name=db.functions.get_name(func),
         is_func_start=(ea == func.start_ea),
         signature=get_function_signature(func.start_ea),
-        comment=ida_funcs.get_func_cmt(func, repeatable=False)
-                or ida_funcs.get_func_cmt(func, repeatable=True),
-        xrefs_to=list(get_xrefs_to_function(func.start_ea)),
+        comment=db.functions.get_comment(func, repeatable=False)
+                or db.functions.get_comment(func, repeatable=True),
+        xrefs_to=list(get_xrefs_to_function(db, func.start_ea)),
     )
 ```
 
 **Xrefs to function:**
 
 ```python
-def get_xrefs_to_function(func_ea: int) -> Iterator[XrefInfo]:
+def get_xrefs_to_function(db, func_ea: int) -> Iterator[XrefInfo]:
     """Yield cross-references to a function, capped at 100."""
     count = 0
-    for xref in idautils.XrefsTo(func_ea, flags=0):
+    for xref in db.xrefs.to_ea(func_ea):
         if count >= 100:
             break
-        caller_func = ida_funcs.get_func(xref.frm)
+        caller_func = db.functions.get_at(xref.from_ea)
         yield XrefInfo(
-            from_addr=xref.frm,
-            from_func_name=ida_funcs.get_func_name(caller_func.start_ea) if caller_func else None,
+            from_addr=xref.from_ea,
+            from_func_name=db.functions.get_name(caller_func) if caller_func else None,
             xref_type=xref.type,
         )
         count += 1
@@ -522,7 +522,7 @@ def render_pseudocode(func_ea: int) -> str | None:
     except ImportError:
         return None
 
-    func = ida_funcs.get_func(func_ea)
+    func = db.functions.get_at(func_ea)
     if func is None or func.start_ea != func_ea:
         return None
 
