@@ -121,7 +121,7 @@ def test_address_tag_width_uses_ea_size() -> None:
     file_path = (PROJECT_ROOT / SAMPLE_BINARY_ARG).resolve()
     stderr_console = Console(file=sys.stderr, markup=False, highlight=False)
     db_path = idals.resolve_database(file_path, stderr_console)
-    with idals.open_database_session(db_path, auto_analysis=False) as runtime:
-        *_, address_len = idals.get_tag_constants(runtime)
-        assert not bool(runtime.ida_ida.inf_is_64bit())
+    with idals.open_database_session(db_path, auto_analysis=False) as db:
+        *_, address_len = idals.get_tag_constants(db)
+        assert not bool(idals.ida_ida.inf_is_64bit())
         assert address_len == 16

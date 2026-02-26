@@ -246,7 +246,9 @@ with Database.open(str(db_path), options) as db:
     ...
 ```
 
-For operations not yet exposed by `ida-domain`, import and use the lower-level `ida_*` modules directly within this context.
+For operations not yet exposed by `ida-domain`, use the imported lower-level `ida_*` modules directly within this context.
+
+Implementation decision: code paths pass `Database` directly between helpers. There is no `IdaRuntime` wrapper object.
 
 
 ### 4.5 Overview Rendering
