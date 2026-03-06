@@ -174,7 +174,8 @@ When stdout is not a TTY (i.e., output is piped to another program, captured by 
 
 When stdout is a TTY (human at a terminal), output uses `rich`:
 
-- Address prefixes use muted styling.
+- Labels use yellow styling.
+- Range boundary addresses (shown as comments at start/end of listing) use muted styling.
 - Comments are dimmed.
 - Section headers/rules match the overview style used elsewhere in the tool.
 - The `rich` Console handles terminal width and wrapping.
@@ -207,8 +208,17 @@ $ idals malware.exe 0x140001000 --offsets file
 ```
 
 The addressing mode affects:
-- The address prefix on each disassembly line.
+- The range boundary addresses shown as comments at the start and end of the listing.
 - The addresses shown in cross-reference listings.
+
+### 4.1 Compact Listing Format (Token Reduction)
+
+To minimize token usage when output is consumed by LLMs, disassembly lines do **not** include per-line address prefixes. Instead:
+
+- **Labels** are shown on their own line (e.g., `loc_401234:`) before the corresponding instruction, preserving control flow resolution.
+- **Range addresses** are shown as comment lines at the start and end of the displayed range (e.g., `; 0x401820` and `; 0x401855`), so the reader knows the address bounds.
+
+This decision trades per-line address visibility for significantly reduced output size. Control flow is still resolvable via labels and branch target names in the disassembly.
 
 The output should always include a tips entry indicating the active addressing mode and how to switch modes with `--offsets rva` and `--offsets file`.
 

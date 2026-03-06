@@ -314,7 +314,11 @@ named = sum(1 for func in functions if not db.functions.get_name(func).startswit
 
 ### 4.6 Listing Rendering (Lines API)
 
-This is the core rendering engine. It uses IDA's lines API to produce output identical to what IDA shows in its listing view.
+This is the core rendering engine. It uses IDA's lines API to produce disassembly output.
+
+**Compact format:** To reduce token usage (important for LLM consumption), listing lines omit per-line address prefixes. Instead:
+- Labels (from `db.names.get_at(ea)`) are emitted on their own line as `label:` before the instruction, enabling control flow resolution.
+- Range boundary addresses are shown as comment lines (`; 0x...`) at the start and end of the displayed listing.
 
 #### 4.6.1 Generating Lines for a Range
 

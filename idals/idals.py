@@ -143,6 +143,7 @@ class ListingLine:
     disassembly: str
     anterior_lines: list[str]
     posterior_lines: list[str]
+    label: str | None = None
 
 
 @dataclass
@@ -1012,12 +1013,15 @@ def generate_listing_lines(db: Database, heads: list[int]) -> list[ListingLine]:
         comment_lines = [] if ";" in disassembly else get_item_comment_lines(db, ea)
         posterior_lines = merge_unique_lines(posterior_lines, comment_lines)
 
+        label = db.names.get_at(ea)
+
         lines.append(
             ListingLine(
                 ea=ea,
                 disassembly=disassembly,
                 anterior_lines=anterior_lines,
                 posterior_lines=posterior_lines,
+                label=str(label) if label else None,
             )
         )
     return lines
@@ -1433,7 +1437,6 @@ def output_xrefs_section(
             console,
             use_rich,
             f"; XREF: {formatter.format_address(xref.from_addr)} (in {source})",
-            indent=15,
         )
 
     if len(xrefs) > MAX_XREFS_INLINE:
@@ -1441,7 +1444,6 @@ def output_xrefs_section(
             console,
             use_rich,
             f"; XREF: ... showing first {MAX_XREFS_INLINE} of {len(xrefs)} callers",
-            indent=15,
         )
 
 
@@ -1457,36 +1459,34 @@ def output_listing_lines(
     """
     for line in lines:
         for annotation in get_data_xref_annotations(db, line.ea, formatter):
-            output_comment_line(console, use_rich, annotation, indent=15)
+            output_comment_line(console, use_rich, annotation)
 
         for anterior_line in line.anterior_lines:
             if use_rich:
-                rendered_anterior = render_listing_aux_line(anterior_line)
-                text = Text(" " * 15)
-                text.append_text(rendered_anterior)
-                console.print(text)
+                console.print(render_listing_aux_line(anterior_line))
             else:
-                console.print(f"{'':>14} {anterior_line}")
+                console.print(anterior_line)
 
-        prefix = formatter.format_address(line.ea)
+        if line.label:
+            if use_rich:
+                console.print(Text(f"{line.label}:", style="yellow"))
+            else:
+                console.print(f"{line.label}:")
+
         if use_rich:
-            text = Text(f"{prefix:>14} ", style="bright_black")
-            text.append_text(render_disassembly_line(line.disassembly))
+            text = render_disassembly_line(line.disassembly)
             if line.ea == target_head:
                 text.append("  ; <-- target", style="yellow")
             console.print(text)
         else:
             marker = "  ; <-- target" if line.ea == target_head else ""
-            console.print(f"{prefix:>14} {line.disassembly}{marker}")
+            console.print(f"{line.disassembly}{marker}")
 
         for posterior_line in line.posterior_lines:
             if use_rich:
-                rendered_posterior = render_listing_aux_line(posterior_line)
-                text = Text(" " * 15)
-                text.append_text(rendered_posterior)
-                console.print(text)
+                console.print(render_listing_aux_line(posterior_line))
             else:
-                console.print(f"{'':>14} {posterior_line}")
+                console.print(posterior_line)
 
 
 def output_pseudocode(
@@ -1532,9 +1532,9 @@ def output_address_view(
         if not func_ctx.is_func_start and func_ctx.signature:
             signature_line = f"; {func_ctx.signature}"
             if use_rich:
-                console.print(Text(" " * 15 + signature_line, style="yellow"))
+                console.print(Text(signature_line, style="yellow"))
             else:
-                console.print(f"{'':>14} {signature_line}")
+                console.print(signature_line)
         if func_ctx.is_func_start:
             output_xrefs_section(db, func_ctx, formatter, use_rich, console)
 
@@ -1543,7 +1543,10 @@ def output_address_view(
         if first_head > func_ctx.start_ea:
             omitted = count_heads_in_range(db, func_ctx.start_ea, first_head)
             if omitted > 0:
-                output_comment_line(console, use_rich, f"; ...{omitted} instructions skipped...", indent=15)
+                output_comment_line(console, use_rich, f"; ...{omitted} instructions skipped...")
+
+    if lines:
+        output_comment_line(console, use_rich, f"; {formatter.format_address(lines[0].ea)}")
 
     output_listing_lines(
         db,
@@ -1560,7 +1563,7 @@ def output_address_view(
         if last_func_line is not None and last_rendered < last_func_line.ea:
             omitted_below = count_heads_in_range(db, last_rendered, last_func_line.ea)
             if omitted_below > 0:
-                output_comment_line(console, use_rich, f"; ...{omitted_below} instructions skipped...", indent=15)
+                output_comment_line(console, use_rich, f"; ...{omitted_below} instructions skipped...")
             output_listing_lines(
                 db,
                 [last_func_line],
@@ -1569,6 +1572,14 @@ def output_address_view(
                 use_rich,
                 console,
             )
+
+    if lines:
+        last_ea = lines[-1].ea
+        if func_ctx is not None and heads:
+            last_func_line = get_last_function_line(db, func_ctx)
+            if last_func_line is not None and heads[-1] < last_func_line.ea:
+                last_ea = last_func_line.ea
+        output_comment_line(console, use_rich, f"; {formatter.format_address(last_ea)}")
 
     if not suppress_decompile and func_ctx is not None and func_ctx.is_func_start:
         pseudocode_lines = get_pseudocode_lines(db, func_ctx.start_ea)
