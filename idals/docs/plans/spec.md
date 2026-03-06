@@ -2,7 +2,7 @@
 
 > **Version:** 0.1.0.dev0
 > **Status:** Ready for implementation
-> **Last updated:** 2026-02-26
+> **Last updated:** 2026-03-05
 
 ## 1. Overview
 
@@ -267,7 +267,7 @@ Where `<sha256>` is the SHA-256 hex digest of the input binary file.
 - **Cache hit:** If a cached `.i64` exists for the input file's hash, open it directly. This makes subsequent invocations fast.
 - **Cache miss:** Run IDA's auto-analysis on the input file (opening with `-R` so resources are loaded), save the resulting database to the cache location, then proceed.
 - **No cache invalidation:** The cache is keyed by content hash, so if the file changes, a new hash produces a new cache entry. Old entries are never automatically deleted (the user can manually clear `~/.cache/hex-rays/idals/`).
-- **No concurrency handling:** If two processes analyze the same file simultaneously, behavior is undefined. This is acceptable for the first version.
+- **Concurrent access protection:** When multiple `idals` processes (or an `idals` process and IDA GUI) target the same database, advisory file locking and unpacked-state detection coordinate access. Processes wait with a polling interval (0.25s) until the database becomes available. Read-only sessions time out after 5 seconds; cache-creation analysis times out after 120 seconds. If IDA GUI has the database open (detected via `.nam` file presence), `idals` waits and then reports an error suggesting the other session be closed. Lock files (`<db>.i64.lock`) use `fcntl.flock` and are never cleaned up (stale files are harmless). This is Unix-only (`fcntl`), which matches `idals`'s macOS/Linux target.
 
 ### 6.4 Analysis Feedback
 

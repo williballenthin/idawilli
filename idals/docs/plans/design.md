@@ -3,7 +3,7 @@
 > **Version:** 0.1.0-draft
 > **Status:** Ready for implementation
 > **Companion document:** SPEC.md (behavioral specification)
-> **Last updated:** 2026-02-26
+> **Last updated:** 2026-03-05
 
 ## 1. Project Structure
 
@@ -689,6 +689,35 @@ def output_tips(console: Console, tips: list[TipSuggestion], use_rich: bool) -> 
 ```python
 use_rich = sys.stdout.isatty() and not args.no_color
 ```
+
+
+### 4.12 Concurrent Access Protection
+
+When multiple `idals` processes — or an `idals` process and IDA GUI — target the same `.i64` database, a two-layer guard prevents corruption:
+
+**Layer 1: `.nam` file polling.** IDA unpacks an `.i64` into component files (`.nam`, `.id0`, `.id1`, `.id2`, `.til`) while the database is open. The presence of a `.nam` file next to the `.i64` means another process has the database unpacked. `_wait_for_repack()` polls for this file's absence before proceeding. This detects IDA GUI sessions that don't use our lock file.
+
+**Layer 2: Advisory `fcntl.flock`.** Between `idals` processes specifically, an exclusive lock on `<db>.i64.lock` serialises access. The lock uses `LOCK_EX | LOCK_NB` with polling (not blocking flock) to implement timeouts.
+
+**Three-phase protocol (`database_access_guard` context manager):**
+1. Wait for `.nam` to disappear (external unpack detection).
+2. Acquire the `.lock` file via `fcntl.flock` with polling.
+3. Re-check `.nam` after lock is held (TOCTOU defence — another process may have unpacked between steps 1 and 2).
+
+**Integration points:**
+- `resolve_database()` wraps the cache-miss analysis path with a 120s timeout guard. After acquiring the lock, it re-checks whether the cache file appeared (double-checked locking) to avoid redundant analysis when another process populated the cache while waiting.
+- `open_database_session()` wraps the entire `Database.open()` through close lifecycle with a 5s timeout guard.
+
+**Constants:**
+- `DATABASE_ACCESS_TIMEOUT = 5.0` — for read-only `open_database_session` calls.
+- `DATABASE_ANALYSIS_TIMEOUT = 120.0` — for `resolve_database` cache-miss analysis (includes `auto_wait()`).
+- `DATABASE_POLL_INTERVAL = 0.25` — sleep between `.nam` / lock polls.
+
+**Platform:** `fcntl` is Unix-only. This is acceptable since `idals` targets macOS and Linux.
+
+**Lock file semantics:** Lock files are never cleaned up. Stale `.lock` files are harmless because `fcntl.flock` is fd-based (locks are released when the file descriptor is closed or the process exits, regardless of whether the file still exists on disk).
+
+**Gap between guards:** Between `resolve_database()` returning and `open_database_session()` acquiring a new guard, the database is briefly unprotected. This is safe because the database is packed (single `.i64` file) at that point — the unpacked state only exists while a `Database.open()` context is active.
 
 
 ## 5. Data Types

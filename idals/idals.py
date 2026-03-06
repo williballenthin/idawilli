@@ -13,10 +13,12 @@ from __future__ import annotations
 import argparse
 import contextlib
 import difflib
+import fcntl
 import hashlib
 import logging
 import re
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterator
@@ -44,6 +46,9 @@ MAX_IMPORTS = 50
 MAX_PSEUDOCODE_LINES = 64
 MAX_XREFS = 100
 MAX_XREFS_INLINE = 10
+DATABASE_ACCESS_TIMEOUT = 5.0
+DATABASE_ANALYSIS_TIMEOUT = 120.0
+DATABASE_POLL_INTERVAL = 0.25
 NOTABLE_IMPORTS = (
     "VirtualAlloc",
     "VirtualProtect",
@@ -424,6 +429,70 @@ def compute_file_hashes(file_path: Path) -> tuple[str, str]:
     return md5_digest.hexdigest(), sha256_digest.hexdigest()
 
 
+def _wait_for_repack(db_path: Path, timeout: float) -> None:
+    """Poll until the .nam companion file disappears.
+
+    When IDA unpacks a database, it creates .nam/.id0/.id1/.id2/.til files
+    alongside the .i64. Their presence means another process has the database
+    open.
+
+    Raises:
+        AnalysisError: If the .nam file persists beyond *timeout* seconds.
+
+    """
+    nam_path = db_path.with_suffix(".nam")
+    deadline = time.monotonic() + timeout
+    while nam_path.exists():
+        if time.monotonic() >= deadline:
+            raise AnalysisError(
+                f"Database {db_path} appears to be open in another program "
+                f"({nam_path} still exists after {timeout:.0f}s). "
+                "Close the other session or remove stale unpacked files."
+            )
+        time.sleep(DATABASE_POLL_INTERVAL)
+
+
+@contextlib.contextmanager
+def database_access_guard(db_path: Path, timeout: float) -> Iterator[None]:
+    """Advisory guard that serialises access to an IDA database.
+
+    Three-phase protocol:
+      1. Wait for .nam to disappear (detects IDA GUI or other unpackers).
+      2. Acquire an exclusive fcntl flock on ``<db>.lock``.
+      3. Re-check .nam after the lock is held (TOCTOU defence).
+
+    The lock file is never cleaned up — stale files are harmless because
+    ``fcntl.flock`` is fd-based, not file-existence-based.
+
+    Raises:
+        AnalysisError: On timeout waiting for the database.
+
+    """
+    _wait_for_repack(db_path, timeout)
+
+    lock_path = Path(str(db_path) + ".lock")
+    lock_fd = lock_path.open("w")
+    deadline = time.monotonic() + timeout
+    try:
+        while True:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise AnalysisError(
+                        f"Timed out waiting for lock on {db_path} "
+                        f"after {timeout:.0f}s. Another idals process may be using it."
+                    )
+                time.sleep(DATABASE_POLL_INTERVAL)
+
+        _wait_for_repack(db_path, max(0, deadline - time.monotonic()))
+        yield
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        lock_fd.close()
+
+
 def resolve_database(file_path: Path, stderr_console: Console) -> Path:
     """Resolve an input path to an .i64/.idb database path.
 
@@ -444,23 +513,28 @@ def resolve_database(file_path: Path, stderr_console: Console) -> Path:
         return cache_path
 
     logger.debug("Cache miss for %s; analyzing to %s", file_path, cache_path)
-    stderr_console.print(f"Analyzing {file_path.name} (this may take a moment)...")
-    ida_options = IdaCommandOptions(
-        auto_analysis=True,
-        new_database=True,
-        output_database=str(cache_path),
-        load_resources=True,
-    )
-    try:
-        with Database.open(str(file_path), ida_options, save_on_close=True):
-            ida_auto.auto_wait()
-    except Exception as exc:
-        raise AnalysisError(f"Analysis failed for {file_path}: {exc}") from exc
+    with database_access_guard(cache_path, timeout=DATABASE_ANALYSIS_TIMEOUT):
+        if cache_path.exists():
+            logger.debug("Cache populated while waiting for lock: %s", cache_path)
+            return cache_path
 
-    if not cache_path.exists():
-        raise AnalysisError(f"Analysis failed for {file_path}: did not create {cache_path}")
-    logger.debug("Analysis completed: %s", cache_path)
-    return cache_path
+        stderr_console.print(f"Analyzing {file_path.name} (this may take a moment)...")
+        ida_options = IdaCommandOptions(
+            auto_analysis=True,
+            new_database=True,
+            output_database=str(cache_path),
+            load_resources=True,
+        )
+        try:
+            with Database.open(str(file_path), ida_options, save_on_close=True):
+                ida_auto.auto_wait()
+        except Exception as exc:
+            raise AnalysisError(f"Analysis failed for {file_path}: {exc}") from exc
+
+        if not cache_path.exists():
+            raise AnalysisError(f"Analysis failed for {file_path}: did not create {cache_path}")
+        logger.debug("Analysis completed: %s", cache_path)
+        return cache_path
 
 
 @contextlib.contextmanager
@@ -468,21 +542,22 @@ def open_database_session(db_path: Path, auto_analysis: bool = False) -> Iterato
     """Open and close a database session.
 
     Raises:
-        AnalysisError: If opening fails.
+        AnalysisError: If opening fails or the database is locked.
 
     """
-    ida_options = IdaCommandOptions(auto_analysis=auto_analysis, new_database=False)
-    logger.debug("Opening database session: %s (auto_analysis=%s)", db_path, auto_analysis)
-    try:
-        database = Database.open(str(db_path), ida_options, save_on_close=False)
-    except Exception as exc:
-        raise AnalysisError(f"Failed to open {db_path}: {exc}") from exc
+    with database_access_guard(db_path, timeout=DATABASE_ACCESS_TIMEOUT):
+        ida_options = IdaCommandOptions(auto_analysis=auto_analysis, new_database=False)
+        logger.debug("Opening database session: %s (auto_analysis=%s)", db_path, auto_analysis)
+        try:
+            database = Database.open(str(db_path), ida_options, save_on_close=False)
+        except Exception as exc:
+            raise AnalysisError(f"Failed to open {db_path}: {exc}") from exc
 
-    with database:
-        if auto_analysis:
-            ida_auto.auto_wait()
-        yield database
-    logger.debug("Closed database session: %s", db_path)
+        with database:
+            if auto_analysis:
+                ida_auto.auto_wait()
+            yield database
+        logger.debug("Closed database session: %s", db_path)
 
 
 def get_permissions_string(db: Database, perm: int) -> str:
