@@ -13,6 +13,9 @@ lint-ty:
 test:
     uv run --with pytest --with idapro --with ida-domain --with rich pytest tests/test_cli_snapshots.py -q
 
+freeze-readme:
+    ./scripts/render-readme-examples.sh
+
 build:
     uv run --with build --with twine python -m build .
     uv run --with twine twine check dist/*
