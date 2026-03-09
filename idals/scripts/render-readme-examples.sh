@@ -6,7 +6,6 @@ SNAPSHOT_DIR="$ROOT/tests/snapshots"
 OUTPUT_DIR="$ROOT/docs/readme"
 FREEZE_BIN="${FREEZE_BIN:-freeze}"
 SAMPLE_BINARY="../tests/data/Practical Malware Analysis Lab 01-01.exe_"
-SCRIPT_PATH="$ROOT/idals.py"
 
 if ! command -v "$FREEZE_BIN" >/dev/null 2>&1; then
     echo "error: freeze not found on PATH. Install it with:" >&2
@@ -16,11 +15,6 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 
-have_live_output=false
-if python3 "$SCRIPT_PATH" "$SAMPLE_BINARY" --no-color >/dev/null 2>/dev/null; then
-    have_live_output=true
-fi
-
 render_execute() {
     local output_name="$1"
     local temp_file="$2"
@@ -29,27 +23,6 @@ render_execute() {
         --config full \
         --output "$OUTPUT_DIR/$output_name" \
         --execute "bash '$temp_file'"
-}
-
-render_live() {
-    local output_name="$1"
-    local command="$2"
-    local temp_file
-
-    temp_file="$(mktemp)"
-    trap 'rm -f "$temp_file"' RETURN
-    cat >"$temp_file" <<EOF
-#!/usr/bin/env bash
-set -euo pipefail
-export TERM=xterm-256color
-export CLICOLOR_FORCE=1
-export FORCE_COLOR=1
-export PYTHONIOENCODING=utf-8
-$command
-EOF
-    chmod +x "$temp_file"
-    render_execute "$output_name" "$temp_file"
-    rm -f "$temp_file"
 }
 
 render_snapshot() {
@@ -148,44 +121,26 @@ EOF
     rm -f "$temp_file"
 }
 
-if [[ "$have_live_output" == true ]]; then
-    render_live \
-        "overview.svg" \
-        "python3 '$SCRIPT_PATH' '$SAMPLE_BINARY'"
+render_snapshot \
+    "overview.svg" \
+    "\$ idals '$SAMPLE_BINARY'" \
+    "overview" \
+    "overview.stdout"
 
-    render_live \
-        "disasm-start.svg" \
-        "python3 '$SCRIPT_PATH' '$SAMPLE_BINARY' 0x401820 --decompile"
+render_snapshot \
+    "disasm-start.svg" \
+    "\$ idals '$SAMPLE_BINARY' 0x401820 --decompile" \
+    "disasm" \
+    "disasm_start.stdout"
 
-    render_live \
-        "disasm-import.svg" \
-        "python3 '$SCRIPT_PATH' '$SAMPLE_BINARY' CreateFileA --after 1 --before 1"
+render_snapshot \
+    "disasm-import.svg" \
+    "\$ idals '$SAMPLE_BINARY' CreateFileA --after 1 --before 1" \
+    "import-short" \
+    "disasm_import.stdout"
 
-    render_live \
-        "error-symbol.svg" \
-        "python3 '$SCRIPT_PATH' '$SAMPLE_BINARY' CreateFlie || true"
-else
-    render_snapshot \
-        "overview.svg" \
-        "\$ idals '$SAMPLE_BINARY'" \
-        "overview" \
-        "overview.stdout"
-
-    render_snapshot \
-        "disasm-start.svg" \
-        "\$ idals '$SAMPLE_BINARY' 0x401820 --decompile" \
-        "disasm" \
-        "disasm_start.stdout"
-
-    render_snapshot \
-        "disasm-import.svg" \
-        "\$ idals '$SAMPLE_BINARY' CreateFileA --after 1 --before 1" \
-        "import-short" \
-        "disasm_import.stdout"
-
-    render_snapshot \
-        "error-symbol.svg" \
-        "\$ idals '$SAMPLE_BINARY' CreateFlie" \
-        "error" \
-        "error_symbol.stderr"
-fi
+render_snapshot \
+    "error-symbol.svg" \
+    "\$ idals '$SAMPLE_BINARY' CreateFlie" \
+    "error" \
+    "error_symbol.stderr"

@@ -44,8 +44,8 @@ idals <file> <address>
 ## examples
 
 These screenshots are refreshed with `./scripts/render-readme-examples.sh`.
-The script prefers live, colorized CLI output when IDA is available and falls
-back to the checked-in snapshots in `tests/snapshots/` otherwise.
+The script renders colorized terminal screenshots from the checked-in snapshots
+in `tests/snapshots/`.
 
 Binary overview:
 
