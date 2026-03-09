@@ -43,13 +43,17 @@ idals <file> <address>
 
 ## examples
 
-These screenshots are generated from the checked-in CLI snapshots in
-`tests/snapshots/`. Refresh them with `./scripts/render-readme-examples.sh`
-after updating the snapshots.
+These screenshots are refreshed with `./scripts/render-readme-examples.sh`.
+The script prefers live, colorized CLI output when IDA is available and falls
+back to the checked-in snapshots in `tests/snapshots/` otherwise.
 
 Binary overview:
 
 ![Binary overview screenshot](docs/readme/overview.svg)
+
+Entry-point disassembly (with pseudocode appended when Hex-Rays is available):
+
+![Entry-point disassembly screenshot](docs/readme/disasm-start.svg)
 
 Data/import view with xrefs before the item:
 

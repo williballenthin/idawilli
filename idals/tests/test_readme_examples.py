@@ -9,6 +9,7 @@ def test_readme_example_assets_exist() -> None:
     readme = README_PATH.read_text()
     expected_assets = (
         "docs/readme/overview.svg",
+        "docs/readme/disasm-start.svg",
         "docs/readme/disasm-import.svg",
         "docs/readme/error-symbol.svg",
     )
