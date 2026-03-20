@@ -231,6 +231,16 @@ def format_float_value(value: int, size: int) -> str:
     return format_integer_value(value, size)
 
 
+def try_decode_ascii(data: bytes) -> str | None:
+    """Try to decode bytes as a printable ASCII string (possibly null-terminated)."""
+    stripped = data.rstrip(b"\x00")
+    if not stripped:
+        return None
+    if all(0x20 <= b < 0x7F for b in stripped):
+        return stripped.decode("ascii")
+    return None
+
+
 def format_pointer_value(value: int) -> str:
     """Format a pointer, including target name if known."""
     name = get_name_at(value)
@@ -327,6 +337,29 @@ class GlobalStructDissectorHooks(idaapi.IDP_Hooks):
 
                 if field.is_array and field.elem_tinfo:
                     elem_size = field.elem_tinfo.get_size()
+
+                    if elem_size == 1:
+                        raw = read_bytes_at(field_ea, field.array_size)
+                        ascii_str = try_decode_ascii(raw) if raw else None
+                        if ascii_str is not None:
+                            inner_prefix = " " * ((indent + 1) * INDENT_SIZE)
+                            ctx.out_line(inner_prefix)
+                            ctx.out_tagon(ida_lines.COLOR_NUMBER)
+                            ctx.out_line(f"+0x{field.offset:02X}:")
+                            ctx.out_tagoff(ida_lines.COLOR_NUMBER)
+                            ctx.out_line(" ")
+                            ctx.out_tagon(ida_lines.COLOR_DNAME)
+                            ctx.out_line(field.name)
+                            ctx.out_tagoff(ida_lines.COLOR_DNAME)
+                            ctx.out_tagon(ida_lines.COLOR_SYMBOL)
+                            ctx.out_line(" = ")
+                            ctx.out_tagoff(ida_lines.COLOR_SYMBOL)
+                            ctx.out_tagon(ida_lines.COLOR_STRING)
+                            ctx.out_line(f'"{ascii_str}"')
+                            ctx.out_tagoff(ida_lines.COLOR_STRING)
+                            ctx.flush_outbuf()
+                            continue
+
                     for i in range(field.array_size):
                         elem_ea = field_ea + (i * elem_size)
                         elem_offset = field.offset + (i * elem_size)
