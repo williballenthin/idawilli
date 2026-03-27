@@ -8,9 +8,11 @@ logger = logging.getLogger(__name__)
 
 def should_load():
     if not ida_kernwin.is_idaq():
+        logger.debug("global_struct_dissector: not loading (not idaq)")
         return False
 
     if os.environ.get("IDA_IS_INTERACTIVE") != "1":
+        logger.debug("global_struct_dissector: not loading (IDA_IS_INTERACTIVE != 1)")
         return False
 
     kernel_version: tuple[int, ...] = tuple(

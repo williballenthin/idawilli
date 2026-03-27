@@ -74,8 +74,11 @@ def unwrap_type(tif: ida_typeinf.tinfo_t) -> UnwrappedType | None:
         elem_tif = result.tinfo.get_array_element()
         if elem_tif:
             result.tinfo = elem_tif
+        else:
+            logger.debug("unwrap_type: array type '%s' has no element type", tif.dstr())
 
     if not result.tinfo.is_struct() and not result.tinfo.is_union():
+        logger.debug("unwrap_type: '%s' is not struct/union", result.tinfo.dstr())
         return None
 
     return result
@@ -85,10 +88,17 @@ def is_global_data_segment(ea: int) -> bool:
     """Check if address is in a global data segment (not stack/code)."""
     seg = ida_segment.getseg(ea)
     if seg is None:
+        logger.debug("0x%X: no segment found", ea)
         return False
 
     seg_type = ida_segment.segtype(ea)
-    return seg_type in (ida_segment.SEG_DATA, ida_segment.SEG_BSS)
+    if seg_type not in (ida_segment.SEG_DATA, ida_segment.SEG_BSS):
+        logger.debug(
+            "0x%X: segment type %d not DATA/BSS (seg: %s)",
+            ea, seg_type, ida_segment.get_segm_name(seg),
+        )
+        return False
+    return True
 
 
 MAX_FIELDS = 10000
@@ -100,6 +110,7 @@ def get_struct_fields(tif: ida_typeinf.tinfo_t) -> list[FieldInfo]:
 
     udt = ida_typeinf.udt_type_data_t()
     if not tif.get_udt_details(udt):
+        logger.debug("get_struct_fields: failed to get UDT details for '%s'", tif.dstr())
         return fields
 
     field_count = udt.size()
@@ -251,6 +262,42 @@ def format_pointer_value(value: int) -> str:
 
 class GlobalStructDissectorHooks(idaapi.IDP_Hooks):
     """Hooks to intercept data rendering."""
+
+    def _get_type_at(self, ea: int) -> ida_typeinf.tinfo_t | None:
+        """
+        Get structure type info at an address.
+
+        Tries ida_nalt.get_tinfo first (set via 'Y' dialog / apply_tinfo),
+        then falls back to detecting struct data applied via the Structures
+        popup (which uses ida_bytes struct flags instead of tinfo).
+        """
+        tif = ida_typeinf.tinfo_t()
+        if ida_nalt.get_tinfo(tif, ea):
+            logger.debug("0x%X: tinfo = '%s' (via get_tinfo)", ea, tif.dstr())
+            return tif
+
+        flags = ida_bytes.get_flags(ea)
+        if not ida_bytes.is_struct(flags):
+            logger.debug("0x%X: no type info and not struct data", ea)
+            return None
+
+        oi = ida_nalt.opinfo_t()
+        if not ida_bytes.get_opinfo(oi, ea, 0, flags):
+            logger.debug("0x%X: struct flags set but get_opinfo failed", ea)
+            return None
+
+        tid = oi.tid
+        if tid == ida_idaapi.BADADDR:
+            logger.debug("0x%X: struct flags set but tid is BADADDR", ea)
+            return None
+
+        tif = ida_typeinf.tinfo_t()
+        if not tif.get_type_by_tid(tid):
+            logger.debug("0x%X: struct tid 0x%X but get_type_by_tid failed", ea, tid)
+            return None
+
+        logger.debug("0x%X: tinfo = '%s' (via struct flags, tid=0x%X)", ea, tif.dstr(), tid)
+        return tif
 
     def _output_field_line(self, ctx, field: FieldInfo, base_ea: int, indent: int):
         """Output a single field with proper coloring."""
@@ -478,17 +525,33 @@ class GlobalStructDissectorHooks(idaapi.IDP_Hooks):
             1 if we handled the output, 0 to let IDA handle it
         """
         ea = ctx.insn_ea
+        logger.debug("ev_out_data called: ea=0x%X analyze_only=%s", ea, analyze_only)
 
         if not is_global_data_segment(ea):
             return 0
 
-        tif = ida_typeinf.tinfo_t()
-        if not ida_nalt.get_tinfo(tif, ea):
+        tif = self._get_type_at(ea)
+        if tif is None:
+            return 0
+
+        item_size = ida_bytes.get_item_size(ea)
+        type_size = tif.get_size()
+        if item_size != type_size:
+            logger.debug(
+                "0x%X: item size %d != type size %d for '%s', skipping (data type changed?)",
+                ea, item_size, type_size, tif.dstr(),
+            )
             return 0
 
         unwrapped = unwrap_type(tif)
         if unwrapped is None:
+            logger.debug("0x%X: type '%s' is not a struct/union (after unwrap)", ea, tif.dstr())
             return 0
+
+        logger.debug(
+            "0x%X: dissecting struct '%s' (array=%s, count=%d)",
+            ea, unwrapped.tinfo.dstr(), unwrapped.is_array, unwrapped.array_count,
+        )
 
         try:
             if unwrapped.is_array:
@@ -503,6 +566,7 @@ class GlobalStructDissectorHooks(idaapi.IDP_Hooks):
             else:
                 self._output_struct(ctx, ea, unwrapped.tinfo, indent=0)
 
+            logger.debug("0x%X: dissection complete, returning 1", ea)
             return 1
 
         except Exception as e:
@@ -525,13 +589,16 @@ class global_struct_dissector_plugmod_t(ida_idaapi.plugmod_t):
             ida_auto.auto_wait()
 
         self.register_hooks()
-        logger.info("Global Struct Dissector plugin loaded")
+        logger.info("Global Struct Dissector plugin loaded (set logging to DEBUG for diagnostics)")
 
     def register_hooks(self):
         """Register IDP hooks."""
         self.hooks = GlobalStructDissectorHooks()
-        self.hooks.hook()
-        logger.debug("IDP hooks registered")
+        ok = self.hooks.hook()
+        if ok:
+            logger.debug("IDP hooks registered")
+        else:
+            logger.warning("IDP hooks registration FAILED")
 
     def unregister_hooks(self):
         """Unregister IDP hooks."""
