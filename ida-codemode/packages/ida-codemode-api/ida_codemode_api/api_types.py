@@ -236,7 +236,6 @@ ExpectOkPayload = TypeVar("ExpectOkPayload")
 
 
 HelpResult = HelpOk | ApiError
-ExpectOkResult = ExpectOkPayload | None
 GetDatabaseMetadataResult = DatabaseMetadata | ApiError
 GetFunctionsResult = GetFunctionsOk | ApiError
 GetFunctionByNameResult = FunctionInfo | ApiError

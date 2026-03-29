@@ -36,3 +36,11 @@ include = ["ida_codemode_sandbox*"]
 
 [tool.setuptools.package-data]
 ida_codemode_sandbox = ["prompts/*.md"]
+
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib"
+filterwarnings = [
+    "ignore:builtin type SwigPyPacked has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type SwigPyObject has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type swigvarlink has no __module__ attribute:DeprecationWarning",
+]

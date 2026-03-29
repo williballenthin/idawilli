@@ -236,9 +236,13 @@ class IdaSandbox:
         limits: pydantic_monty.ResourceLimits | None = None,
     ):
         self.db = db
-        self.limits = limits if limits is not None else dict(DEFAULT_LIMITS)
+        self.limits: pydantic_monty.ResourceLimits = (
+            limits if limits is not None else DEFAULT_LIMITS
+        )
 
-        raw_fn_impls = dict(create_api_from_database(db))
+        raw_fn_impls = cast(
+            dict[str, Callable[..., object]], dict(create_api_from_database(db))
+        )
         self._help_fn = cast(Callable[[str], object], raw_fn_impls["help"])
 
         self._active_print_callback: Callable[[str, str], None] | None = None

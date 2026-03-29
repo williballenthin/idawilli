@@ -261,7 +261,7 @@ def _build_model_settings(inputs: EvalInputs) -> Any:
                     "effort": inputs.reasoning_effort,
                 }
 
-            return OpenRouterModelSettings(**settings_dict)
+            return OpenRouterModelSettings(**settings_dict)  # type: ignore[typeddict-item]
         except ImportError:
             logger.warning(
                 "pydantic_ai.models.openrouter.OpenRouterModelSettings not available, "
@@ -275,7 +275,7 @@ def _build_model_settings(inputs: EvalInputs) -> Any:
     if inputs.extra_model_settings:
         settings_dict.update(inputs.extra_model_settings)
 
-    return ModelSettings(**settings_dict) if settings_dict else None
+    return ModelSettings(**settings_dict) if settings_dict else None  # type: ignore[typeddict-item]
 
 
 def _build_agent_with_prompt(model: Any, evaluator: Any, system_prompt: str) -> Any:
@@ -299,7 +299,7 @@ def _build_agent_with_prompt(model: Any, evaluator: Any, system_prompt: str) -> 
         from pydantic_ai import RunContext
 
         @agent.tool
-        async def evaluate_ida_script(_ctx: RunContext[Any], script: str) -> str:
+        async def evaluate_ida_script(_ctx: RunContext[Any], script: str) -> str:  # type: ignore[misc]
             """Execute sandboxed Python source against the opened IDA database."""
             return evaluator.evaluate(script)
 

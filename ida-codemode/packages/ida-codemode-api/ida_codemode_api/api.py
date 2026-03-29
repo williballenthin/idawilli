@@ -565,11 +565,10 @@ def create_api_from_database(db: Any) -> api_types.ApiFunctions:
             return err
 
         try:
-            items = []
+            items: list[api_types.DataXrefInfo] = []
             flowchart = db.functions.get_flowchart(func)
             if flowchart is None:
-                payload: api_types.GetFunctionDataXrefsOk = {"xrefs": []}
-                return payload
+                return {"xrefs": []}
 
             visited = set()
             for block in flowchart:
@@ -621,11 +620,10 @@ def create_api_from_database(db: Any) -> api_types.ApiFunctions:
             return err
 
         try:
-            items = []
+            items: list[api_types.StringXrefInfo] = []
             flowchart = db.functions.get_flowchart(func)
             if flowchart is None:
-                payload: api_types.GetFunctionStringXrefsOk = {"xrefs": []}
-                return payload
+                return {"xrefs": []}
 
             visited = set()
             for block in flowchart:
@@ -691,14 +689,11 @@ def create_api_from_database(db: Any) -> api_types.ApiFunctions:
                 exc,
             )
 
-        payload: api_types.GetFunctionStringXrefsOk = {
-            "xrefs": items,
-        }
-        return payload
+        return {"xrefs": items}
 
     def get_xrefs_to_at(address: int) -> api_types.GetXrefsToAtResult:
         try:
-            items = []
+            items: list[api_types.XrefToInfo] = []
             for xref in db.xrefs.to_ea(address):
                 items.append(
                     {
@@ -718,7 +713,7 @@ def create_api_from_database(db: Any) -> api_types.ApiFunctions:
 
     def get_xrefs_from_at(address: int) -> api_types.GetXrefsFromAtResult:
         try:
-            items = []
+            items: list[api_types.XrefFromInfo] = []
             for xref in db.xrefs.from_ea(address):
                 items.append(
                     {
@@ -738,7 +733,7 @@ def create_api_from_database(db: Any) -> api_types.ApiFunctions:
 
     def get_strings() -> api_types.GetStringsResult:
         try:
-            items = []
+            items: list[api_types.StringInfo] = []
             for s in db.strings:
                 value = s.contents
                 if isinstance(value, (bytes, bytearray)):
@@ -789,7 +784,7 @@ def create_api_from_database(db: Any) -> api_types.ApiFunctions:
 
     def get_segments() -> api_types.GetSegmentsResult:
         try:
-            items = []
+            items: list[api_types.SegmentInfo] = []
             for seg in db.segments:
                 items.append(
                     {
@@ -835,7 +830,7 @@ def create_api_from_database(db: Any) -> api_types.ApiFunctions:
 
     def get_names() -> api_types.GetNamesResult:
         try:
-            items = []
+            items: list[api_types.NamedAddress] = []
             for ea, name in db.names:
                 demangled = db.names.demangle_name(name)
                 display_name = str(demangled) if demangled else str(name)
@@ -874,7 +869,7 @@ def create_api_from_database(db: Any) -> api_types.ApiFunctions:
         return payload
 
     def get_imports() -> api_types.GetImportsResult:
-        results = []
+        results: list[api_types.ImportInfo] = []
         db_imports_error = None
 
         if hasattr(db, "imports"):
@@ -888,10 +883,7 @@ def create_api_from_database(db: Any) -> api_types.ApiFunctions:
                             "ordinal": int(imp.ordinal),
                         }
                     )
-                payload: api_types.GetImportsOk = {
-                    "imports": results,
-                }
-                return payload
+                return {"imports": results}
             except Exception as exc:
                 db_imports_error = exc
                 results = []
@@ -947,7 +939,7 @@ def create_api_from_database(db: Any) -> api_types.ApiFunctions:
 
     def get_entries() -> api_types.GetEntriesResult:
         try:
-            items = []
+            items: list[api_types.EntryPointInfo] = []
             for entry in db.entries:
                 forwarder = None
                 has_forwarder = getattr(entry, "has_forwarder", None)
@@ -978,10 +970,7 @@ def create_api_from_database(db: Any) -> api_types.ApiFunctions:
             return _error(f"size must be non-negative (got {size})")
 
         if size == 0:
-            payload: api_types.GetBytesAtOk = {
-                "bytes": [],
-            }
-            return payload
+            return {"bytes": []}
 
         try:
             data = db.bytes.get_bytes_at(address, size)
@@ -1033,44 +1022,29 @@ def create_api_from_database(db: Any) -> api_types.ApiFunctions:
     def get_address_type(address: int) -> api_types.GetAddressTypeResult:
         try:
             if not bool(db.is_valid_ea(address)):
-                payload: api_types.GetAddressTypeOk = {
-                    "address_type": "invalid",
-                }
-                return payload
+                return {"address_type": "invalid"}
         except Exception as exc:
             return _error_from_exc(f"failed to validate address {address:#x}", exc)
 
         try:
             if bool(db.bytes.is_code_at(address)):
-                payload: api_types.GetAddressTypeOk = {
-                    "address_type": "code",
-                }
-                return payload
+                return {"address_type": "code"}
         except Exception:
             pass
 
         try:
             if bool(db.bytes.is_data_at(address)):
-                payload: api_types.GetAddressTypeOk = {
-                    "address_type": "data",
-                }
-                return payload
+                return {"address_type": "data"}
         except Exception:
             pass
 
         try:
             if bool(db.bytes.is_unknown_at(address)):
-                payload: api_types.GetAddressTypeOk = {
-                    "address_type": "unknown",
-                }
-                return payload
+                return {"address_type": "unknown"}
         except Exception:
             pass
 
-        payload: api_types.GetAddressTypeOk = {
-            "address_type": "unknown",
-        }
-        return payload
+        return {"address_type": "unknown"}
 
     def get_comment_at(address: int) -> api_types.GetCommentAtResult:
         try:
@@ -1129,7 +1103,7 @@ def create_api_from_database(db: Any) -> api_types.ApiFunctions:
             )
 
         try:
-            items = []
+            items: list[api_types.BookmarkInfo] = []
             max_slots = 1024
             for index in range(max_slots):
                 try:
