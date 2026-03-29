@@ -30,7 +30,6 @@ _TYPE_GUARD_STUB = (
     "def is_error(result: object) -> TypeIs[ApiError]: ..."
 )
 
-SANDBOX_FUNCTION_NAMES = [*FUNCTION_NAMES, _TYPE_GUARD_FUNCTION_NAME]
 SANDBOX_TYPE_STUBS = TYPE_STUBS + "\n\n" + _TYPE_GUARD_STUB + "\n"
 
 _DOC_HINT_LINE_LIMIT = 24
@@ -364,7 +363,6 @@ class IdaSandbox:
                 with logfire.span("sandbox.monty.construct"):
                     m = pydantic_monty.Monty(
                         code,
-                        external_functions=SANDBOX_FUNCTION_NAMES,
                         type_check=True,
                         type_check_stubs=SANDBOX_TYPE_STUBS,
                     )
