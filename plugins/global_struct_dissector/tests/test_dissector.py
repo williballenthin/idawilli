@@ -177,7 +177,10 @@ def test_array_of_structs(test_binary: Path, session_idauser: Path, work_dir: Pa
             array_tif = ida_typeinf.tinfo_t()
             array_tif.create_array(elem_ref, 2)
 
+            import ida_bytes
+
             data_ea = 0x403030
+            ida_bytes.del_items(data_ea, ida_bytes.DELIT_SIMPLE, array_tif.get_size())
             ida_typeinf.apply_tinfo(data_ea, array_tif, ida_typeinf.TINFO_DEFINITE)
 
             hooks = GlobalStructDissectorHooks()
@@ -452,10 +455,12 @@ def test_struct_with_byte_field(test_binary: Path, session_idauser: Path, work_d
             tif.create_udt(udt)
             tif.set_named_type(til, "CharStruct", ida_typeinf.NTF_TYPE)
 
-            # Apply in .rdata where there's interesting byte data
-            data_ea = 0x40206C
+            import ida_bytes
+
+            data_ea = 0x403070
             ref = ida_typeinf.tinfo_t()
             ref.get_named_type(til, "CharStruct")
+            ida_bytes.del_items(data_ea, ida_bytes.DELIT_SIMPLE, ref.get_size())
             ida_typeinf.apply_tinfo(data_ea, ref, ida_typeinf.TINFO_DEFINITE)
 
             hooks = GlobalStructDissectorHooks()
@@ -475,10 +480,12 @@ def test_struct_with_byte_field(test_binary: Path, session_idauser: Path, work_d
 
     lines = json.loads(output_path.read_text())
 
-    assert ".rdata:0040206C                 struct CharStruct {" in lines
-    assert ".rdata:0040206C                   +0x00: ch = 0x00" in lines
-    assert ".rdata:0040206C                   +0x04: value = 0xFFFFFFFF" in lines
-    assert ".rdata:0040206C                 }" in lines
+    assert any("struct CharStruct {" in l for l in lines)
+    ch_line = next(l for l in lines if "+0x00: ch = " in l)
+    assert "0x4B" in ch_line
+    assert "'K'" in ch_line
+    assert any("+0x04: value = 0x32336C65" in l for l in lines)
+    assert ".data:00403070                 }" in lines
 
 
 def test_struct_with_array_of_ints(test_binary: Path, session_idauser: Path, work_dir: Path):
