@@ -4,9 +4,17 @@ from typing import get_type_hints
 
 import pytest
 
-from ida_codemode_api import FUNCTION_NAMES, TYPE_STUBS, create_api_from_database
-from ida_codemode_api import api_types
-from ida_codemode_api.api import read_ascii_string_at, read_utf16le_string_at, read_string_at
+from ida_codemode_api import (
+    FUNCTION_NAMES,
+    TYPE_STUBS,
+    api_types,
+    create_api_from_database,
+)
+from ida_codemode_api.api import (
+    read_ascii_string_at,
+    read_string_at,
+    read_utf16le_string_at,
+)
 
 
 def assert_ok(result):
@@ -54,25 +62,41 @@ class TestPayloadContracts:
             "help": assert_ok(fns["help"]("get_functions")),
             "get_database_metadata": assert_ok(fns["get_database_metadata"]()),
             "get_functions": functions_result,
-            "get_function_by_name": assert_ok(fns["get_function_by_name"](first["name"])),
+            "get_function_by_name": assert_ok(
+                fns["get_function_by_name"](first["name"])
+            ),
             "get_function_at": assert_ok(fns["get_function_at"](first["address"])),
-            "get_function_disassembly_at": assert_ok(fns["get_function_disassembly_at"](first["address"])),
-            "get_function_callers": assert_ok(fns["get_function_callers"](first["address"])),
-            "get_function_callees": assert_ok(fns["get_function_callees"](first["address"])),
-            "get_function_data_xrefs": assert_ok(fns["get_function_data_xrefs"](first["address"])),
-            "get_function_string_xrefs": assert_ok(fns["get_function_string_xrefs"](first["address"])),
+            "get_function_disassembly_at": assert_ok(
+                fns["get_function_disassembly_at"](first["address"])
+            ),
+            "get_function_callers": assert_ok(
+                fns["get_function_callers"](first["address"])
+            ),
+            "get_function_callees": assert_ok(
+                fns["get_function_callees"](first["address"])
+            ),
+            "get_function_data_xrefs": assert_ok(
+                fns["get_function_data_xrefs"](first["address"])
+            ),
+            "get_function_string_xrefs": assert_ok(
+                fns["get_function_string_xrefs"](first["address"])
+            ),
             "get_xrefs_to_at": assert_ok(fns["get_xrefs_to_at"](first["address"])),
             "get_xrefs_from_at": assert_ok(fns["get_xrefs_from_at"](first["address"])),
             "get_strings": strings_result,
             "get_segments": assert_ok(fns["get_segments"]()),
-            "get_segment_containing": assert_ok(fns["get_segment_containing"](first["address"])),
+            "get_segment_containing": assert_ok(
+                fns["get_segment_containing"](first["address"])
+            ),
             "get_names": assert_ok(fns["get_names"]()),
             "demangle_name": assert_ok(fns["demangle_name"]("main")),
             "get_imports": assert_ok(fns["get_imports"]()),
             "get_entries": assert_ok(fns["get_entries"]()),
             "get_bytes_at": {"bytes": raw_bytes},
             "find_bytes": assert_ok(fns["find_bytes"](raw_bytes)),
-            "get_disassembly_at": assert_ok(fns["get_disassembly_at"](first["address"])),
+            "get_disassembly_at": assert_ok(
+                fns["get_disassembly_at"](first["address"])
+            ),
             "get_address_type": assert_ok(fns["get_address_type"](first["address"])),
             "read_pointer": assert_ok(fns["read_pointer"](first["address"])),
             "get_bookmarks": assert_ok(fns["get_bookmarks"]()),
@@ -95,8 +119,24 @@ class TestPayloadContracts:
                 "input_file_sha256",
             },
             "get_functions": {"functions"},
-            "get_function_by_name": {"address", "name", "size", "signature", "flags", "comment", "repeatable_comment"},
-            "get_function_at": {"address", "name", "size", "signature", "flags", "comment", "repeatable_comment"},
+            "get_function_by_name": {
+                "address",
+                "name",
+                "size",
+                "signature",
+                "flags",
+                "comment",
+                "repeatable_comment",
+            },
+            "get_function_at": {
+                "address",
+                "name",
+                "size",
+                "signature",
+                "flags",
+                "comment",
+                "repeatable_comment",
+            },
             "get_function_disassembly_at": {"disassembly"},
             "get_function_callers": {"callers"},
             "get_function_callees": {"callees"},
@@ -106,7 +146,15 @@ class TestPayloadContracts:
             "get_xrefs_from_at": {"xrefs"},
             "get_strings": {"strings"},
             "get_segments": {"segments"},
-            "get_segment_containing": {"name", "start", "end", "size", "permissions", "class", "bitness"},
+            "get_segment_containing": {
+                "name",
+                "start",
+                "end",
+                "size",
+                "permissions",
+                "class",
+                "bitness",
+            },
             "get_names": {"names"},
             "demangle_name": {"demangled_name"},
             "get_imports": {"imports"},
@@ -123,17 +171,50 @@ class TestPayloadContracts:
             assert_keys_exact(payload, expected_keys[function_name])
 
         if functions:
-            assert_keys_exact(functions[0], {"address", "name", "size", "signature", "flags", "comment", "repeatable_comment"})
+            assert_keys_exact(
+                functions[0],
+                {
+                    "address",
+                    "name",
+                    "size",
+                    "signature",
+                    "flags",
+                    "comment",
+                    "repeatable_comment",
+                },
+            )
 
         bookmarks = payloads["get_bookmarks"]["bookmarks"]
         if bookmarks:
             assert_keys_exact(bookmarks[0], {"index", "address", "description"})
 
         if payloads["get_function_callers"]["callers"]:
-            assert_keys_exact(payloads["get_function_callers"]["callers"][0], {"address", "name", "size", "signature", "flags", "comment", "repeatable_comment"})
+            assert_keys_exact(
+                payloads["get_function_callers"]["callers"][0],
+                {
+                    "address",
+                    "name",
+                    "size",
+                    "signature",
+                    "flags",
+                    "comment",
+                    "repeatable_comment",
+                },
+            )
 
         if payloads["get_function_callees"]["callees"]:
-            assert_keys_exact(payloads["get_function_callees"]["callees"][0], {"address", "name", "size", "signature", "flags", "comment", "repeatable_comment"})
+            assert_keys_exact(
+                payloads["get_function_callees"]["callees"][0],
+                {
+                    "address",
+                    "name",
+                    "size",
+                    "signature",
+                    "flags",
+                    "comment",
+                    "repeatable_comment",
+                },
+            )
 
         if payloads["get_xrefs_to_at"]["xrefs"]:
             assert_keys_exact(
@@ -327,7 +408,9 @@ class TestFunctionDiscovery:
 
 class TestFunctionAnalysis:
     def test_disassembly(self, fns, first_func):
-        lines = assert_ok(fns["get_function_disassembly_at"](first_func["address"]))["disassembly"]
+        lines = assert_ok(fns["get_function_disassembly_at"](first_func["address"]))[
+            "disassembly"
+        ]
         assert isinstance(lines, list)
         assert len(lines) >= 1
         assert all(isinstance(line, str) for line in lines)
@@ -345,7 +428,9 @@ class TestFunctionAnalysis:
             assert all(isinstance(line, str) for line in result["pseudocode"])
 
     def test_callers_shape(self, fns, first_func):
-        callers = assert_ok(fns["get_function_callers"](first_func["address"]))["callers"]
+        callers = assert_ok(fns["get_function_callers"](first_func["address"]))[
+            "callers"
+        ]
         assert isinstance(callers, list)
         for c in callers:
             assert "address" in c
@@ -357,7 +442,9 @@ class TestFunctionAnalysis:
             assert "repeatable_comment" in c
 
     def test_callees_shape(self, fns, first_func):
-        callees = assert_ok(fns["get_function_callees"](first_func["address"]))["callees"]
+        callees = assert_ok(fns["get_function_callees"](first_func["address"]))[
+            "callees"
+        ]
         assert isinstance(callees, list)
         for c in callees:
             assert "address" in c
@@ -422,7 +509,9 @@ class TestFunctionAnalysis:
             if len(result["callers"]) > 0:
                 found_callers = True
                 break
-        assert found_callers, "No functions with callers found in test binary (32-bit PE malware sample should have call graph)"
+        assert found_callers, (
+            "No functions with callers found in test binary (32-bit PE malware sample should have call graph)"
+        )
 
     def test_callees_has_at_least_one_for_some_function(self, fns):
         functions = assert_ok(fns["get_functions"]())["functions"]
@@ -432,7 +521,9 @@ class TestFunctionAnalysis:
             if len(result["callees"]) > 0:
                 found_callees = True
                 break
-        assert found_callees, "No functions with callees found in test binary (32-bit PE malware sample should have call graph)"
+        assert found_callees, (
+            "No functions with callees found in test binary (32-bit PE malware sample should have call graph)"
+        )
 
 
 class TestXrefs:
@@ -457,7 +548,9 @@ class TestXrefs:
 
 class TestFunctionDataXrefs:
     def test_data_xrefs_shape(self, fns, first_func):
-        xrefs = assert_ok(fns["get_function_data_xrefs"](first_func["address"]))["xrefs"]
+        xrefs = assert_ok(fns["get_function_data_xrefs"](first_func["address"]))[
+            "xrefs"
+        ]
         assert isinstance(xrefs, list)
         for x in xrefs:
             assert "from_address" in x
@@ -482,7 +575,9 @@ class TestFunctionDataXrefs:
 
 class TestFunctionStringXrefs:
     def test_string_xrefs_shape(self, fns, first_func):
-        xrefs = assert_ok(fns["get_function_string_xrefs"](first_func["address"]))["xrefs"]
+        xrefs = assert_ok(fns["get_function_string_xrefs"](first_func["address"]))[
+            "xrefs"
+        ]
         assert isinstance(xrefs, list)
         for x in xrefs:
             assert "from_address" in x
@@ -560,7 +655,9 @@ class TestSegmentContaining:
     def test_segment_containing_matches_segment_list(self, fns, first_func):
         seg = assert_ok(fns["get_segment_containing"](first_func["address"]))
         all_segs = assert_ok(fns["get_segments"]())["segments"]
-        matching_segs = [s for s in all_segs if s["start"] <= first_func["address"] < s["end"]]
+        matching_segs = [
+            s for s in all_segs if s["start"] <= first_func["address"] < s["end"]
+        ]
         assert len(matching_segs) == 1
         assert seg["name"] == matching_segs[0]["name"]
         assert seg["start"] == matching_segs[0]["start"]
@@ -614,7 +711,9 @@ class TestBytesAndMemory:
         assert isinstance(hits, list)
 
     def test_get_disassembly_at(self, fns, first_func):
-        text = assert_ok(fns["get_disassembly_at"](first_func["address"]))["disassembly"]
+        text = assert_ok(fns["get_disassembly_at"](first_func["address"]))[
+            "disassembly"
+        ]
         assert isinstance(text, str)
 
 
@@ -674,11 +773,15 @@ class TestNoExceptionsContract:
             ("set_local_variable_type", ("abc", 123, 456)),
         ],
     )
-    def test_invalid_inputs_return_payload_instead_of_raising(self, fns, function_name, args):
+    def test_invalid_inputs_return_payload_instead_of_raising(
+        self, fns, function_name, args
+    ):
         try:
             result = fns[function_name](*args)
         except Exception as exc:
-            pytest.fail(f"{function_name} raised unexpectedly: {type(exc).__name__}: {exc}")
+            pytest.fail(
+                f"{function_name} raised unexpectedly: {type(exc).__name__}: {exc}"
+            )
 
         assert result is None or isinstance(result, dict)
 
@@ -703,7 +806,9 @@ class TestReadPointer:
         raw_bytes = bytes_result["bytes"]
 
         assert len(raw_bytes) == 4
-        expected_value = int.from_bytes(bytes(raw_bytes), byteorder="little", signed=False)
+        expected_value = int.from_bytes(
+            bytes(raw_bytes), byteorder="little", signed=False
+        )
 
         assert pointer_value == expected_value
 
@@ -717,7 +822,9 @@ class TestMutatorConvention:
         assert_mutator_success(None)
 
     def test_assert_mutator_success_rejects_success_payload(self):
-        with pytest.raises(pytest.fail.Exception, match="mutator returned non-None success value"):
+        with pytest.raises(
+            pytest.fail.Exception, match="mutator returned non-None success value"
+        ):
             assert_mutator_success({"result": "success"})
 
     def test_assert_mutator_success_rejects_error(self):
@@ -725,7 +832,9 @@ class TestMutatorConvention:
             assert_mutator_success({"error": "failed"})
 
     def test_assert_mutator_success_rejects_other_values(self):
-        with pytest.raises(pytest.fail.Exception, match="mutator returned unexpected value"):
+        with pytest.raises(
+            pytest.fail.Exception, match="mutator returned unexpected value"
+        ):
             assert_mutator_success(True)
 
 
@@ -735,7 +844,11 @@ class TestDatabaseMutators:
         test_comment = "Test comment from API integration test"
 
         original_comment_result = fns["get_comment_at"](address)
-        original_comment = original_comment_result.get("comment") if "error" not in original_comment_result else None
+        original_comment = (
+            original_comment_result.get("comment")
+            if "error" not in original_comment_result
+            else None
+        )
 
         result = fns["set_comment_at"](address, test_comment)
         assert_mutator_success(result)
@@ -779,7 +892,11 @@ class TestDatabaseMutators:
         test_name = "test_renamed_function"
 
         original_name_result = fns["get_name_at"](address)
-        original_name = original_name_result.get("name") if "error" not in original_name_result else first_func["name"]
+        original_name = (
+            original_name_result.get("name")
+            if "error" not in original_name_result
+            else first_func["name"]
+        )
 
         result = fns["set_name_at"](address, test_name)
         assert_mutator_success(result)
@@ -880,14 +997,18 @@ class TestBookmarks:
         assert len(after_delete) == initial_count
 
         for bm in after_delete:
-            assert not (bm["address"] == test_address and bm["description"] == test_description)
+            assert not (
+                bm["address"] == test_address and bm["description"] == test_description
+            )
 
     def test_delete_nonexistent_bookmark_fails(self, fns):
         result = fns["delete_bookmark"](999)
         assert "error" in result
         assert isinstance(result["error"], str)
 
-    def test_add_bookmark_at_same_address_with_different_descriptions(self, fns, first_func):
+    def test_add_bookmark_at_same_address_with_different_descriptions(
+        self, fns, first_func
+    ):
         test_address = first_func["address"]
 
         initial_bookmarks = assert_ok(fns["get_bookmarks"]())["bookmarks"]
@@ -919,10 +1040,15 @@ class TestLocalVariableMutators:
             pytest.skip("decompiler not available")
 
         nonexistent_name = "this_variable_does_not_exist_xyz123"
-        result = fns["set_local_variable_name"](first_func["address"], nonexistent_name, "new_name")
+        result = fns["set_local_variable_name"](
+            first_func["address"], nonexistent_name, "new_name"
+        )
         assert "error" in result
         assert isinstance(result["error"], str)
-        assert "not found" in result["error"].lower() or "no local variable" in result["error"].lower()
+        assert (
+            "not found" in result["error"].lower()
+            or "no local variable" in result["error"].lower()
+        )
 
     def test_set_local_variable_type(self, fns, first_func):
         result = fns["decompile_function_at"](first_func["address"])
@@ -930,10 +1056,15 @@ class TestLocalVariableMutators:
             pytest.skip("decompiler not available")
 
         nonexistent_name = "this_variable_does_not_exist_xyz123"
-        result = fns["set_local_variable_type"](first_func["address"], nonexistent_name, "int")
+        result = fns["set_local_variable_type"](
+            first_func["address"], nonexistent_name, "int"
+        )
         assert "error" in result
         assert isinstance(result["error"], str)
-        assert "not found" in result["error"].lower() or "no local variable" in result["error"].lower()
+        assert (
+            "not found" in result["error"].lower()
+            or "no local variable" in result["error"].lower()
+        )
 
     def test_set_local_variable_name_bad_address(self, fns):
         result = fns["set_local_variable_name"](0xDEADDEAD, "var1", "var2")

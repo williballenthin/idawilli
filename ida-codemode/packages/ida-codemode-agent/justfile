@@ -1,16 +1,18 @@
-set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
+set quiet
 
-all: lint tests
+format:
+    uvx --quiet ruff format --quiet ida_codemode_agent/ tests/
 
 ruff:
-    uvx ruff check ida_codemode_agent tests
+    uvx --quiet ruff check --quiet --fix ida_codemode_agent/ tests/
+    uvx --quiet ruff check --quiet --select I --fix ida_codemode_agent/ tests/
 
-ty:
-    PYTHONPATH=.:../ida-codemode-sandbox:../ida-codemode-api uvx ty check ida_codemode_agent tests
+mypy:
+    uv run --quiet --directory ../.. mypy --no-error-summary packages/ida-codemode-agent/ida_codemode_agent/
 
-lint: ruff ty
+test:
+    uv run --quiet --directory ../.. pytest -x -q --no-header packages/ida-codemode-agent/tests/
 
-tests:
-    PYTHONPATH=.:../ida-codemode-sandbox:../ida-codemode-api python -m pytest tests -v
+lint: format ruff mypy
 
-test: tests
+all: lint test

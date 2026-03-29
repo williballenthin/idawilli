@@ -16,7 +16,7 @@ API functions follow three conventions:
 
 from __future__ import annotations
 
-from typing import Callable, Literal, TypeVar, TypedDict
+from typing import Callable, Literal, TypedDict, TypeVar
 
 
 class DatabaseMetadata(TypedDict):
@@ -1282,7 +1282,9 @@ def set_comment_at(address: int, comment: str) -> SetCommentAtResult:
     raise NotImplementedError
 
 
-def set_repeatable_comment_at(address: int, comment: str) -> SetRepeatableCommentAtResult:
+def set_repeatable_comment_at(
+    address: int, comment: str
+) -> SetRepeatableCommentAtResult:
     """Set the repeatable comment at an address.
 
     Use this to add or update repeatable comments that propagate to all
@@ -1302,7 +1304,9 @@ def set_repeatable_comment_at(address: int, comment: str) -> SetRepeatableCommen
     raise NotImplementedError
 
 
-def set_local_variable_name(function_address: int, existing_name: str, new_name: str) -> SetLocalVariableNameResult:
+def set_local_variable_name(
+    function_address: int, existing_name: str, new_name: str
+) -> SetLocalVariableNameResult:
     """Set the name of a local variable within a function.
 
     Use this to rename local variables during annotation workflows. Requires
@@ -1326,7 +1330,9 @@ def set_local_variable_name(function_address: int, existing_name: str, new_name:
     raise NotImplementedError
 
 
-def set_local_variable_type(function_address: int, existing_name: str, type: str) -> SetLocalVariableTypeResult:
+def set_local_variable_type(
+    function_address: int, existing_name: str, type: str
+) -> SetLocalVariableTypeResult:
     """Set the type of a local variable within a function.
 
     Use this to apply type information to local variables during annotation

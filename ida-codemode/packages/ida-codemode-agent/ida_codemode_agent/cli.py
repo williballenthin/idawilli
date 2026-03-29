@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Any, Callable, Literal, cast, get_args
 
 import logfire
-
 from rich.console import Console, Group, RenderableType
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -27,7 +26,9 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
-DEFAULT_MODEL = os.getenv("IDA_CODEMODE_AGENT_MODEL", "openrouter:google/gemini-3-flash-preview")
+DEFAULT_MODEL = os.getenv(
+    "IDA_CODEMODE_AGENT_MODEL", "openrouter:google/gemini-3-flash-preview"
+)
 IDB_EXTENSIONS = {".i64", ".idb"}
 
 BASE_SYSTEM_PROMPT = """
@@ -63,7 +64,9 @@ def _openrouter_model_ids() -> tuple[str, ...]:
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
-    response = httpx.get("https://openrouter.ai/api/v1/models", headers=headers, timeout=15.0)
+    response = httpx.get(
+        "https://openrouter.ai/api/v1/models", headers=headers, timeout=15.0
+    )
     response.raise_for_status()
 
     payload = response.json()
@@ -307,7 +310,12 @@ class ScriptEvaluator:
                 if stderr:
                     out.extend(["stderr:", _truncate(stderr, self.max_output_chars)])
                 if result.output is not None:
-                    out.extend(["result:", _truncate(repr(result.output), self.max_output_chars)])
+                    out.extend(
+                        [
+                            "result:",
+                            _truncate(repr(result.output), self.max_output_chars),
+                        ]
+                    )
                 if len(out) == 1:
                     out.append("no stdout/stderr/result")
                 tool_result = "\n".join(out)
@@ -319,7 +327,9 @@ class ScriptEvaluator:
             if error is None:
                 span.set_attribute("result_status", "error")
                 span.set_attribute("error_kind", "unknown")
-                return self._finalize(source, "status: error\nmessage: unknown sandbox error")
+                return self._finalize(
+                    source, "status: error\nmessage: unknown sandbox error"
+                )
 
             out = [
                 "status: error",
@@ -327,10 +337,16 @@ class ScriptEvaluator:
                 f"message: {error.message}",
             ]
             if stdout:
-                out.extend(["stdout-before-error:", _truncate(stdout, self.max_output_chars)])
+                out.extend(
+                    ["stdout-before-error:", _truncate(stdout, self.max_output_chars)]
+                )
             if stderr:
-                out.extend(["stderr-before-error:", _truncate(stderr, self.max_output_chars)])
-            out.extend(["error-detail:", _truncate(error.formatted, self.max_output_chars)])
+                out.extend(
+                    ["stderr-before-error:", _truncate(stderr, self.max_output_chars)]
+                )
+            out.extend(
+                ["error-detail:", _truncate(error.formatted, self.max_output_chars)]
+            )
             tool_result = "\n".join(out)
             span.set_attribute("result_status", "error")
             span.set_attribute("error_kind", error.kind)
@@ -360,7 +376,6 @@ def build_agent(model: Any, evaluator: ScriptEvaluator) -> Any:
     )
 
     if hasattr(agent, "tool_plain"):
-
         # Keep tool callbacks async so pydantic-ai executes them on the event-loop
         # thread instead of offloading sync callables to a worker thread. IDA APIs
         # require main-thread access.
@@ -509,7 +524,12 @@ def _parse_evaluate_tool_result_text(text: str) -> dict[str, str]:
 def _build_eval_text_section(title: str, text: str, *, style: str) -> RenderableType:
     return Group(
         Text(f"{title}:", style=f"bold {style}"),
-        Syntax(_truncate(text or "(empty)", 8_000), "text", line_numbers=False, word_wrap=True),
+        Syntax(
+            _truncate(text or "(empty)", 8_000),
+            "text",
+            line_numbers=False,
+            word_wrap=True,
+        ),
     )
 
 
@@ -524,7 +544,9 @@ def _build_eval_result_section(text: str) -> RenderableType:
     return Group(Text("result:", style="bold cyan"), rendered)
 
 
-def _build_evaluate_tool_result_renderable(text: str) -> tuple[RenderableType, str, str] | None:
+def _build_evaluate_tool_result_renderable(
+    text: str,
+) -> tuple[RenderableType, str, str] | None:
     parsed = _parse_evaluate_tool_result_text(text)
     status = parsed.get("status")
     if status not in {"ok", "error"}:
@@ -557,9 +579,13 @@ def _build_evaluate_tool_result_renderable(text: str) -> tuple[RenderableType, s
 
     result = parsed.get("result")
 
-    only_stdout = bool(stdout) and not has_meta and not stderr and not error_detail and not result
+    only_stdout = (
+        bool(stdout) and not has_meta and not stderr and not error_detail and not result
+    )
     if only_stdout and stdout is not None:
-        sections.append(Syntax(_truncate(stdout, 8_000), "text", line_numbers=False, word_wrap=True))
+        sections.append(
+            Syntax(_truncate(stdout, 8_000), "text", line_numbers=False, word_wrap=True)
+        )
     else:
         if stdout:
             sections.append(_build_eval_text_section("stdout", stdout, style="green"))
@@ -570,7 +596,9 @@ def _build_evaluate_tool_result_renderable(text: str) -> tuple[RenderableType, s
             sections.append(_build_eval_result_section(result))
 
         if error_detail:
-            sections.append(_build_eval_text_section("error detail", error_detail, style="red"))
+            sections.append(
+                _build_eval_text_section("error detail", error_detail, style="red")
+            )
 
     if not sections:
         sections.append(Text("(no output)", style="dim"))
@@ -580,22 +608,30 @@ def _build_evaluate_tool_result_renderable(text: str) -> tuple[RenderableType, s
     return Group(*sections), border_style, f"result: {status_label}"
 
 
-def _build_tool_result_renderable(tool_name: str, result_content: object) -> tuple[RenderableType, str, str]:
+def _build_tool_result_renderable(
+    tool_name: str, result_content: object
+) -> tuple[RenderableType, str, str]:
     if isinstance(result_content, str) and tool_name == "evaluate_ida_script":
         parsed = _build_evaluate_tool_result_renderable(result_content)
         if parsed is not None:
             return parsed
 
     if isinstance(result_content, str):
-        body: RenderableType = Syntax(_truncate(result_content, 6_000), "text", line_numbers=False, word_wrap=True)
+        body: RenderableType = Syntax(
+            _truncate(result_content, 6_000), "text", line_numbers=False, word_wrap=True
+        )
     else:
         body = Pretty(result_content, expand_all=False)
 
     return body, "green", "result"
 
 
-def _render_tool_result(console: Console, tool_name: str, result_content: object) -> None:
-    body, border_style, _result_heading = _build_tool_result_renderable(tool_name, result_content)
+def _render_tool_result(
+    console: Console, tool_name: str, result_content: object
+) -> None:
+    body, border_style, _result_heading = _build_tool_result_renderable(
+        tool_name, result_content
+    )
     console.print(
         Panel(
             body,
@@ -612,7 +648,9 @@ def _render_tool_exchange(
     result_content: object,
 ) -> None:
     call_body = _build_tool_call_body(args)
-    result_body, result_border_style, result_heading = _build_tool_result_renderable(tool_name, result_content)
+    result_body, result_border_style, result_heading = _build_tool_result_renderable(
+        tool_name, result_content
+    )
 
     console.print(
         Panel(
@@ -747,7 +785,9 @@ def _build_left_right_line(
     )
 
 
-def _prompt_user_fallback_input(console: Console, prompt: str, right_label: str) -> PromptInputResult:
+def _prompt_user_fallback_input(
+    console: Console, prompt: str, right_label: str
+) -> PromptInputResult:
     left_prompt = Text(prompt, style="bold blue")
 
     header = _build_left_right_line(
@@ -802,11 +842,14 @@ def run_agent_turn(
     pending_tool_calls: dict[str, tuple[str, object]] = {}
     tool_call_count_ref: dict[str, int] = {"value": 0}
     context_estimate_ref: dict[str, int] = {
-        "value": _estimate_context_tokens(agent, history) + _estimate_text_tokens(user_input)
+        "value": _estimate_context_tokens(agent, history)
+        + _estimate_text_tokens(user_input)
     }
 
     def _build_thinking_spinner() -> Spinner:
-        context_label = f"~{_format_compact_token_count(context_estimate_ref['value'])} ctx tokens"
+        context_label = (
+            f"~{_format_compact_token_count(context_estimate_ref['value'])} ctx tokens"
+        )
         thinking_line = _build_left_right_line(
             left_text="assistant thinking...",
             right_text=context_label,
@@ -827,10 +870,17 @@ def run_agent_turn(
             event_console = live.console if live is not None else console
 
             if isinstance(event, FunctionToolCallEvent):
-                pending_tool_calls[event.part.tool_call_id] = (event.part.tool_name, event.part.args)
+                pending_tool_calls[event.part.tool_call_id] = (
+                    event.part.tool_name,
+                    event.part.args,
+                )
                 tool_call_count_ref["value"] += 1
-                context_estimate_ref["value"] += _estimate_text_tokens(event.part.tool_name)
-                context_estimate_ref["value"] += _estimate_object_tokens(event.part.args)
+                context_estimate_ref["value"] += _estimate_text_tokens(
+                    event.part.tool_name
+                )
+                context_estimate_ref["value"] += _estimate_object_tokens(
+                    event.part.args
+                )
                 _refresh_thinking_spinner()
                 continue
 
@@ -846,11 +896,17 @@ def run_agent_turn(
                 else:
                     fallback_tool_name = "tool"
 
-                context_estimate_ref["value"] += _estimate_text_tokens(fallback_tool_name)
-                context_estimate_ref["value"] += _estimate_object_tokens(event.result.content)
+                context_estimate_ref["value"] += _estimate_text_tokens(
+                    fallback_tool_name
+                )
+                context_estimate_ref["value"] += _estimate_object_tokens(
+                    event.result.content
+                )
 
                 if pending is None:
-                    _render_tool_result(event_console, fallback_tool_name, event.result.content)
+                    _render_tool_result(
+                        event_console, fallback_tool_name, event.result.content
+                    )
                     _refresh_thinking_spinner()
                     continue
 
@@ -968,7 +1024,9 @@ def run_repl(
             pending_inputs.append(stripped_initial_prompt)
 
     console.print(Rule("ida-codemode-agent"))
-    console.print("[bold green]Session ready.[/bold green] Ask reverse engineering questions.")
+    console.print(
+        "[bold green]Session ready.[/bold green] Ask reverse engineering questions."
+    )
     console.print("[dim]Commands: /exit, /quit | Ctrl-D twice exit[/dim]")
 
     while True:
@@ -1043,7 +1101,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         _validate_model_name(model)
     except Exception as exc:
-        error_console.print(f"[red]error:[/red] invalid model '{model}': {type(exc).__name__}: {exc}")
+        error_console.print(
+            f"[red]error:[/red] invalid model '{model}': {type(exc).__name__}: {exc}"
+        )
         return 2
 
     # Resolve URL-based model specs into a concrete pydantic-ai Model object.
@@ -1135,7 +1195,9 @@ def main(argv: list[str] | None = None) -> int:
             finally:
                 db_cm.__exit__(None, None, None)
     except Exception as exc:  # pragma: no cover
-        session_logger.log("error", stage="startup", message=f"{type(exc).__name__}: {exc}")
+        session_logger.log(
+            "error", stage="startup", message=f"{type(exc).__name__}: {exc}"
+        )
         error_console.print(f"[red]error:[/red] failed to start agent: {exc}")
         return 1
     finally:

@@ -20,7 +20,9 @@ from ida_codemode_agent.cli import (
 )
 
 
-def test_main_validates_model_before_database_resolution(capsys: pytest.CaptureFixture[str]) -> None:
+def test_main_validates_model_before_database_resolution(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     rc = main(["/definitely/missing/file.i64", "--model", "x"])
     assert rc == 2
     err = capsys.readouterr().err
@@ -38,7 +40,12 @@ def test_removed_script_size_flag_is_rejected() -> None:
 
 
 def test_removed_idb_control_flags_are_rejected() -> None:
-    for flag in ("--new-database", "--auto-analysis", "--no-auto-analysis", "--save-on-close"):
+    for flag in (
+        "--new-database",
+        "--auto-analysis",
+        "--no-auto-analysis",
+        "--save-on-close",
+    ):
         with pytest.raises(SystemExit):
             parse_args(["/tmp/fake-input.i64", flag])
 
@@ -52,11 +59,11 @@ def test_render_evaluate_error_omits_duplicate_stderr_traceback() -> None:
             "message: boom",
             "stderr-before-error:",
             "Traceback (most recent call last):",
-            "  File \"<string>\", line 1, in <module>",
+            '  File "<string>", line 1, in <module>',
             "ZeroDivisionError: division by zero",
             "error-detail:",
             "Traceback (most recent call last):",
-            "  File \"<string>\", line 1, in <module>",
+            '  File "<string>", line 1, in <module>',
             "ZeroDivisionError: division by zero",
         ]
     )
@@ -116,7 +123,9 @@ class TestParseOpenAICompatibleUrl:
 
     def test_non_url_returns_none(self) -> None:
         assert _parse_openai_compatible_url("openrouter:google/gemini") is None
-        assert _parse_openai_compatible_url("anthropic:claude-sonnet-4-20250514") is None
+        assert (
+            _parse_openai_compatible_url("anthropic:claude-sonnet-4-20250514") is None
+        )
 
     def test_https_no_port_with_model(self) -> None:
         result = _parse_openai_compatible_url("https://my-server.com/v1:llama3")
@@ -134,7 +143,9 @@ class TestValidateModelNameUrl:
     def test_url_model_main_validates_before_database(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        rc = main(["/definitely/missing/file.i64", "--model", "http://localhost:1234/v1"])
+        rc = main(
+            ["/definitely/missing/file.i64", "--model", "http://localhost:1234/v1"]
+        )
         assert rc == 2
         err = capsys.readouterr().err
         assert "missing a model name suffix" in err

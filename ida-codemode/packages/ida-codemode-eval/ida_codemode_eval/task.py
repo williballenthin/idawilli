@@ -103,9 +103,8 @@ async def run_eval_task(inputs: EvalInputs) -> str:
     The output is then assessed by evaluators (ContainsC2Indicator, etc.)
     to determine success and capture performance metrics.
     """
-    from pydantic_evals.dataset import increment_eval_metric, set_eval_attribute
-
     from ida_codemode_agent.cli import ScriptEvaluator, SessionLogger, build_agent
+    from pydantic_evals.dataset import increment_eval_metric, set_eval_attribute
 
     # Create a session logger for this eval run so traces can be reviewed later.
     session_logger = SessionLogger.create_for_eval(inputs.model_label)

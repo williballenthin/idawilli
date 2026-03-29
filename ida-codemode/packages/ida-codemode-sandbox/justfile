@@ -1,0 +1,18 @@
+set quiet
+
+format:
+    uvx --quiet ruff format --quiet ida_codemode_sandbox/ tests/
+
+ruff:
+    uvx --quiet ruff check --quiet --fix ida_codemode_sandbox/ tests/
+    uvx --quiet ruff check --quiet --select I --fix ida_codemode_sandbox/ tests/
+
+mypy:
+    uv run --quiet --directory ../.. mypy --no-error-summary packages/ida-codemode-sandbox/ida_codemode_sandbox/
+
+test:
+    uv run --quiet --directory ../.. pytest -x -q --no-header packages/ida-codemode-sandbox/tests/
+
+lint: format ruff mypy
+
+all: lint test

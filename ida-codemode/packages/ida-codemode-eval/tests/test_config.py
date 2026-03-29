@@ -5,14 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 from textwrap import dedent
 
-import pytest
-
 from ida_codemode_eval.config import EvalConfig
 
 
 def test_from_yaml_minimal(tmp_path: Path) -> None:
     config_file = tmp_path / "test.yaml"
-    config_file.write_text(dedent("""\
+    config_file.write_text(
+        dedent("""\
         name: test-eval
         database: sample.i64
         task_prompt: "Analyze this binary."
@@ -20,7 +19,8 @@ def test_from_yaml_minimal(tmp_path: Path) -> None:
         models:
           - id: "openrouter:test/model"
             label: "test-model"
-    """))
+    """)
+    )
 
     config = EvalConfig.from_yaml(config_file)
 
@@ -37,7 +37,8 @@ def test_from_yaml_minimal(tmp_path: Path) -> None:
 
 def test_from_yaml_with_reasoning_effort(tmp_path: Path) -> None:
     config_file = tmp_path / "test.yaml"
-    config_file.write_text(dedent("""\
+    config_file.write_text(
+        dedent("""\
         name: test-eval
         database: sample.i64
         task_prompt: "Analyze this binary."
@@ -52,7 +53,8 @@ def test_from_yaml_with_reasoning_effort(tmp_path: Path) -> None:
           - id: "openrouter:test/model-c"
             label: "model-c-minimal"
             reasoning_effort: "minimal"
-    """))
+    """)
+    )
 
     config = EvalConfig.from_yaml(config_file)
 
@@ -65,13 +67,15 @@ def test_from_yaml_with_reasoning_effort(tmp_path: Path) -> None:
 
 def test_resolve_database_path_relative(tmp_path: Path) -> None:
     config_file = tmp_path / "test.yaml"
-    config_file.write_text(dedent("""\
+    config_file.write_text(
+        dedent("""\
         name: test
         database: data/sample.i64
         task_prompt: test
         magic_string: test
         models: []
-    """))
+    """)
+    )
 
     config = EvalConfig.from_yaml(config_file)
     resolved = config.resolve_database_path(tmp_path)
@@ -80,13 +84,15 @@ def test_resolve_database_path_relative(tmp_path: Path) -> None:
 
 def test_resolve_database_path_absolute(tmp_path: Path) -> None:
     config_file = tmp_path / "test.yaml"
-    config_file.write_text(dedent(f"""\
+    config_file.write_text(
+        dedent("""\
         name: test
         database: /absolute/path/sample.i64
         task_prompt: test
         magic_string: test
         models: []
-    """))
+    """)
+    )
 
     config = EvalConfig.from_yaml(config_file)
     resolved = config.resolve_database_path(tmp_path)

@@ -8,7 +8,6 @@ import shutil
 from pathlib import Path
 
 import pytest
-
 from ida_codemode_api import create_api_from_database
 
 TESTS_DIR = Path(__file__).resolve().parent

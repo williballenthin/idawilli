@@ -18,8 +18,10 @@ import pydantic_monty
 from ida_codemode_api import (
     FUNCTION_NAMES,
     TYPE_STUBS,
-    api_reference as codemode_api_reference,
     create_api_from_database,
+)
+from ida_codemode_api import (
+    api_reference as codemode_api_reference,
 )
 
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
@@ -106,7 +108,7 @@ class SandboxResult:
 
 DEFAULT_LIMITS = pydantic_monty.ResourceLimits(
     max_duration_secs=30.0,
-    max_memory=100_000_000,    # 100 MB
+    max_memory=100_000_000,  # 100 MB
     max_recursion_depth=200,
 )
 
@@ -158,7 +160,9 @@ def _extract_callback_names(text: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def _runtime_error_to_sandbox_error(exc: pydantic_monty.MontyRuntimeError) -> SandboxError:
+def _runtime_error_to_sandbox_error(
+    exc: pydantic_monty.MontyRuntimeError,
+) -> SandboxError:
     inner = exc.exception()
     return SandboxError(
         kind="runtime",
@@ -168,7 +172,9 @@ def _runtime_error_to_sandbox_error(exc: pydantic_monty.MontyRuntimeError) -> Sa
     )
 
 
-def _syntax_error_to_sandbox_error(exc: pydantic_monty.MontySyntaxError) -> SandboxError:
+def _syntax_error_to_sandbox_error(
+    exc: pydantic_monty.MontySyntaxError,
+) -> SandboxError:
     return SandboxError(
         kind="syntax",
         message=str(exc),
@@ -176,7 +182,9 @@ def _syntax_error_to_sandbox_error(exc: pydantic_monty.MontySyntaxError) -> Sand
     )
 
 
-def _typing_error_to_sandbox_error(exc: pydantic_monty.MontyTypingError) -> SandboxError:
+def _typing_error_to_sandbox_error(
+    exc: pydantic_monty.MontyTypingError,
+) -> SandboxError:
     return SandboxError(
         kind="typing",
         message=str(exc),
@@ -238,8 +246,7 @@ class IdaSandbox:
         self._help_cache: dict[str, str] = {}
 
         self._fn_impls: dict[str, Callable[..., object]] = {
-            name: self._wrap_api_function(name, fn)
-            for name, fn in raw_fn_impls.items()
+            name: self._wrap_api_function(name, fn) for name, fn in raw_fn_impls.items()
         }
         self._fn_impls[_TYPE_GUARD_FUNCTION_NAME] = _is_error
 
@@ -281,7 +288,7 @@ class IdaSandbox:
 
         self._emit_hint(
             f"{_DOC_HINT_PREFIX} {callback_name} returned ApiError: {error_message}\n"
-            f"{_DOC_HINT_PREFIX} help(\"{callback_name}\") excerpt (shown once):\n"
+            f'{_DOC_HINT_PREFIX} help("{callback_name}") excerpt (shown once):\n'
             f"{excerpt}"
         )
 
@@ -301,7 +308,7 @@ class IdaSandbox:
 
             self._doc_hints_emitted.add(callback_name)
             sections.append(
-                f"{_DOC_HINT_PREFIX} help(\"{callback_name}\") excerpt (shown once):\n{excerpt}"
+                f'{_DOC_HINT_PREFIX} help("{callback_name}") excerpt (shown once):\n{excerpt}'
             )
 
         if not sections:
@@ -309,12 +316,18 @@ class IdaSandbox:
 
         return formatted + "\n\n" + "\n\n".join(sections)
 
-    def _typing_error_with_hints(self, exc: pydantic_monty.MontyTypingError) -> SandboxError:
+    def _typing_error_with_hints(
+        self, exc: pydantic_monty.MontyTypingError
+    ) -> SandboxError:
         error = _typing_error_to_sandbox_error(exc)
-        error.formatted = self._augment_typing_error_with_callback_hints(error.formatted)
+        error.formatted = self._augment_typing_error_with_callback_hints(
+            error.formatted
+        )
         return error
 
-    def _wrap_api_function(self, callback_name: str, fn: Callable[..., object]) -> Callable[..., object]:
+    def _wrap_api_function(
+        self, callback_name: str, fn: Callable[..., object]
+    ) -> Callable[..., object]:
         if callback_name == "help":
             return fn
 
@@ -327,7 +340,9 @@ class IdaSandbox:
 
         return wrapped
 
-    def run(self, code: str, print_callback: Callable[[str, str], None] | None = None) -> SandboxResult:
+    def run(
+        self, code: str, print_callback: Callable[[str, str], None] | None = None
+    ) -> SandboxResult:
         """Evaluate *code* in the sandbox.
 
         Args:

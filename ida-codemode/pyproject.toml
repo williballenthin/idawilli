@@ -5,3 +5,43 @@ members = [
     "packages/ida-codemode-eval",
     "packages/ida-codemode-sandbox",
 ]
+
+[tool.mypy]
+mypy_path = "packages/ida-codemode-api:packages/ida-codemode-sandbox:packages/ida-codemode-agent:packages/ida-codemode-eval"
+check_untyped_defs = true
+disable_error_code = ["import-untyped"]
+
+[[tool.mypy.overrides]]
+module = [
+    "ida_auto",
+    "ida_bytes",
+    "ida_diskio",
+    "ida_entry",
+    "ida_expr",
+    "ida_funcs",
+    "ida_hexrays",
+    "ida_ida",
+    "ida_idaapi",
+    "ida_idp",
+    "ida_kernwin",
+    "ida_lines",
+    "ida_loader",
+    "ida_moves",
+    "ida_nalt",
+    "ida_name",
+    "ida_registry",
+    "ida_segment",
+    "ida_settings",
+    "ida_typeinf",
+    "ida_ua",
+    "idaapi",
+    "idapro",
+    "idautils",
+    "idc",
+]
+ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+]

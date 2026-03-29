@@ -1,0 +1,33 @@
+set quiet
+
+format-all:
+    just -f packages/ida-codemode-api/justfile format
+    just -f packages/ida-codemode-sandbox/justfile format
+    just -f packages/ida-codemode-agent/justfile format
+    just -f packages/ida-codemode-eval/justfile format
+
+ruff-all:
+    just -f packages/ida-codemode-api/justfile ruff
+    just -f packages/ida-codemode-sandbox/justfile ruff
+    just -f packages/ida-codemode-agent/justfile ruff
+    just -f packages/ida-codemode-eval/justfile ruff
+
+mypy-all:
+    just -f packages/ida-codemode-api/justfile mypy
+    just -f packages/ida-codemode-sandbox/justfile mypy
+    just -f packages/ida-codemode-agent/justfile mypy
+    just -f packages/ida-codemode-eval/justfile mypy
+
+lint-all: format-all ruff-all mypy-all
+
+test-all:
+    just -f packages/ida-codemode-api/justfile test
+    just -f packages/ida-codemode-sandbox/justfile test
+    just -f packages/ida-codemode-agent/justfile test
+    just -f packages/ida-codemode-eval/justfile test
+
+format: format-all
+ruff: ruff-all
+mypy: mypy-all
+lint: lint-all
+test: test-all
