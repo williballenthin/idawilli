@@ -31,7 +31,7 @@ class ColorHooks(idaapi.IDP_Hooks):
         if mnem == "call":
             bgcolor = ctypes.cast(int(color), ctypes.POINTER(ctypes.c_int))
             # TODO: make this configurable
-            bgcolor[0] = 0xDDDDDD
+            bgcolor[0] = 0x444444
             return 1
 
         else:
