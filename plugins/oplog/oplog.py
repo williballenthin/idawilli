@@ -8,6 +8,7 @@ from pathlib import Path
 import ida_auto
 import ida_expr
 import ida_idaapi
+import ida_idp
 import ida_kernwin
 import ida_netnode
 from oplog_events import Events
@@ -71,9 +72,19 @@ class UI_Closing_Hooks(ida_kernwin.UI_Hooks):
             return 0
 
 
+class AutoAnalysisHook(ida_idp.IDB_Hooks):
+    def __init__(self, plugin: "oplog_plugmod_t", *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.plugin = plugin
+
+    def auto_empty_finally(self) -> None:
+        self.plugin.on_autoanalysis_complete()
+
+
 class oplog_plugmod_t(ida_idaapi.plugmod_t):
     def __init__(self):
         self.events: Events | None = None
+        self.autoanalysis_hook: AutoAnalysisHook | None = None
         self.idb_hooks: IDBChangedHook | None = None
         self.ui_closing_hooks: UI_Closing_Hooks | None = None
         self.ui_manager = None
@@ -128,13 +139,29 @@ class oplog_plugmod_t(ida_idaapi.plugmod_t):
         ida_expr.del_idc_func("oplog_export")
 
     def init(self):
-        if not ida_auto.auto_is_ok():
-            logger.debug(
-                "waiting for auto-analysis to complete before subscribing to events"
-            )
-            ida_auto.auto_wait()
-            logger.debug("auto-analysis complete, now subscribing to events")
+        if ida_auto.auto_is_ok():
+            self.on_autoanalysis_complete()
+            return
 
+        logger.debug(
+            "waiting for auto-analysis to complete before subscribing to events"
+        )
+        self.autoanalysis_hook = AutoAnalysisHook(self)
+        self.autoanalysis_hook.hook()
+
+        # Auto-analysis may have completed between the first check and hook().
+        if ida_auto.auto_is_ok():
+            self.on_autoanalysis_complete()
+
+    def on_autoanalysis_complete(self):
+        if self.events is not None:
+            return
+
+        if self.autoanalysis_hook is not None:
+            self.autoanalysis_hook.unhook()
+            self.autoanalysis_hook = None
+
+        logger.debug("auto-analysis complete, now subscribing to events")
         self.events = load_events()
         self.register_idb_hooks()
         self.register_export_idc_func()
@@ -148,19 +175,24 @@ class oplog_plugmod_t(ida_idaapi.plugmod_t):
             self.ui_manager.setup()
 
     def run(self, arg):
-        assert self.events is not None
-        save_events(self.events)
+        if self.events is not None:
+            save_events(self.events)
 
     def term(self):
+        if self.autoanalysis_hook is not None:
+            self.autoanalysis_hook.unhook()
+            self.autoanalysis_hook = None
+
+        if self.events is None:
+            return
+
         if self.ui_manager is not None:
             self.ui_manager.teardown()
 
         self.unregister_ui_closing_hooks()
         self.unregister_export_idc_func()
         self.unregister_idb_hooks()
-
-        if self.events is not None:
-            self.events.clear()
+        self.events.clear()
 
 
 class oplog_plugin_t(ida_idaapi.plugin_t):
