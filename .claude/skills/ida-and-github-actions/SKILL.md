@@ -43,9 +43,10 @@ While IDA comes bundled with Python, users can and should provide their own Pyth
 And, it is strongly recommended to use a virtual environment, because this avoids dependency conflicts and issues with "externally managed" environments.
 Use `IDAPYTHON_VENV_EXECUTABLE` rather than `VIRTUAL_ENV` to signal the virtual environment to IDA (without interfering with other tools that use `VIRTUAL_ENV`).
 
-For IDA plugins that are installed and tested in CI (you should see `hcli plugin install...`), create a venv for IDA:
+For IDA plugins that are installed and tested in CI (you should see `hcli plugin install...`), create a venv for IDA.
+Use `--seed` so that `pip` is available in the venv; `hcli plugin install` uses pip to install plugin Python dependencies.
 
-    uv venv $HOME/.idapro/venv
+    uv venv --seed $HOME/.idapro/venv
 
 Register the interpreter with IDA:
 
@@ -125,13 +126,13 @@ For programs that use idalib, they need the idapro or ida-domain Python packages
             version: "0.12.6"
             python-version: ${{ matrix.python-version }}
             
-        - name: Install IDA ${{ matrix.os.version }}
+        - name: Install IDA ${{ matrix.ida.version }}
           shell: bash
           run: |
             uv run --with ida-hcli hcli \
               ida install \
-              --download-id "ida-pro:${{ matrix.os.version }}" \
-              --license-id "${ IDA_LICENSE_ID }" \
+              --download-id "ida-pro:${{ matrix.ida.version }}" \
+              --license-id "${IDA_LICENSE_ID}" \
               --install-dir="${{ runner.temp }}/app/ida" \
               --accept-eula \
               --set-default \
@@ -144,7 +145,7 @@ For programs that use idalib, they need the idapro or ida-domain Python packages
         #  including where plugin dependencies will be installed.
         # This should be set before HCLI installs plugins.
         - name: Create venv for IDA
-          run: uv venv $HOME/.idapro/venv
+          run: uv venv --seed $HOME/.idapro/venv
 
         # Register the specific Python interpreter with IDA, so that native Python extensions load correctly.
         - name: Register Python interpreter with IDA
