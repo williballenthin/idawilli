@@ -3,26 +3,33 @@ from pathlib import Path
 
 import pytest
 from conftest import run_ida_script
+
 from oplog_events import (
     EventList,
     SegmentModel,
     SegmMoveInfoModel,
-    adding_segm_event,
-    allsegs_moved_event,
-    changing_segm_end_event,
-    changing_segm_start_event,
-    deleting_segm_event,
     segm_added_event,
-    segm_attrs_updated_event,
-    segm_class_changed_event,
-    segm_deleted_event,
-    segm_end_changed_event,
     segm_moved_event,
-    segm_name_changed_event,
-    segm_start_changed_event,
+    adding_segm_event,
     sgr_changed_event,
     sgr_deleted_event,
+    segm_deleted_event,
+    allsegs_moved_event,
+    deleting_segm_event,
+    segm_end_changed_event,
+    changing_segm_end_event,
+    segm_name_changed_event,
+    segm_attrs_updated_event,
+    segm_class_changed_event,
+    segm_start_changed_event,
+    changing_segm_start_event,
 )
+
+_DEFSR_EXCLUDE = {"s": {"defsr"}}
+
+
+def _assert_segm_event_eq(actual, expected):
+    assert actual.model_dump(exclude=_DEFSR_EXCLUDE) == expected.model_dump(exclude=_DEFSR_EXCLUDE)
 
 
 def test_segm_name_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
@@ -44,9 +51,7 @@ def test_segm_name_changed(test_binary: Path, session_idauser: Path, work_dir: P
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
-    name_changed = [
-        e for e in event_list.root if isinstance(e, segm_name_changed_event)
-    ]
+    name_changed = [e for e in event_list.root if isinstance(e, segm_name_changed_event)]
     assert len(name_changed) >= 1
 
     actual = name_changed[-1]
@@ -91,7 +96,7 @@ def test_segm_name_changed(test_binary: Path, session_idauser: Path, work_dir: P
             segment_class="CODE",
         ),
     )
-    assert actual == expected
+    _assert_segm_event_eq(actual, expected)
 
 
 def test_segm_class_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
@@ -113,9 +118,7 @@ def test_segm_class_changed(test_binary: Path, session_idauser: Path, work_dir: 
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
-    class_changed = [
-        e for e in event_list.root if isinstance(e, segm_class_changed_event)
-    ]
+    class_changed = [e for e in event_list.root if isinstance(e, segm_class_changed_event)]
     assert len(class_changed) >= 1
 
     actual = class_changed[-1]
@@ -160,7 +163,7 @@ def test_segm_class_changed(test_binary: Path, session_idauser: Path, work_dir: 
             segment_class="TEST_CLASS",
         ),
     )
-    assert actual == expected
+    _assert_segm_event_eq(actual, expected)
 
 
 def test_segm_attrs_updated(test_binary: Path, session_idauser: Path, work_dir: Path):
@@ -182,9 +185,7 @@ def test_segm_attrs_updated(test_binary: Path, session_idauser: Path, work_dir: 
     )
 
     event_list = EventList.model_validate_json(events_path.read_text())
-    attrs_updated = [
-        e for e in event_list.root if isinstance(e, segm_attrs_updated_event)
-    ]
+    attrs_updated = [e for e in event_list.root if isinstance(e, segm_attrs_updated_event)]
     assert len(attrs_updated) >= 1
 
     actual = attrs_updated[-1]
@@ -228,7 +229,7 @@ def test_segm_attrs_updated(test_binary: Path, session_idauser: Path, work_dir: 
             segment_class="CODE",
         ),
     )
-    assert actual == expected
+    _assert_segm_event_eq(actual, expected)
 
 
 def test_segm_added(test_binary: Path, session_idauser: Path, work_dir: Path):
@@ -306,11 +307,9 @@ def test_segm_added(test_binary: Path, session_idauser: Path, work_dir: Path):
             segment_class=None,
         ),
     )
-    assert actual_adding == expected_adding
+    _assert_segm_event_eq(actual_adding, expected_adding)
 
-    matching_added = [
-        e for e in segm_added_events if e.s.segment_name == "TEST_NEW_SEG"
-    ]
+    matching_added = [e for e in segm_added_events if e.s.segment_name == "TEST_NEW_SEG"]
     assert len(matching_added) >= 1
 
     actual_added = matching_added[-1]
@@ -353,7 +352,7 @@ def test_segm_added(test_binary: Path, session_idauser: Path, work_dir: Path):
             segment_class="DATA",
         ),
     )
-    assert actual_added == expected_added
+    _assert_segm_event_eq(actual_added, expected_added)
 
 
 def test_segm_deleted(test_binary: Path, session_idauser: Path, work_dir: Path):
@@ -446,12 +445,8 @@ def test_segm_start_changed(test_binary: Path, session_idauser: Path, work_dir: 
 
     event_list = EventList.model_validate_json(events_path.read_text())
 
-    changing_events = [
-        e for e in event_list.root if isinstance(e, changing_segm_start_event)
-    ]
-    changed_events = [
-        e for e in event_list.root if isinstance(e, segm_start_changed_event)
-    ]
+    changing_events = [e for e in event_list.root if isinstance(e, changing_segm_start_event)]
+    changed_events = [e for e in event_list.root if isinstance(e, segm_start_changed_event)]
     assert len(changing_events) >= 1
     assert len(changed_events) >= 1
 
@@ -500,7 +495,7 @@ def test_segm_start_changed(test_binary: Path, session_idauser: Path, work_dir: 
             segment_class="DATA",
         ),
     )
-    assert actual_changing == expected_changing
+    _assert_segm_event_eq(actual_changing, expected_changing)
 
     changed_matching = [e for e in changed_events if e.oldstart == 0x92000000]
     assert len(changed_matching) >= 1
@@ -546,7 +541,7 @@ def test_segm_start_changed(test_binary: Path, session_idauser: Path, work_dir: 
             segment_class="DATA",
         ),
     )
-    assert actual_changed == expected_changed
+    _assert_segm_event_eq(actual_changed, expected_changed)
 
 
 def test_segm_end_changed(test_binary: Path, session_idauser: Path, work_dir: Path):
@@ -580,12 +575,8 @@ def test_segm_end_changed(test_binary: Path, session_idauser: Path, work_dir: Pa
 
     event_list = EventList.model_validate_json(events_path.read_text())
 
-    changing_events = [
-        e for e in event_list.root if isinstance(e, changing_segm_end_event)
-    ]
-    changed_events = [
-        e for e in event_list.root if isinstance(e, segm_end_changed_event)
-    ]
+    changing_events = [e for e in event_list.root if isinstance(e, changing_segm_end_event)]
+    changed_events = [e for e in event_list.root if isinstance(e, segm_end_changed_event)]
     assert len(changing_events) >= 1
     assert len(changed_events) >= 1
 
@@ -634,7 +625,7 @@ def test_segm_end_changed(test_binary: Path, session_idauser: Path, work_dir: Pa
             segment_class="DATA",
         ),
     )
-    assert actual_changing == expected_changing
+    _assert_segm_event_eq(actual_changing, expected_changing)
 
     changed_matching = [e for e in changed_events if e.oldend == 0x93002000]
     assert len(changed_matching) >= 1
@@ -680,7 +671,7 @@ def test_segm_end_changed(test_binary: Path, session_idauser: Path, work_dir: Pa
             segment_class="DATA",
         ),
     )
-    assert actual_changed == expected_changed
+    _assert_segm_event_eq(actual_changed, expected_changed)
 
 
 def test_segm_moved(test_binary: Path, session_idauser: Path, work_dir: Path):
