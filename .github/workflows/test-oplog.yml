@@ -60,3 +60,4 @@ jobs:
       run: python -m pytest plugins/oplog/tests/ -v
       env:
         IDA_LICENSE_ID: ${{ secrets.IDA_LICENSE_ID }}
+        HCLI_CURRENT_IDA_PYTHON_EXE: ${{ github.workspace }}/.venv/bin/python

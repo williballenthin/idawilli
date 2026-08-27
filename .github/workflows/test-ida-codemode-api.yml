@@ -52,7 +52,7 @@ jobs:
       working-directory: ida-codemode/packages/ida-codemode-api
       run: |
         uvx ruff check .
-        uvx ty check ida_codemode_api tests
+        uvx ty check --python "${{ github.workspace }}/.venv/bin/python" ida_codemode_api tests
 
     - name: Install IDA ${{ matrix.ida.version }}
       shell: bash
