@@ -1,18 +1,18 @@
 import logging
 import threading
-from datetime import datetime
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any, Literal
+from datetime import datetime
 
-from pydantic import BaseModel, Field, RootModel, field_validator
+from pydantic import Field, BaseModel, RootModel, field_validator
 
 if TYPE_CHECKING:
-    import ida_funcs
+    import ida_ua
     import ida_nalt
+    import ida_funcs
     import ida_range
     import ida_segment
     import ida_typeinf
-    import ida_ua
 
 logger = logging.getLogger(__name__)
 
@@ -272,9 +272,7 @@ class CatchModel(BaseModel):
     @classmethod
     def from_catch_t(cls, catch_obj) -> "CatchModel":
         return cls(
-            ranges=[
-                RangeModel(start_ea=r.start_ea, end_ea=r.end_ea) for r in catch_obj
-            ],
+            ranges=[RangeModel(start_ea=r.start_ea, end_ea=r.end_ea) for r in catch_obj],
             disp=catch_obj.disp,
             fpreg=catch_obj.fpreg,
             obj=catch_obj.obj,
@@ -297,9 +295,7 @@ class SehModel(BaseModel):
             ranges=[RangeModel(start_ea=r.start_ea, end_ea=r.end_ea) for r in seh_obj],
             disp=seh_obj.disp,
             fpreg=seh_obj.fpreg,
-            filter_ranges=[
-                RangeModel(start_ea=r.start_ea, end_ea=r.end_ea) for r in seh_obj.filter
-            ],
+            filter_ranges=[RangeModel(start_ea=r.start_ea, end_ea=r.end_ea) for r in seh_obj.filter],
             seh_code=seh_obj.seh_code,
         )
 
@@ -471,8 +467,8 @@ class OpInfoModel(BaseModel):
 
     @classmethod
     def from_opinfo_t(cls, opinfo: "ida_nalt.opinfo_t") -> "OpInfoModel | None":
-        import ida_typeinf
         import idc
+        import ida_typeinf
 
         if opinfo is None:
             return None
@@ -519,8 +515,8 @@ class OpInfoModel(BaseModel):
     @classmethod
     def from_database(cls, ea: int, n: int) -> "OpInfoModel | None":
         """Create OpInfoModel by querying the database for current operand info at ea, n."""
-        import ida_bytes
         import ida_nalt
+        import ida_bytes
         import ida_typeinf
 
         flags = ida_bytes.get_flags(ea)
@@ -922,10 +918,19 @@ class op_type_changed_event(BaseModel):
     opinfo: OpInfoModel | None = None
 
 
+def _normalize_dirtree_path(v: str) -> str:
+    return v.lstrip("/")
+
+
 class dirtree_mkdir_event(BaseModel):
     event_name: Literal["dirtree_mkdir"]
     timestamp: datetime
     path: str
+
+    @field_validator("path")
+    @classmethod
+    def normalize_path(cls, v: str) -> str:
+        return _normalize_dirtree_path(v)
 
 
 class dirtree_rmdir_event(BaseModel):
@@ -933,12 +938,22 @@ class dirtree_rmdir_event(BaseModel):
     timestamp: datetime
     path: str
 
+    @field_validator("path")
+    @classmethod
+    def normalize_path(cls, v: str) -> str:
+        return _normalize_dirtree_path(v)
+
 
 class dirtree_link_event(BaseModel):
     event_name: Literal["dirtree_link"]
     timestamp: datetime
     path: str
     link: bool
+
+    @field_validator("path")
+    @classmethod
+    def normalize_path(cls, v: str) -> str:
+        return _normalize_dirtree_path(v)
 
 
 class dirtree_move_event(BaseModel):
@@ -949,12 +964,22 @@ class dirtree_move_event(BaseModel):
     from_path: str = Field(alias="_from")
     to: str
 
+    @field_validator("from_path", "to")
+    @classmethod
+    def normalize_path(cls, v: str) -> str:
+        return _normalize_dirtree_path(v)
+
 
 class dirtree_rank_event(BaseModel):
     event_name: Literal["dirtree_rank"]
     timestamp: datetime
     path: str
     rank: int
+
+    @field_validator("path")
+    @classmethod
+    def normalize_path(cls, v: str) -> str:
+        return _normalize_dirtree_path(v)
 
 
 class dirtree_rminode_event(BaseModel):
