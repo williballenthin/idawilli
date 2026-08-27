@@ -49,16 +49,19 @@ For IDA plugins that are installed and tested in CI (you should see `hcli plugin
 
 Register the interpreter with IDA:
 
-    ${{ runner.temp }}/app/ida/${{ matrix.ida.idapyswitch }} --force-path $(uv run --directory $HOME/.idapro/venv python -c 'import sysconfig, pathlib; ld = pathlib.Path(sysconfig.get_config_var("LIBDIR")); print(next(iter(list(ld.glob("libpython*")) + list(ld.glob("python3*.dll")))))')
+    ${{ runner.temp }}/app/ida/${{ matrix.ida.idapyswitch }} --force-path $(uv run --python $HOME/.idapro/venv python -c 'import sys,sysconfig,pathlib;print(__import__("_winapi").GetModuleFileName(sys.dllhandle) if sys.platform=="win32" else next(pathlib.Path(sysconfig.get_config_var("LIBDIR")).glob("libpython*")))')
 
 This causes IDA to use the specific version of Python, which is important when Python loads native libraries (Pydantic, SSL, etc.).
 
-When subsequent steps start IDA or HCLI, they should point `IDAPYTHON_VENV_EXECUTABLE` to the virtual environment's Python interpreter:
+When subsequent steps start IDA or HCLI, they should point `IDAPYTHON_VENV_EXECUTABLE` to the virtual environment's Python interpreter.
+Use `uv python find` to resolve the path cross-platform (avoids platform-specific `bin/python3` vs `Scripts/python.exe`):
 
 ```yml
     env:
-        IDAPYTHON_VENV_EXECUTABLE: $HOME/.idapro/venv/bin/python3
+        IDAPYTHON_VENV_EXECUTABLE: $(uv python find $HOME/.idapro/venv)
 ```
+
+On Windows, the path must use native separators: wrap with `cygpath -w` in bash steps.
 
 This causes IDA to use the virtual environment for Python, giving access to the libraries installed there.
 Unfortunately, both idapyswitch and the virtual environment registration are required.
@@ -148,18 +151,22 @@ For programs that use idalib, they need the idapro or ida-domain Python packages
           run: |
             ${{ runner.temp }}/app/ida/${{ matrix.ida.idapyswitch }} \
               --force-path $( \
-                uv run --directory $HOME/.idapro/venv python -c \
-                  'import sysconfig, pathlib; ld = pathlib.Path(sysconfig.get_config_var("LIBDIR")); print(next(iter(list(ld.glob("libpython*")) + list(ld.glob("python3*.dll")))))' \
+                uv run --python $HOME/.idapro/venv python -c \
+                  'import sys,sysconfig,pathlib;print(__import__("_winapi").GetModuleFileName(sys.dllhandle) if sys.platform=="win32" else next(pathlib.Path(sysconfig.get_config_var("LIBDIR")).glob("libpython*")))' \
               )
             
+        - name: Set IDAPYTHON_VENV_EXECUTABLE
+          shell: bash
+          run: |
+            VENV_PYTHON="$(uv python find "$HOME/.idapro/venv")"
+            if [[ "$RUNNER_OS" == "Windows" ]]; then
+              echo "IDAPYTHON_VENV_EXECUTABLE=$(cygpath -w "$VENV_PYTHON")" >> "$GITHUB_ENV"
+            else
+              echo "IDAPYTHON_VENV_EXECUTABLE=$VENV_PYTHON" >> "$GITHUB_ENV"
+            fi
+
         - name: Install foo plugin to IDA
           run: uv run --with ida-hcli hcli plugin install foo
-          env:
-            IDAPYTHON_VENV_EXECUTABLE: |-
-              ${{ case(
-                matrix.ida.os == 'windows-latest', "$HOME/.idapro/venv/Scripts/python.exe",
-                "$HOME/.idapro/venv/bin/python3",
-              ) }}
 
         - name: Create program environment
           run: uv sync --no-sources --extra dev --extra test
