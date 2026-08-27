@@ -889,7 +889,7 @@ def create_api_from_database(db: Any) -> api_types.ApiFunctions:
                 results = []
 
         try:
-            import ida_nalt  # type: ignore
+            import ida_nalt
         except Exception as exc:
             if db_imports_error is not None:
                 return _error(
@@ -1225,8 +1225,8 @@ def create_api_from_database(db: Any) -> api_types.ApiFunctions:
             if "(" in type_str and name not in type_str:
                 type_str = type_str.replace("(", f" {name}(", 1)
 
-            tif = ida_typeinf.tinfo_t()  # ty: ignore[missing-argument]
-            parse_result = ida_typeinf.parse_decl(tif, None, type_str, 0)  # ty: ignore[invalid-argument-type]
+            tif = ida_typeinf.tinfo_t()
+            parse_result = ida_typeinf.parse_decl(tif, None, type_str, 0)
             if not parse_result:
                 return _error(f"failed to parse type declaration: {type_str}")
 
@@ -1376,8 +1376,8 @@ def create_api_from_database(db: Any) -> api_types.ApiFunctions:
 
         try:
             type_str = type
-            tinfo = ida_typeinf.tinfo_t()  # ty: ignore[missing-argument]
-            if not ida_typeinf.parse_decl(tinfo, None, type_str, ida_typeinf.PT_SIL):  # ty: ignore[invalid-argument-type]
+            tinfo = ida_typeinf.tinfo_t()
+            if not ida_typeinf.parse_decl(tinfo, None, type_str, ida_typeinf.PT_SIL):
                 return _error(f"failed to parse type string {type_str!r}")
 
             lvar = matching_vars[0]
