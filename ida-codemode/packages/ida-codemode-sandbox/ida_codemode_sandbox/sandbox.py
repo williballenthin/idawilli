@@ -188,7 +188,7 @@ def _typing_error_to_sandbox_error(
     return SandboxError(
         kind="typing",
         message=str(exc),
-        formatted=exc.display(format="full"),
+        formatted=exc.display(),
     )
 
 
@@ -253,6 +253,24 @@ class IdaSandbox:
             name: self._wrap_api_function(name, fn) for name, fn in raw_fn_impls.items()
         }
         self._fn_impls[_TYPE_GUARD_FUNCTION_NAME] = _is_error
+
+        self._pool = pydantic_monty.Monty()
+        self._pool.__enter__()
+
+    def close(self) -> None:
+        """Shut down the Monty subprocess pool."""
+        if self._pool is not None:
+            self._pool.__exit__(None, None, None)
+            self._pool = None
+
+    def __enter__(self) -> IdaSandbox:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        self.close()
 
     def _emit_hint(self, text: str) -> None:
         if self._active_print_callback is None:
@@ -377,14 +395,19 @@ class IdaSandbox:
                 if print_callback is not None:
                     print_callback(stream, text)
 
-            # --- Construct the Monty instance (syntax + type errors surface here)
+            self._active_print_callback = _capture
             try:
-                with logfire.span("sandbox.monty.construct"):
-                    m = pydantic_monty.Monty(
-                        code,
+                with logfire.span("sandbox.monty.run"):
+                    with self._pool.checkout(
                         type_check=True,
                         type_check_stubs=SANDBOX_TYPE_STUBS,
-                    )
+                        limits=self.limits,
+                    ) as session:
+                        output = session.feed_run(
+                            code,
+                            external_lookup=self._fn_impls,
+                            print_callback=_capture,
+                        )
             except pydantic_monty.MontySyntaxError as exc:
                 run_span.set_attribute("result_ok", False)
                 run_span.set_attribute("error_kind", "syntax")
@@ -393,16 +416,6 @@ class IdaSandbox:
                 run_span.set_attribute("result_ok", False)
                 run_span.set_attribute("error_kind", "typing")
                 return SandboxResult(error=self._typing_error_with_hints(exc))
-
-            # --- Execute
-            self._active_print_callback = _capture
-            try:
-                with logfire.span("sandbox.monty.execute"):
-                    output = m.run(
-                        external_functions=self._fn_impls,
-                        print_callback=_capture,
-                        limits=self.limits,
-                    )
             except pydantic_monty.MontyRuntimeError as exc:
                 run_span.set_attribute("result_ok", False)
                 run_span.set_attribute("error_kind", "runtime")
