@@ -11,41 +11,47 @@ permissions: read-all
 jobs:
   global-struct-dissector-tests:
     name: global struct dissector tests on IDA ${{ matrix.ida.version }} / Python ${{ matrix.python-version }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.13"]
+        python-version: ["3.10", "3.14"]
         ida:
-          - version: "9.0"
-            tag: "ida-pro:9.0"
-          - version: "9.1"
-            tag: "ida-pro:9.1"
           - version: "9.2"
-            tag: "ida-pro:9.2"
+          - version: "latest"
     steps:
-    - name: Checkout with submodules
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+    - name: Checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
-        submodules: recursive
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # v5.0.0
-      with:
-        python-version: ${{ matrix.python-version }}
+        persist-credentials: false
+
     - name: Setup uv
-      uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
+      uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+      with:
+        enable-cache: true
+        version: "0.12.6"
+        python-version: ${{ matrix.python-version }}
+
     - name: Install Python dependencies
-      run: |
-        pip install idapro ida-domain pytest
+      run: uv pip install --system idapro ida-domain pytest
+
     - name: Install IDA ${{ matrix.ida.version }}
+      shell: bash
       run: |
-        uv run --with ida-hcli hcli --disable-updates ida install --download-id ${{ matrix.ida.tag }} --license-id ${{ secrets.IDA_LICENSE_ID }} --set-default --yes
+        uv run --with ida-hcli hcli \
+          ida install \
+          --download-id "ida-pro:${{ matrix.ida.version }}" \
+          --license-id "${IDA_LICENSE_ID}" \
+          --install-dir="${{ runner.temp }}/app/ida" \
+          --accept-eula \
+          --set-default \
+          --yes
       env:
         HCLI_API_KEY: ${{ secrets.HCLI_API_KEY }}
         IDA_LICENSE_ID: ${{ secrets.IDA_LICENSE_ID }}
+
     - name: Run global struct dissector tests
       if: ${{ env.IDA_LICENSE_ID != 0 }}
-      run: |
-        python -m pytest plugins/global_struct_dissector/tests/ -v
+      run: python -m pytest plugins/global_struct_dissector/tests/ -v
       env:
         IDA_LICENSE_ID: ${{ secrets.IDA_LICENSE_ID }}
