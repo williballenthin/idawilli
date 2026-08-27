@@ -34,7 +34,7 @@ jobs:
 
     - name: Create test environment
       run: |
-        uv venv
+        uv venv --seed
         echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
     - name: Install Python dependencies
