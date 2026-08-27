@@ -32,8 +32,13 @@ jobs:
         version: "0.12.6"
         python-version: ${{ matrix.python-version }}
 
+    - name: Create test environment
+      run: |
+        uv venv
+        echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
     - name: Install Python dependencies
-      run: uv pip install --system idapro ida-domain pydantic pytest
+      run: uv pip install idapro ida-domain pydantic pytest
 
     - name: Install IDA ${{ matrix.ida.version }}
       shell: bash

@@ -33,11 +33,16 @@ jobs:
         version: "0.12.6"
         python-version: ${{ matrix.python-version }}
 
+    - name: Create test environment
+      run: |
+        uv venv
+        echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
     - name: Install Python dependencies
       run: |
-        uv pip install --system idapro pydantic-monty pytest
-        uv pip install --system --editable ida-codemode/packages/ida-codemode-api
-        uv pip install --system --editable ida-codemode/packages/ida-codemode-sandbox
+        uv pip install idapro pydantic-monty pytest
+        uv pip install --editable ida-codemode/packages/ida-codemode-api
+        uv pip install --editable ida-codemode/packages/ida-codemode-sandbox
 
     - name: Install IDA ${{ matrix.ida.version }}
       shell: bash
