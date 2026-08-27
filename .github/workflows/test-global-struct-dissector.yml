@@ -35,10 +35,7 @@ jobs:
     - name: Create test environment
       run: |
         uv venv
-        echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-
-    - name: Install Python dependencies
-      run: uv pip install idapro ida-domain pytest
+        uv pip install idapro ida-domain pytest
 
     - name: Install IDA ${{ matrix.ida.version }}
       shell: bash
@@ -57,6 +54,6 @@ jobs:
 
     - name: Run global struct dissector tests
       if: ${{ env.IDA_LICENSE_ID != 0 }}
-      run: python -m pytest plugins/global_struct_dissector/tests/ -v
+      run: uv run --no-project python -m pytest plugins/global_struct_dissector/tests/ -v
       env:
         IDA_LICENSE_ID: ${{ secrets.IDA_LICENSE_ID }}

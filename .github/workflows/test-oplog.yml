@@ -18,7 +18,9 @@ jobs:
         python-version: ["3.10", "3.14"]
         ida:
           - version: "9.2"
+            idapyswitch: "/idapyswitch"
           - version: "latest"
+            idapyswitch: "/idapyswitch"
     steps:
     - name: Checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,10 +37,7 @@ jobs:
     - name: Create test environment
       run: |
         uv venv --seed
-        echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-
-    - name: Install Python dependencies
-      run: uv pip install idapro ida-domain pydantic pytest
+        uv pip install idapro ida-domain pydantic pytest
 
     - name: Install IDA ${{ matrix.ida.version }}
       shell: bash
@@ -55,9 +54,26 @@ jobs:
         HCLI_API_KEY: ${{ secrets.HCLI_API_KEY }}
         IDA_LICENSE_ID: ${{ secrets.IDA_LICENSE_ID }}
 
+    - name: Create venv for IDA
+      run: uv venv --seed $HOME/.idapro/venv
+
+    - name: Register Python interpreter with IDA
+      shell: bash
+      run: |
+        ${{ runner.temp }}/app/ida/${{ matrix.ida.idapyswitch }} \
+          --force-path $( \
+            uv run --python $HOME/.idapro/venv python -c \
+              'import sys,sysconfig,pathlib;print(next(pathlib.Path(sysconfig.get_config_var("LIBDIR")).glob("libpython*")))' \
+          )
+
+    - name: Set IDAPYTHON_VENV_EXECUTABLE
+      shell: bash
+      run: |
+        VENV_PYTHON="$(uv python find "$HOME/.idapro/venv")"
+        echo "IDAPYTHON_VENV_EXECUTABLE=$VENV_PYTHON" >> "$GITHUB_ENV"
+
     - name: Run oplog tests
       if: ${{ env.IDA_LICENSE_ID != 0 }}
-      run: python -m pytest plugins/oplog/tests/ -v
+      run: uv run --no-project python -m pytest plugins/oplog/tests/ -v
       env:
         IDA_LICENSE_ID: ${{ secrets.IDA_LICENSE_ID }}
-        HCLI_CURRENT_IDA_PYTHON_EXE: ${{ github.workspace }}/.venv/bin/python

@@ -36,10 +36,6 @@ jobs:
     - name: Create test environment
       run: |
         uv venv
-        echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-
-    - name: Install Python dependencies
-      run: |
         uv pip install idapro pydantic-monty pytest
         uv pip install --editable ida-codemode/packages/ida-codemode-api
         uv pip install --editable ida-codemode/packages/ida-codemode-sandbox
@@ -61,6 +57,6 @@ jobs:
 
     - name: Run ida-codemode-sandbox tests
       if: ${{ env.IDA_LICENSE_ID != 0 }}
-      run: python -m pytest ida-codemode/packages/ida-codemode-sandbox/tests/ -v
+      run: uv run --no-project python -m pytest ida-codemode/packages/ida-codemode-sandbox/tests/ -v
       env:
         IDA_LICENSE_ID: ${{ secrets.IDA_LICENSE_ID }}
