@@ -188,7 +188,7 @@ def _typing_error_to_sandbox_error(
     return SandboxError(
         kind="typing",
         message=str(exc),
-        formatted=exc.display(format="full"),
+        formatted=exc.display(),
     )
 
 

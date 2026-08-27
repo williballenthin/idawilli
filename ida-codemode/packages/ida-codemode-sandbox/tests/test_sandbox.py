@@ -73,7 +73,7 @@ class TestApiErrorHints:
 
 
 class TestTypedDictNarrowingRegression:
-    def test_direct_error_key_check_reproduces_typing_failure(self, db):
+    def test_direct_error_key_check_succeeds(self, db):
         sandbox = IdaSandbox(db)
         code = """\
 meta = get_database_metadata()
@@ -90,12 +90,10 @@ else:
 """
         result = sandbox.run(code)
 
-        assert not result.ok
-        assert result.error is not None
-        assert result.error.kind == "typing"
-        assert 'Unknown key "error"' in result.error.formatted
-        assert "DatabaseMetadata" in result.error.formatted
-        assert "GetFunctionsOk" in result.error.formatted
+        assert result.ok
+        out = "".join(result.stdout)
+        assert "Entry:" in out
+        assert "Count:" in out
 
     def test_type_guard_helper_supports_union_error_checks(self, db):
         sandbox = IdaSandbox(db)
