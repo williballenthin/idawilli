@@ -45,12 +45,13 @@ Use `IDAPYTHON_VENV_EXECUTABLE` rather than `VIRTUAL_ENV` to signal the virtual 
 
 For IDA plugins that are installed and tested in CI (you should see `hcli plugin install...`), create a venv for IDA.
 Use `--seed` so that `pip` is available in the venv; `hcli plugin install` uses pip to install plugin Python dependencies.
+If plugins are not installed via hcli (e.g. installed from a zip archive), `--seed` can be omitted.
 
     uv venv --seed $HOME/.idapro/venv
 
-Register the interpreter with IDA:
+Register the interpreter with IDA using idapyswitch. The one-liner below finds the Python shared library path cross-platform. It uses `max(glob, key=len)` instead of `next(glob)` because on some platforms (notably Linux aarch64) the unversioned `libpython3.so` symlink sorts before the versioned `libpython3.14.so`, and idapyswitch rejects the unversioned file. Picking the longest filename ensures the versioned library is selected. On macOS with Homebrew framework builds, `sysconfig.get_config_var("LDLIBRARY")` returns a framework-relative path that doesn't exist under `LIBDIR`, so the glob approach is used instead:
 
-    ${{ runner.temp }}/app/ida/${{ matrix.ida.idapyswitch }} --force-path $(uv run --python $HOME/.idapro/venv python -c 'import sys,sysconfig,pathlib;print(__import__("_winapi").GetModuleFileName(sys.dllhandle) if sys.platform=="win32" else next(pathlib.Path(sysconfig.get_config_var("LIBDIR")).glob("libpython*")))')
+    ${{ runner.temp }}/app/ida/${{ matrix.ida.idapyswitch }} --force-path $(uv run --python $HOME/.idapro/venv python -c 'import sys,sysconfig,pathlib;print(__import__("_winapi").GetModuleFileName(sys.dllhandle) if sys.platform=="win32" else max(pathlib.Path(sysconfig.get_config_var("LIBDIR")).glob("libpython*"),key=lambda p:len(p.name)))')
 
 This causes IDA to use the specific version of Python, which is important when Python loads native libraries (Pydantic, SSL, etc.).
 
@@ -149,11 +150,12 @@ For programs that use idalib, they need the idapro or ida-domain Python packages
 
         # Register the specific Python interpreter with IDA, so that native Python extensions load correctly.
         - name: Register Python interpreter with IDA
+          shell: bash
           run: |
-            ${{ runner.temp }}/app/ida/${{ matrix.ida.idapyswitch }} \
+            "${{ runner.temp }}/app/ida/${{ matrix.ida.idapyswitch }}" \
               --force-path $( \
                 uv run --python $HOME/.idapro/venv python -c \
-                  'import sys,sysconfig,pathlib;print(__import__("_winapi").GetModuleFileName(sys.dllhandle) if sys.platform=="win32" else next(pathlib.Path(sysconfig.get_config_var("LIBDIR")).glob("libpython*")))' \
+                  'import sys,sysconfig,pathlib;print(__import__("_winapi").GetModuleFileName(sys.dllhandle) if sys.platform=="win32" else max(pathlib.Path(sysconfig.get_config_var("LIBDIR")).glob("libpython*"),key=lambda p:len(p.name)))' \
               )
             
         - name: Set IDAPYTHON_VENV_EXECUTABLE
