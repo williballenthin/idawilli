@@ -1,0 +1,51 @@
+{
+  "IDAMetadataDescriptorVersion": 1,
+  "plugin": {
+    "name": "memloader",
+    "version": "1.1.0",
+    "entryPoint": "memloader_entry.py",
+    "description": "Load files from ZIP archives, URLs or VirusTotal into IDA without writing them to disk",
+    "license": "MIT",
+    "idaVersions": ">=9.2",
+    "platforms": [
+      "windows-x86_64",
+      "linux-x86_64",
+      "macos-x86_64",
+      "macos-aarch64"
+    ],
+    "categories": [
+      "file-parsers-and-loaders",
+      "malware-analysis"
+    ],
+    "keywords": [
+      "loader",
+      "zip",
+      "url",
+      "virustotal",
+      "malware",
+      "in-memory",
+      "shellcode"
+    ],
+    "urls": {
+      "repository": "https://github.com/williballenthin/idawilli"
+    },
+    "authors": [
+      {
+        "name": "Willi Ballenthin",
+        "email": "wballenthin@hex-rays.com"
+      }
+    ],
+    "pythonDependencies": [
+      "ida-settings>=3.5.1"
+    ],
+    "settings": [
+      {
+        "key": "vt_api_key",
+        "type": "string",
+        "required": false,
+        "name": "VirusTotal API key",
+        "documentation": "API key used to download files from VirusTotal. Downloads need a key with the file download privilege."
+      }
+    ]
+  }
+}
