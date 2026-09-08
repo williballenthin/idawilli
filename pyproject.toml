@@ -73,8 +73,6 @@ module = [
     "idapro",
     "idautils",
     "idc",
-    "memloader",
-    "memloader.*",
     "oplog",
     "oplog_events",
     "oplog_hooks",
@@ -86,8 +84,9 @@ module = [
     "qtpy",
     "rich",
     "rich.*",
+    "vtloader",
+    "vtloader.*",
     "yara",
-    "zipcrypto",
 ]
 ignore_missing_imports = true
 

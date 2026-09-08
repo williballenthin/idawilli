@@ -18,8 +18,8 @@ def blank_database(open_database, tmp_path):
 def test_load_buffer_runs_native_pe_loader(blank_database, tiny_pe):
     import ida_ida
     import ida_loader
-    from memloader.core import load_buffer_into_ida
-    from memloader.options import LoadOptions
+    from vtloader.core import load_buffer_into_ida
+    from vtloader.options import LoadOptions
 
     result = load_buffer_into_ida(
         tiny_pe,
@@ -41,8 +41,8 @@ def test_load_buffer_runs_native_pe_loader(blank_database, tiny_pe):
 
 def test_load_buffer_rejects_empty_and_archives(blank_database, tiny_pe):
     import ida_loader
-    from memloader.core import LoadError, load_buffer_into_ida
-    from memloader.options import LoadOptions
+    from vtloader.core import LoadError, load_buffer_into_ida
+    from vtloader.options import LoadOptions
 
     with pytest.raises(LoadError):
         load_buffer_into_ida(
@@ -63,7 +63,7 @@ def test_load_buffer_rejects_empty_and_archives(blank_database, tiny_pe):
 
 
 def test_kernel_lists_loaders_for_pe(blank_database, tiny_pe):
-    from memloader.kernel import IdaKernel
+    from vtloader.kernel import IdaKernel
 
     kernel = IdaKernel.from_idadir()
     with (

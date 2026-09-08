@@ -5,8 +5,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_NAME = "memloader"
-VT_FORMAT_NAME = "Memloader VirusTotal"
+PLUGIN_NAME = "vtloader"
+VT_FORMAT_NAME = "vtloader"
 VT_HASH_PROMPT = "SHA-256 of the file on VirusTotal"
 VT_API_KEY_SETTING = "vt_api_key"
 
@@ -56,7 +56,7 @@ def get_vt_api_key() -> str:
     key = get_setting(VT_API_KEY_SETTING)
     if key is None:
         raise ApiKeyMissingError(
-            "no VirusTotal API key is set in the Memloader plugin settings"
+            "no VirusTotal API key is set in the vtloader plugin settings"
         )
     return key
 

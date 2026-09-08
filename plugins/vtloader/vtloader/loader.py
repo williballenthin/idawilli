@@ -9,7 +9,7 @@ import logging
 
 import ida_kernwin
 
-from memloader.core import (
+from vtloader.core import (
     UserCancelled,
     get_options,
     is_batch_mode,
@@ -17,14 +17,14 @@ from memloader.core import (
     load_buffer_into_ida,
     wait_box,
 )
-from memloader.options import LoadOptions
-from memloader.settings import (
+from vtloader.options import LoadOptions
+from vtloader.settings import (
     VT_FORMAT_NAME,
     VT_HASH_PROMPT,
     get_vt_api_key,
     get_vt_database_dir,
 )
-from memloader.virustotal import VirusTotalClient, normalize_sha256
+from vtloader.virustotal import VirusTotalClient, normalize_sha256
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ def choose_sha256(options: LoadOptions) -> str:
     if options.sha256 is not None:
         return options.sha256
     if is_batch_mode():
-        raise UserCancelled("no hash given; pass -Omemloader:sha256=... in batch mode")
+        raise UserCancelled("no hash given; pass -Ovtloader:sha256=... in batch mode")
     text = ida_kernwin.ask_str("", ida_kernwin.HIST_SRCH, VT_HASH_PROMPT)
     if not text:
         raise UserCancelled("no hash entered")

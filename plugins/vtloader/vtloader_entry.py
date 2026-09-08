@@ -1,6 +1,6 @@
-"""Memloader plugin entry point.
+"""vtloader plugin entry point.
 
-At IDA startup the plugin keeps the Memloader loader link in ``$IDAUSR/loaders/`` up
+At IDA startup the plugin keeps the vtloader loader link in ``$IDAUSR/loaders/`` up
 to date, so that the VirusTotal loader appears in the "Load a new file" dialog. Its
 menu entry fetches a file from VirusTotal by SHA-256 into a new IDA instance, with
 the database written to the Downloads directory.
@@ -13,16 +13,16 @@ import ida_diskio
 import ida_idaapi
 import ida_kernwin
 import idc
-from memloader.core import UserCancelled, get_database_extension, wait_box
-from memloader.install import install_loader_links
-from memloader.instance import (
+from vtloader.core import UserCancelled, get_database_extension, wait_box
+from vtloader.install import install_loader_links
+from vtloader.instance import (
     build_open_command,
     build_vt_load_command,
     create_vt_input_file,
     get_ida_executable,
     launch,
 )
-from memloader.settings import (
+from vtloader.settings import (
     PLUGIN_NAME,
     VT_HASH_PROMPT,
     ApiKeyMissingError,
@@ -30,7 +30,7 @@ from memloader.settings import (
     get_vt_api_key,
     get_vt_database_dir,
 )
-from memloader.virustotal import (
+from vtloader.virustotal import (
     InvalidHashError,
     VirusTotalClient,
     VirusTotalError,
@@ -39,11 +39,11 @@ from memloader.virustotal import (
 
 PLUGIN_ROOT = Path(__file__).resolve().parent
 SETTINGS_HINT = (
-    "Set the VirusTotal API key in the Memloader plugin settings.\n"
-    "Without the settings editor plugin, run: hcli plugin config set memloader vt_api_key <key>"
+    "Set the VirusTotal API key in the vtloader plugin settings.\n"
+    "Without the settings editor plugin, run: hcli plugin config set vtloader vt_api_key <key>"
 )
 
-logger = logging.getLogger("memloader")
+logger = logging.getLogger("vtloader")
 
 
 def show_plugin_settings() -> bool:
@@ -101,7 +101,7 @@ def load_from_virustotal() -> None:
             ida_kernwin.warning(SETTINGS_HINT)
         else:
             ida_kernwin.info(
-                "Memloader needs a VirusTotal API key.\nEnter it in the settings, then run the plugin again."
+                "vtloader needs a VirusTotal API key.\nEnter it in the settings, then run the plugin again."
             )
         return
 
@@ -117,10 +117,10 @@ def load_from_virustotal() -> None:
     database.parent.mkdir(parents=True, exist_ok=True)
     input_file = create_vt_input_file(sha256)
     launch(build_vt_load_command(ida, sha256, database, input_file))
-    ida_kernwin.msg(f"Memloader: loading {sha256} from VirusTotal into {database}\n")
+    ida_kernwin.msg(f"vtloader: loading {sha256} from VirusTotal into {database}\n")
 
 
-class MemloaderPlugmod(ida_idaapi.plugmod_t):
+class VtLoaderPlugmod(ida_idaapi.plugmod_t):
     def __init__(self):
         super().__init__()
         loaders_dir = Path(ida_diskio.get_user_idadir()) / "loaders"
@@ -128,24 +128,24 @@ class MemloaderPlugmod(ida_idaapi.plugmod_t):
             path = install_loader_links(loaders_dir, PLUGIN_ROOT)
         except OSError as e:
             logger.warning(
-                "Memloader: cannot install the loader link into %s: %s", loaders_dir, e
+                "vtloader: cannot install the loader link into %s: %s", loaders_dir, e
             )
         else:
-            logger.debug("Memloader: loader link current at %s", path)
+            logger.debug("vtloader: loader link current at %s", path)
 
     def run(self, arg):
         try:
             load_from_virustotal()
         except UserCancelled as e:
-            logger.debug("Memloader: %s", e)
+            logger.debug("vtloader: %s", e)
         except (InvalidHashError, VirusTotalError, SettingsError, OSError) as e:
-            ida_kernwin.warning(f"Memloader: {e}")
+            ida_kernwin.warning(f"vtloader: {e}")
         return True
 
 
-class MemloaderPlugin(ida_idaapi.plugin_t):
+class VtLoaderPlugin(ida_idaapi.plugin_t):
     flags = ida_idaapi.PLUGIN_FIX | ida_idaapi.PLUGIN_MULTI
-    wanted_name = "Memloader: load from VirusTotal"
+    wanted_name = "vtloader: load from VirusTotal"
     wanted_hotkey = ""
     comment = (
         "Fetch a file from VirusTotal by SHA-256 and load it without writing it to disk"
@@ -153,8 +153,8 @@ class MemloaderPlugin(ida_idaapi.plugin_t):
     help = ""
 
     def init(self):
-        return MemloaderPlugmod()
+        return VtLoaderPlugmod()
 
 
 def PLUGIN_ENTRY():
-    return MemloaderPlugin()
+    return VtLoaderPlugin()

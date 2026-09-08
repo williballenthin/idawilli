@@ -1,4 +1,4 @@
-"""IDA loader entry for Memloader VirusTotal. IDA reaches it through a link in ``$IDAUSR/loaders/``.
+"""IDA loader entry for vtloader. IDA reaches it through a link in ``$IDAUSR/loaders/``.
 
 IDA puts every plugin directory on ``sys.path`` at startup, so the package imports
 directly. The functions are defined here rather than imported because IDAPython runs a
@@ -15,28 +15,28 @@ import types
 import ida_diskio
 import ida_kernwin
 
-vt_loader: types.ModuleType | None
+loader: types.ModuleType | None
 try:
-    from memloader import vt_loader as _module
+    from vtloader import loader as _module
 except ModuleNotFoundError as e:
-    if e.name != "memloader":
+    if e.name != "vtloader":
         raise
-    vt_loader = None
+    loader = None
     ida_kernwin.msg(
-        "Memloader: the plugin is not installed, but its loader entry remains. "
-        f"Delete {ida_diskio.get_user_idadir()}/loaders/memloader_vt_loader.py to remove this message.\n"
+        "vtloader: the plugin is not installed, but its loader entry remains. "
+        f"Delete {ida_diskio.get_user_idadir()}/loaders/vtloader_loader.py to remove this message.\n"
     )
 else:
-    vt_loader = _module
+    loader = _module
 
 
 def accept_file(li, filename):
-    if vt_loader is None:
+    if loader is None:
         return 0
-    return vt_loader.accept_file(li, filename)
+    return loader.accept_file(li, filename)
 
 
 def load_file(li, neflags, format):
-    if vt_loader is None:
-        raise RuntimeError("Memloader plugin is not installed")
-    return vt_loader.load_file(li, neflags, format)
+    if loader is None:
+        raise RuntimeError("vtloader plugin is not installed")
+    return loader.load_file(li, neflags, format)

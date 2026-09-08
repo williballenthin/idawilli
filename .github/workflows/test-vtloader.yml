@@ -1,4 +1,4 @@
-name: memloader tests
+name: vtloader tests
 
 on:
   push:
@@ -9,8 +9,8 @@ on:
 permissions: read-all
 
 jobs:
-  memloader-lint:
-    name: memloader lint
+  vtloader-lint:
+    name: vtloader lint
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
@@ -28,16 +28,16 @@ jobs:
     # Pinned: an unpinned formatter turns this check red whenever ruff makes a
     # release, with no change to the code under test. Bump deliberately.
     - name: Check formatting
-      run: uvx ruff@0.16.6 format --check plugins/memloader
+      run: uvx ruff@0.16.6 format --check plugins/vtloader
 
     - name: Check lints
-      run: uvx ruff@0.16.6 check plugins/memloader
+      run: uvx ruff@0.16.6 check plugins/vtloader
 
     - name: Check plugin metadata
-      run: uvx --from ida-hcli hcli plugin lint plugins/memloader
+      run: uvx --from ida-hcli hcli plugin lint plugins/vtloader
 
-  memloader-unit-tests:
-    name: memloader unit tests on Python ${{ matrix.python-version }}
+  vtloader-unit-tests:
+    name: vtloader unit tests on Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -62,12 +62,12 @@ jobs:
         uv pip install pytest
 
     # The tests that need IDA skip themselves when no installation is configured,
-    # so this job covers the parts of memloader that are pure Python.
+    # so this job covers the parts of vtloader that are pure Python.
     - name: Run tests that do not need IDA
-      run: uv run --no-project python -m pytest plugins/memloader/tests -v
+      run: uv run --no-project python -m pytest plugins/vtloader/tests -v
 
-  memloader-idalib-tests:
-    name: memloader idalib tests on IDA ${{ matrix.ida-version }} / Python ${{ matrix.python-version }}
+  vtloader-idalib-tests:
+    name: vtloader idalib tests on IDA ${{ matrix.ida-version }} / Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     # Job level so that the `if` guards below see them: without a license the
     # IDA steps skip and the job still passes.
@@ -114,7 +114,7 @@ jobs:
     # idalib. The live VirusTotal tests additionally need VT_API_KEY and skip without it.
     - name: Run idalib tests
       if: ${{ env.IDA_LICENSE_ID != 0 }}
-      run: uv run --no-project python -m pytest plugins/memloader/tests -v
+      run: uv run --no-project python -m pytest plugins/vtloader/tests -v
       env:
         IDADIR: ${{ runner.temp }}/app/ida
         VT_API_KEY: ${{ secrets.VT_API_KEY }}

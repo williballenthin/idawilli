@@ -4,7 +4,7 @@ import zipfile
 
 import pytest
 from conftest import PMA_ARCHIVE, PMA_PASSWORD
-from memloader.virustotal import (
+from vtloader.virustotal import (
     InvalidHashError,
     VirusTotalClient,
     VirusTotalError,
@@ -73,5 +73,5 @@ def test_wrong_key_is_reported_as_invalid_key():
 def test_unknown_hash_is_reported_as_not_found(vt_client):
     with pytest.raises(VirusTotalError, match="no file with this hash"):
         vt_client.get_download_url(
-            hashlib.sha256(b"memloader: not a real file").hexdigest()
+            hashlib.sha256(b"vtloader: not a real file").hexdigest()
         )

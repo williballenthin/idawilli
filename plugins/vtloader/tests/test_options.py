@@ -1,5 +1,5 @@
 import pytest
-from memloader.options import LoadOptions, OptionsError
+from vtloader.options import LoadOptions, OptionsError
 
 
 def test_empty_string_gives_defaults():

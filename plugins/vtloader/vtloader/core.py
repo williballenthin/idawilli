@@ -15,8 +15,8 @@ import ida_loader
 import ida_nalt
 import ida_segment
 
-from memloader.kernel import IdaKernel, LoaderInfo
-from memloader.options import PLUGIN_OPTIONS_NAME, LoadOptions
+from vtloader.kernel import IdaKernel, LoaderInfo
+from vtloader.options import PLUGIN_OPTIONS_NAME, LoadOptions
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ _loading_buffer = False
 def is_loading_buffer() -> bool:
     """True while a downloaded buffer is being offered to IDA's loaders.
 
-    Memloader's loader accepts any input once it has a hash to fetch, so it is a
+    vtloader's loader accepts any input once it has a hash to fetch, so it is a
     candidate for the buffer it just downloaded. For a recognized format IDA's own
     loader outranks it, but for anything else it is the only candidate and the load
     recurses instead of falling back to shellcode. It declines while this is set.
@@ -75,7 +75,7 @@ def wait_box(message: str) -> Iterator[None]:
 
 
 def get_options() -> LoadOptions:
-    """Read the ``-Omemloader:...`` command line options.
+    """Read the ``-Ovtloader:...`` command line options.
 
     Raises:
         OptionsError: the option string is malformed.
@@ -217,7 +217,7 @@ def _load(
         best = loaders.best
         if best.is_archive:
             raise LoadError(
-                f"{filename} is an archive ({best.format_name}); Memloader cannot open archives in memory"
+                f"{filename} is an archive ({best.format_name}); vtloader cannot open archives in memory"
             )
 
         logger.info("loading %s with %s", filename, best.format_name)

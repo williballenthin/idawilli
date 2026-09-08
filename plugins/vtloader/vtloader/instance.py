@@ -1,4 +1,4 @@
-"""Start another IDA instance that loads a file through one of the Memloader loaders."""
+"""Start another IDA instance that loads a file through one of the vtloader loaders."""
 
 import logging
 import os
@@ -6,8 +6,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from memloader.options import PLUGIN_OPTIONS_NAME
-from memloader.settings import VT_FORMAT_NAME
+from vtloader.options import PLUGIN_OPTIONS_NAME
+from vtloader.settings import VT_FORMAT_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ def create_vt_input_file(sha256: str) -> Path:
     after the hash gives IDA a meaningful input name while the new database is
     being initialized.
     """
-    directory = Path(tempfile.mkdtemp(prefix="memloader-vt-"))
+    directory = Path(tempfile.mkdtemp(prefix="vtloader-vt-"))
     input_file = directory / sha256
     input_file.write_bytes(b"\0" * 16)
     return input_file

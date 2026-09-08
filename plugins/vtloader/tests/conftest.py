@@ -9,17 +9,17 @@ from pathlib import Path
 
 import pytest
 
-# The plugin directory holds the ``memloader`` package and is what IDA puts on
+# The plugin directory holds the ``vtloader`` package and is what IDA puts on
 # ``sys.path``; the tests import the package the same way IDA does.
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PLUGIN_ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from memloader.options import PLUGIN_OPTIONS_NAME  # noqa: E402
-from memloader.settings import PLUGIN_NAME  # noqa: E402
 from pe import build_minimal_pe  # noqa: E402
+from vtloader.options import PLUGIN_OPTIONS_NAME  # noqa: E402
+from vtloader.settings import PLUGIN_NAME  # noqa: E402
 
-VT_ARGS = '-T"Memloader VirusTotal"'
+VT_ARGS = '-T"vtloader"'
 PMA_ARCHIVE = PLUGIN_ROOT / "tests" / "data" / "pma-lab01-01.zip"
 PMA_PASSWORD = b"infected"
 
@@ -56,7 +56,7 @@ def create_idausr(root: Path, idadir: Path, plugin_root: Path | None) -> Path:
     (root / "plugins").mkdir()
     (root / "loaders").mkdir()
     if plugin_root is not None:
-        (root / "plugins" / "memloader").symlink_to(plugin_root)
+        (root / "plugins" / "vtloader").symlink_to(plugin_root)
     for source in (Path.home() / ".idapro", idadir):
         for lic in source.glob("*.hexlic"):
             shutil.copy(lic, root / lic.name)
@@ -75,14 +75,14 @@ def pytest_configure(config):
     os.environ["IDADIR"] = str(idadir)
 
     idausr = create_idausr(
-        Path(tempfile.mkdtemp(prefix="memloader-idausr-")), idadir, PLUGIN_ROOT
+        Path(tempfile.mkdtemp(prefix="vtloader-idausr-")), idadir, PLUGIN_ROOT
     )
     os.environ["IDAUSR"] = str(idausr)
-    config._memloader_idausr = idausr
+    config._vtloader_idausr = idausr
 
 
 def pytest_unconfigure(config):
-    idausr = getattr(config, "_memloader_idausr", None)
+    idausr = getattr(config, "_vtloader_idausr", None)
     if idausr is not None:
         shutil.rmtree(idausr, ignore_errors=True)
 
@@ -106,7 +106,7 @@ def ida():
             "idalib before IDA 9.2 does not accept the -T switch used to select a loader"
         )
     ida_registry.reg_write_int("EULA 90", 1)
-    idapro.enable_console_messages(os.environ.get("MEMLOADER_TEST_CONSOLE") == "1")
+    idapro.enable_console_messages(os.environ.get("VTLOADER_TEST_CONSOLE") == "1")
     return idapro
 
 
@@ -115,7 +115,7 @@ def open_database(ida):
     """Open a file through idalib for the duration of a ``with`` block, then close without saving.
 
     idalib keeps ``-O`` plugin options from earlier opens in the same process, so an
-    empty ``-Omemloader:`` is appended whenever the caller passes none.
+    empty ``-Ovtloader:`` is appended whenever the caller passes none.
     """
 
     @contextmanager
@@ -142,7 +142,7 @@ def tiny_pe() -> bytes:
 
 @pytest.fixture
 def plugin_settings(ida) -> Iterator[Callable[[dict[str, str]], None]]:
-    """Write Memloader settings into the temporary IDAUSR's ida-config.json for one test.
+    """Write vtloader settings into the temporary IDAUSR's ida-config.json for one test.
 
     ida-settings reads this file, so the loader sees the values exactly as it would
     in a configured installation. The plugin entry is removed afterwards.

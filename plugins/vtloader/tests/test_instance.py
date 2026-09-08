@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from memloader.instance import (
+from vtloader.instance import (
     build_open_command,
     build_vt_load_command,
     create_vt_input_file,
@@ -12,9 +12,7 @@ from memloader.instance import (
 def test_vt_input_file_is_minimal_and_named_after_hash(monkeypatch, tmp_path):
     temp_root = tmp_path / "temp"
     temp_root.mkdir()
-    monkeypatch.setattr(
-        "memloader.instance.tempfile.gettempdir", lambda: str(temp_root)
-    )
+    monkeypatch.setattr("vtloader.instance.tempfile.gettempdir", lambda: str(temp_root))
 
     sha256 = "5" + "a" * 63
     input_file = create_vt_input_file(sha256)
@@ -33,8 +31,8 @@ def test_vt_load_command_selects_loader_and_passes_hash_and_database(tmp_path):
     command = build_vt_load_command(ida, sha256, database, input_file)
 
     assert command[0] == str(ida)
-    assert "-TMemloader VirusTotal" in command
-    assert f"-Omemloader:sha256={sha256}" in command
+    assert "-Tvtloader" in command
+    assert f"-Ovtloader:sha256={sha256}" in command
     assert f"-o{database}" in command
     assert command[-1] == str(input_file)
 

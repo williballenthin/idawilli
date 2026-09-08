@@ -3,11 +3,11 @@
 import logging
 from dataclasses import dataclass
 
-from memloader.virustotal import InvalidHashError, normalize_sha256
+from vtloader.virustotal import InvalidHashError, normalize_sha256
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_OPTIONS_NAME = "memloader"
+PLUGIN_OPTIONS_NAME = "vtloader"
 DEFAULT_SHELLCODE_BITNESS = 32
 KEYS = ("sha256", "bitness")
 
@@ -20,7 +20,7 @@ class OptionsError(ValueError):
 class LoadOptions:
     """Options that replace the interactive prompts when IDA runs in batch mode.
 
-    Passed as ``-Omemloader:key=value;key=value`` on the IDA command line.
+    Passed as ``-Ovtloader:key=value;key=value`` on the IDA command line.
     Entries are separated by ``;`` so that values may contain ``:``.
     """
 
@@ -29,7 +29,7 @@ class LoadOptions:
 
     @classmethod
     def from_plugin_options(cls, text: str) -> "LoadOptions":
-        """Parse the string that IDA returns from ``get_plugin_options("memloader")``.
+        """Parse the string that IDA returns from ``get_plugin_options("vtloader")``.
 
         Raises:
             OptionsError: an entry is not ``key=value``, the key is unknown, bitness is

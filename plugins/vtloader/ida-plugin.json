@@ -1,9 +1,9 @@
 {
   "IDAMetadataDescriptorVersion": 1,
   "plugin": {
-    "name": "memloader",
-    "version": "2.0.0",
-    "entryPoint": "memloader_entry.py",
+    "name": "vtloader",
+    "version": "1.0.0",
+    "entryPoint": "vtloader_entry.py",
     "description": "Load a file from VirusTotal into IDA without writing it to disk",
     "license": "Apache 2.0",
     "idaVersions": ">=9.2",
