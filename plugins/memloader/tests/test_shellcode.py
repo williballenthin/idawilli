@@ -2,25 +2,27 @@
 
 from conftest import VT_ARGS
 from idahelpers import get_bytes, get_filetype, get_root_filename, get_segments
+from memloader.instance import create_vt_input_file
 
 SHELLCODE = b"\x90\x90\x31\xc0\xc3" + b"\xcc" * 11
 SHA256 = "5" + "a" * 63
 
 
-def fetch_shellcode(open_database, monkeypatch, tmp_path, args=""):
-    """Open a database through the VT loader, with the download replaced by shellcode."""
+def fetch_shellcode(open_database, monkeypatch, args=""):
+    """Open a database through the VT loader, with the download replaced by shellcode.
+
+    Uses the same generated input file the plugin creates for a real load: IDA reads a
+    block of it while initializing, and its 16 null bytes stay out of the way.
+    """
     from memloader import vt_loader
 
     monkeypatch.setattr(vt_loader, "fetch", lambda requested: SHELLCODE)
-    trigger = tmp_path / "anything.bin"
-    trigger.write_bytes(b"ignored input file")
-    return open_database(trigger, f"{VT_ARGS} -Omemloader:sha256={SHA256}{args}")
+    input_file = create_vt_input_file(SHA256)
+    return open_database(input_file, f"{VT_ARGS} -Omemloader:sha256={SHA256}{args}")
 
 
-def test_unrecognized_download_loads_as_32bit_shellcode(
-    open_database, monkeypatch, tmp_path
-):
-    with fetch_shellcode(open_database, monkeypatch, tmp_path) as rc:
+def test_unrecognized_download_loads_as_32bit_shellcode(open_database, monkeypatch):
+    with fetch_shellcode(open_database, monkeypatch) as rc:
         assert rc == 0
         (seg,) = get_segments()
         assert seg.name == "shellcode"
@@ -30,10 +32,10 @@ def test_unrecognized_download_loads_as_32bit_shellcode(
         assert get_root_filename() == SHA256
 
 
-def test_shellcode_bitness_option(open_database, monkeypatch, tmp_path):
+def test_shellcode_bitness_option(open_database, monkeypatch):
     import ida_ida
 
-    with fetch_shellcode(open_database, monkeypatch, tmp_path, ";bitness=64") as rc:
+    with fetch_shellcode(open_database, monkeypatch, ";bitness=64") as rc:
         assert rc == 0
         (seg,) = get_segments()
         assert seg.bitness == 2
