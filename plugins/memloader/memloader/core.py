@@ -47,6 +47,20 @@ def is_batch_mode() -> bool:
     return bool(ida_kernwin.cvar.batch)
 
 
+_loading_buffer = False
+
+
+def is_loading_buffer() -> bool:
+    """True while a downloaded buffer is being offered to IDA's loaders.
+
+    Memloader's loader accepts any input once it has a hash to fetch, so it is a
+    candidate for the buffer it just downloaded. For a recognized format IDA's own
+    loader outranks it, but for anything else it is the only candidate and the load
+    recurses instead of falling back to shellcode. It declines while this is set.
+    """
+    return _loading_buffer
+
+
 @contextmanager
 def wait_box(message: str) -> Iterator[None]:
     """Show IDA's wait box around a long operation; nothing is shown in batch mode."""
@@ -171,6 +185,17 @@ def load_buffer_into_ida(
     set_database_names(filename, database_dir)
     kernel = IdaKernel.from_idadir()
 
+    global _loading_buffer
+    _loading_buffer = True
+    try:
+        return _load(kernel, buffer, filename, neflags, options)
+    finally:
+        _loading_buffer = False
+
+
+def _load(
+    kernel: IdaKernel, buffer: bytes, filename: str, neflags: int, options: LoadOptions
+) -> LoadResult:
     with (
         kernel.bytearray_linput(buffer) as li,
         kernel.loaders_list(li, filename) as loaders,

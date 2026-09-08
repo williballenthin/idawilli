@@ -13,6 +13,7 @@ from memloader.core import (
     UserCancelled,
     get_options,
     is_batch_mode,
+    is_loading_buffer,
     load_buffer_into_ida,
     wait_box,
 )
@@ -29,6 +30,9 @@ logger = logging.getLogger(__name__)
 
 
 def accept_file(li, filename):
+    if is_loading_buffer():
+        # never claim the buffer this loader just downloaded
+        return 0
     if is_batch_mode() and get_options().sha256 is None:
         return 0
     return VT_FORMAT_NAME

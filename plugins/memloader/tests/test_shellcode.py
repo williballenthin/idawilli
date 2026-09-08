@@ -41,3 +41,15 @@ def test_shellcode_bitness_option(open_database, monkeypatch):
         assert seg.bitness == 2
         assert ida_ida.inf_is_64bit()
         assert get_filetype() == ida_ida.f_LOADER
+
+
+def test_own_loader_declines_the_buffer_it_downloaded(ida, monkeypatch):
+    """Otherwise Memloader is its own best candidate for an unrecognized download."""
+    from memloader import core, vt_loader
+    from memloader.settings import VT_FORMAT_NAME
+
+    monkeypatch.setattr(vt_loader, "is_batch_mode", lambda: False)
+    assert vt_loader.accept_file(None, "x.bin") == VT_FORMAT_NAME
+
+    monkeypatch.setattr(core, "_loading_buffer", True)
+    assert vt_loader.accept_file(None, "x.bin") == 0
