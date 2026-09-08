@@ -203,6 +203,7 @@ def test_zip_loads_pe(session_idauser, test_binary, tmp_path):
     idapro.open_database(str(zip_path), run_auto_analysis=True)
 
     import ida_segment
+
     seg = ida_segment.get_first_seg()
     assert seg is not None
 

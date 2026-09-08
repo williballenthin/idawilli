@@ -25,11 +25,13 @@ jobs:
         version: "0.12.6"
         python-version: "3.12"
 
+    # Pinned: an unpinned formatter turns this check red whenever ruff makes a
+    # release, with no change to the code under test. Bump deliberately.
     - name: Check formatting
-      run: uvx ruff format --check plugins/memloader
+      run: uvx ruff@0.16.6 format --check plugins/memloader
 
     - name: Check lints
-      run: uvx ruff check plugins/memloader
+      run: uvx ruff@0.16.6 check plugins/memloader
 
     - name: Check plugin metadata
       run: uvx --from ida-hcli hcli plugin lint plugins/memloader
