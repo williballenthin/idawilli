@@ -1,10 +1,8 @@
-import http.server
 import json
 import os
 import shutil
 import sys
 import tempfile
-import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -20,13 +18,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from memloader.options import PLUGIN_OPTIONS_NAME  # noqa: E402
 from memloader.settings import PLUGIN_NAME  # noqa: E402
 from pe import build_minimal_pe  # noqa: E402
-from zipcrypto import make_encrypted_zip  # noqa: E402
 
-ZIP_ARGS = '-T"Memloader ZIP"'
 VT_ARGS = '-T"Memloader VirusTotal"'
 PMA_ARCHIVE = PLUGIN_ROOT / "tests" / "data" / "pma-lab01-01.zip"
 PMA_PASSWORD = b"infected"
-URL_ARGS = '-T"Memloader URL"'
 
 
 def find_ida_install_dir() -> Path | None:
@@ -71,7 +66,7 @@ def create_idausr(root: Path, idadir: Path, plugin_root: Path | None) -> Path:
 def pytest_configure(config):
     """Point idalib at an isolated IDAUSR whose only plugin is this directory.
 
-    The plugin runs at ``import idapro`` and creates the loader links itself. Runs
+    The plugin runs at ``import idapro`` and creates the loader link itself. Runs
     before any test module imports ``idapro``, which reads these variables at import.
     """
     idadir = find_ida_install_dir()
@@ -145,37 +140,12 @@ def tiny_pe() -> bytes:
     return build_minimal_pe()
 
 
-@pytest.fixture(scope="session")
-def encrypted_zip() -> tuple[bytes, str]:
-    password = "infected"
-    return make_encrypted_zip({"sample.bin": b"secret payload"}, password), password
-
-
-class _QuietHandler(http.server.SimpleHTTPRequestHandler):
-    def log_message(self, format, *args):
-        pass
-
-
-@pytest.fixture
-def http_server(tmp_path) -> Iterator[str]:
-    """Serve ``tmp_path`` over HTTP on localhost and yield the base URL."""
-    handler = lambda *a, **kw: _QuietHandler(*a, directory=str(tmp_path), **kw)  # noqa: E731
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield f"http://127.0.0.1:{server.server_address[1]}"
-    finally:
-        server.shutdown()
-        server.server_close()
-
-
 @pytest.fixture
 def plugin_settings(ida) -> Iterator[Callable[[dict[str, str]], None]]:
     """Write Memloader settings into the temporary IDAUSR's ida-config.json for one test.
 
-    ida-settings reads this file, so the loaders see the values exactly as they
-    would in a configured installation. The plugin entry is removed afterwards.
+    ida-settings reads this file, so the loader sees the values exactly as it would
+    in a configured installation. The plugin entry is removed afterwards.
     """
     config_path = Path(os.environ["IDAUSR"]) / "ida-config.json"
 

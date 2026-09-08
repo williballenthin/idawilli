@@ -17,7 +17,7 @@ needs_vt = pytest.mark.skipif(
 
 def test_sha256_prompt_accepts_a_hash_that_starts_with_a_number(ida, monkeypatch):
     import ida_kernwin
-    from memloader.loaders import vt_loader
+    from memloader import vt_loader
     from memloader.options import LoadOptions
 
     sha256 = PMA_EXE_SHA256
@@ -43,7 +43,7 @@ def trigger(tmp_path):
 
 def test_generated_vt_input_file_reaches_loader(open_database, monkeypatch):
     import ida_ida
-    from memloader.loaders import vt_loader
+    from memloader import vt_loader
 
     sha256 = "5" + "a" * 63
     input_file = create_vt_input_file(sha256)

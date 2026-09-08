@@ -2,9 +2,9 @@
   "IDAMetadataDescriptorVersion": 1,
   "plugin": {
     "name": "memloader",
-    "version": "1.1.0",
+    "version": "2.0.0",
     "entryPoint": "memloader_entry.py",
-    "description": "Load files from ZIP archives, URLs or VirusTotal into IDA without writing them to disk",
+    "description": "Load a file from VirusTotal into IDA without writing it to disk",
     "license": "Apache 2.0",
     "idaVersions": ">=9.2",
     "platforms": [
@@ -19,8 +19,6 @@
     ],
     "keywords": [
       "loader",
-      "zip",
-      "url",
       "virustotal",
       "malware",
       "in-memory",

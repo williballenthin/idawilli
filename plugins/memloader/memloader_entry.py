@@ -1,9 +1,9 @@
 """Memloader plugin entry point.
 
-At IDA startup the plugin keeps the Memloader loader links in ``$IDAUSR/loaders/`` up
-to date, so that the ZIP, URL and VirusTotal loaders appear in the "Load a new file"
-dialog. Its menu entry fetches a file from VirusTotal by SHA-256 into a new IDA
-instance, with the database written to the Downloads directory.
+At IDA startup the plugin keeps the Memloader loader link in ``$IDAUSR/loaders/`` up
+to date, so that the VirusTotal loader appears in the "Load a new file" dialog. Its
+menu entry fetches a file from VirusTotal by SHA-256 into a new IDA instance, with
+the database written to the Downloads directory.
 """
 
 import logging
@@ -125,17 +125,13 @@ class MemloaderPlugmod(ida_idaapi.plugmod_t):
         super().__init__()
         loaders_dir = Path(ida_diskio.get_user_idadir()) / "loaders"
         try:
-            paths = install_loader_links(loaders_dir, PLUGIN_ROOT)
+            path = install_loader_links(loaders_dir, PLUGIN_ROOT)
         except OSError as e:
             logger.warning(
-                "Memloader: cannot install loader links into %s: %s", loaders_dir, e
+                "Memloader: cannot install the loader link into %s: %s", loaders_dir, e
             )
         else:
-            logger.debug(
-                "Memloader: loader links current in %s: %s",
-                loaders_dir,
-                [p.name for p in paths],
-            )
+            logger.debug("Memloader: loader link current at %s", path)
 
     def run(self, arg):
         try:

@@ -1,3 +1,3 @@
-"""Load binaries into IDA from ZIP archives or URLs without writing them to disk."""
+"""Load a file from VirusTotal into IDA without writing it to disk."""
 
-__version__ = "1.1.0"
+__version__ = "2.0.0"

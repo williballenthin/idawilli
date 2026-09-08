@@ -17,7 +17,7 @@ import ida_kernwin
 
 vt_loader: types.ModuleType | None
 try:
-    from memloader.loaders import vt_loader as _module
+    from memloader import vt_loader as _module
 except ModuleNotFoundError as e:
     if e.name != "memloader":
         raise

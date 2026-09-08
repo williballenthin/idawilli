@@ -22,7 +22,11 @@ def test_load_buffer_runs_native_pe_loader(blank_database, tiny_pe):
     from memloader.options import LoadOptions
 
     result = load_buffer_into_ida(
-        tiny_pe, "direct.exe", ida_loader.NEF_FIRST | ida_loader.NEF_SEGS, LoadOptions()
+        tiny_pe,
+        "direct.exe",
+        ida_loader.NEF_FIRST | ida_loader.NEF_SEGS,
+        LoadOptions(),
+        blank_database,
     )
 
     assert not result.is_shellcode
@@ -35,20 +39,26 @@ def test_load_buffer_runs_native_pe_loader(blank_database, tiny_pe):
     assert get_root_filename() == "direct.exe"
 
 
-def test_load_buffer_rejects_empty_and_nested_archives(blank_database, tiny_pe):
+def test_load_buffer_rejects_empty_and_archives(blank_database, tiny_pe):
     import ida_loader
     from memloader.core import LoadError, load_buffer_into_ida
     from memloader.options import LoadOptions
 
     with pytest.raises(LoadError):
-        load_buffer_into_ida(b"", "empty", ida_loader.NEF_FIRST, LoadOptions())
+        load_buffer_into_ida(
+            b"", "empty", ida_loader.NEF_FIRST, LoadOptions(), blank_database
+        )
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         zf.writestr("sample.exe", tiny_pe)
-    with pytest.raises(LoadError, match="nested"):
+    with pytest.raises(LoadError, match="archive"):
         load_buffer_into_ida(
-            buf.getvalue(), "inner.zip", ida_loader.NEF_FIRST, LoadOptions()
+            buf.getvalue(),
+            "inner.zip",
+            ida_loader.NEF_FIRST,
+            LoadOptions(),
+            blank_database,
         )
 
 

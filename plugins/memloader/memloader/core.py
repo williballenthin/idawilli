@@ -1,4 +1,4 @@
-"""Shared pipeline that loads an in-memory buffer into the current IDA database."""
+"""Pipeline that loads a downloaded buffer into the current IDA database."""
 
 import logging
 from collections.abc import Iterator
@@ -75,25 +75,23 @@ def get_database_extension() -> str:
     return ".i64" if ida_idaapi.BADADDR == 0xFFFFFFFFFFFFFFFF else ".idb"
 
 
-def set_database_names(filename: str, database_dir: Path | None = None) -> Path:
-    """Name the database after the loaded buffer instead of the container file.
+def set_database_names(filename: str, database_dir: Path) -> None:
+    """Name the database after the downloaded buffer instead of the input file.
 
-    The root filename always changes. The IDB path only changes in interactive
-    mode, so that headless callers keep the output path they chose. It then goes
-    into ``database_dir``, or next to the input file when no directory is given.
-    Returns the path IDA will save the database to.
+    The root filename always changes. The IDB path only changes in interactive mode,
+    so that headless callers keep the output path they chose; it then goes into
+    ``database_dir``.
 
     Raises:
         UserCancelled: the target IDB exists and the user declined to overwrite it.
     """
     input_dir = Path(ida_loader.get_path(ida_loader.PATH_TYPE_CMD)).parent
-    new_input = input_dir / filename
-    ida_nalt.set_root_filename(str(new_input))
+    ida_nalt.set_root_filename(str(input_dir / filename))
 
     if is_batch_mode():
-        return Path(ida_loader.get_path(ida_loader.PATH_TYPE_IDB))
+        return
 
-    idb_path = (database_dir or input_dir) / (filename + get_database_extension())
+    idb_path = database_dir / (filename + get_database_extension())
     if idb_path.exists():
         answer = ida_kernwin.ask_yn(
             ida_kernwin.ASKBTN_YES, f"{idb_path} already exists. Overwrite it?"
@@ -101,7 +99,6 @@ def set_database_names(filename: str, database_dir: Path | None = None) -> Path:
         if answer != ida_kernwin.ASKBTN_YES:
             raise UserCancelled("user declined to overwrite the existing database")
     ida_loader.set_path(ida_loader.PATH_TYPE_IDB, str(idb_path))
-    return idb_path
 
 
 def load_as_shellcode(buffer: bytes, bitness: int) -> None:
@@ -155,17 +152,16 @@ def load_buffer_into_ida(
     filename: str,
     neflags: int,
     options: LoadOptions,
-    database_dir: Path | None = None,
+    database_dir: Path,
 ) -> LoadResult:
     """Load ``buffer`` into the current database using IDA's own file format loaders.
 
     The buffer never touches the disk. When no loader recognizes it, the buffer is
     mapped as shellcode instead. Must be called from within a loader's ``load_file``.
-    Interactively the database is written to ``database_dir``, or next to the input
-    file when no directory is given.
+    Interactively the database is written to ``database_dir``.
 
     Raises:
-        LoadError: no usable loader, a nested archive, or the loader failed.
+        LoadError: the buffer is empty or an archive, or the chosen loader failed.
         UserCancelled: the user aborted one of the prompts.
         KernelError: the IDA kernel library cannot be bound.
     """
@@ -179,8 +175,7 @@ def load_buffer_into_ida(
         kernel.bytearray_linput(buffer) as li,
         kernel.loaders_list(li, filename) as loaders,
     ):
-        for entry in loaders.entries:
-            logger.debug("candidate loader: %s (%s)", entry.format_name, entry.dllname)
+        logger.debug("candidate loaders: %s", [e.format_name for e in loaders.entries])
 
         if not loaders.entries:
             bitness = confirm_shellcode_fallback(options)
@@ -197,7 +192,7 @@ def load_buffer_into_ida(
         best = loaders.best
         if best.is_archive:
             raise LoadError(
-                f"{filename} is itself an archive ({best.format_name}); nested archives are not supported"
+                f"{filename} is an archive ({best.format_name}); Memloader cannot open archives in memory"
             )
 
         logger.info("loading %s with %s", filename, best.format_name)

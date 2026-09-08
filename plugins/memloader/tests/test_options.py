@@ -1,36 +1,36 @@
 import pytest
-from memloader.options import DEFAULT_PASSWORD, LoadOptions, OptionsError
+from memloader.options import LoadOptions, OptionsError
 
 
 def test_empty_string_gives_defaults():
     opts = LoadOptions.from_plugin_options("")
     assert opts == LoadOptions()
-    assert opts.password == DEFAULT_PASSWORD
-    assert opts.member is None
+    assert opts.sha256 is None
     assert opts.bitness == 32
 
 
 def test_parses_all_keys():
-    opts = LoadOptions.from_plugin_options(
-        "member=a/b.exe;password=secret;url=http://x/y;bitness=64"
-    )
-    assert opts.member == "a/b.exe"
-    assert opts.password == "secret"
-    assert opts.url == "http://x/y"
+    opts = LoadOptions.from_plugin_options(f"sha256={'ab' * 32};bitness=64")
+    assert opts.sha256 == "ab" * 32
     assert opts.bitness == 64
 
 
-def test_value_may_contain_equals_sign():
-    opts = LoadOptions.from_plugin_options("url=http://x/y?a=b")
-    assert opts.url == "http://x/y?a=b"
-
-
 def test_sha256_is_normalized():
-    digest = "AB" * 32
-    assert LoadOptions.from_plugin_options(f"sha256={digest}").sha256 == "ab" * 32
+    assert LoadOptions.from_plugin_options(f"sha256={'AB' * 32}").sha256 == "ab" * 32
 
 
-@pytest.mark.parametrize("text", ["member", "bogus=1", "bitness=16", "sha256=abc"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "sha256",
+        "bogus=1",
+        "bitness=16",
+        "bitness=abc",
+        "sha256=abc",
+        "member=a.exe",
+        "url=http://x/y",
+    ],
+)
 def test_rejects_malformed_options(text):
     with pytest.raises(OptionsError):
         LoadOptions.from_plugin_options(text)

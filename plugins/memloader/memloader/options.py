@@ -1,4 +1,4 @@
-"""Headless options passed to the loaders via IDA's ``-O`` command line switch."""
+"""Headless options passed to the loader via IDA's ``-O`` command line switch."""
 
 import logging
 from dataclasses import dataclass
@@ -8,8 +8,8 @@ from memloader.virustotal import InvalidHashError, normalize_sha256
 logger = logging.getLogger(__name__)
 
 PLUGIN_OPTIONS_NAME = "memloader"
-DEFAULT_PASSWORD = "infected"
 DEFAULT_SHELLCODE_BITNESS = 32
+KEYS = ("sha256", "bitness")
 
 
 class OptionsError(ValueError):
@@ -21,12 +21,9 @@ class LoadOptions:
     """Options that replace the interactive prompts when IDA runs in batch mode.
 
     Passed as ``-Omemloader:key=value;key=value`` on the IDA command line.
-    Entries are separated by ``;`` so that values may contain ``:`` (for example URLs).
+    Entries are separated by ``;`` so that values may contain ``:``.
     """
 
-    member: str | None = None
-    password: str = DEFAULT_PASSWORD
-    url: str | None = None
     sha256: str | None = None
     bitness: int = DEFAULT_SHELLCODE_BITNESS
 
@@ -35,39 +32,25 @@ class LoadOptions:
         """Parse the string that IDA returns from ``get_plugin_options("memloader")``.
 
         Raises:
-            OptionsError: an entry is not ``key=value``, the key is unknown, bitness is not
-                32 or 64, or sha256 is not a hex digest.
+            OptionsError: an entry is not ``key=value``, the key is unknown, bitness is
+                not 32 or 64, or sha256 is not a hex digest.
         """
         values: dict[str, str] = {}
         for entry in filter(None, text.split(";")):
             key, sep, value = entry.partition("=")
             if not sep:
                 raise OptionsError(f"expected key=value, got {entry!r}")
+            if key not in KEYS:
+                raise OptionsError(f"unknown option: {key}")
             values[key] = value
 
-        unknown = set(values) - {"member", "password", "url", "sha256", "bitness"}
-        if unknown:
-            raise OptionsError(f"unknown option(s): {', '.join(sorted(unknown))}")
+        bitness = values.get("bitness", str(DEFAULT_SHELLCODE_BITNESS))
+        if bitness not in ("32", "64"):
+            raise OptionsError(f"bitness must be 32 or 64, got {bitness!r}")
 
-        bitness = DEFAULT_SHELLCODE_BITNESS
-        if "bitness" in values:
-            if values["bitness"] not in ("32", "64"):
-                raise OptionsError(
-                    f"bitness must be 32 or 64, got {values['bitness']!r}"
-                )
-            bitness = int(values["bitness"])
+        try:
+            sha256 = normalize_sha256(values["sha256"]) if "sha256" in values else None
+        except InvalidHashError as e:
+            raise OptionsError(str(e)) from e
 
-        sha256 = None
-        if "sha256" in values:
-            try:
-                sha256 = normalize_sha256(values["sha256"])
-            except InvalidHashError as e:
-                raise OptionsError(str(e)) from e
-
-        return cls(
-            member=values.get("member"),
-            password=values.get("password", DEFAULT_PASSWORD),
-            url=values.get("url"),
-            sha256=sha256,
-            bitness=bitness,
-        )
+        return cls(sha256=sha256, bitness=int(bitness))
