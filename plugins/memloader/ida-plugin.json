@@ -5,7 +5,7 @@
     "version": "1.1.0",
     "entryPoint": "memloader_entry.py",
     "description": "Load files from ZIP archives, URLs or VirusTotal into IDA without writing them to disk",
-    "license": "MIT",
+    "license": "Apache 2.0",
     "idaVersions": ">=9.2",
     "platforms": [
       "windows-x86_64",
