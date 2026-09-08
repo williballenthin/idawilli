@@ -56,7 +56,6 @@ def describe_api_error(status: int, body: bytes) -> str:
 @dataclass(frozen=True)
 class VirusTotalClient:
     api_key: str
-    api_url: str = API_URL
 
     def get_download_url(self, sha256: str) -> str:
         """Ask VirusTotal for a short-lived URL that serves the file with ``sha256``.
@@ -66,7 +65,7 @@ class VirusTotalClient:
                 exhausted, or VirusTotal cannot be reached.
         """
         request = urllib.request.Request(
-            f"{self.api_url}/files/{sha256}/download_url",
+            f"{API_URL}/files/{sha256}/download_url",
             headers={"x-apikey": self.api_key, "accept": "application/json"},
         )
         try:

@@ -56,13 +56,9 @@ _load_info_t._fields_ = [
 class LoaderInfo:
     """One candidate loader for an input file, as reported by the IDA kernel."""
 
-    dllname: str
     format_name: str
-    processor: str
     filetype: int
-    loader_flags: int
     lflags: int
-    priority: int
 
     @property
     def is_archive(self) -> bool:
@@ -71,13 +67,9 @@ class LoaderInfo:
     @classmethod
     def from_struct(cls, node: _load_info_t) -> "LoaderInfo":
         return cls(
-            dllname=node.dllname.get(),
             format_name=node.ftypename.get(),
-            processor=node.processor.get(),
             filetype=node.ftype,
-            loader_flags=node.loader_flags,
             lflags=node.lflags,
-            priority=node.pri,
         )
 
 

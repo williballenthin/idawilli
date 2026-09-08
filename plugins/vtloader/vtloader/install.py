@@ -12,7 +12,7 @@ them rather than leaving loaders IDA would still offer.
 
 import logging
 import os
-from collections.abc import Iterator, Sequence
+from collections.abc import Sequence
 from enum import Enum
 from pathlib import Path
 
@@ -106,30 +106,22 @@ def create_link(path: Path, target: Path, kinds: Sequence[LinkKind]) -> LinkKind
     raise error
 
 
-def iter_retired(loaders_dir: Path) -> Iterator[Path]:
-    """Every loader-named file in ``loaders_dir`` other than the one we install."""
-    for prefix in (LINK_PREFIX, LEGACY_LINK_PREFIX):
-        for path in loaders_dir.glob(f"{prefix}*.py"):
-            if path.name != LINK_NAME:
-                yield path
-
-
-def remove_retired_links(loaders_dir: Path, plugin_root: Path) -> list[Path]:
-    """Delete our loader links other than the current one, and return the removed paths.
+def remove_retired_links(loaders_dir: Path, plugin_root: Path) -> None:
+    """Delete our loader links in ``loaders_dir`` other than the current one.
 
     This covers the ZIP and URL loaders that Memloader installed, links left behind by
     a moved plugin root, dangling links, and generated stub files from earlier
     versions. A live link into some other plugin's directory is left alone, as is any
     file that is not ours.
     """
-    removed = []
-    for path in iter_retired(loaders_dir):
-        dangling = path.is_symlink() and not path.exists()
-        if dangling or is_our_link(path, plugin_root) or is_our_file(path):
-            logger.info("removing retired loader link %s", path)
-            path.unlink()
-            removed.append(path)
-    return removed
+    for prefix in (LINK_PREFIX, LEGACY_LINK_PREFIX):
+        for path in loaders_dir.glob(f"{prefix}*.py"):
+            if path.name == LINK_NAME:
+                continue
+            dangling = path.is_symlink() and not path.exists()
+            if dangling or is_our_link(path, plugin_root) or is_our_file(path):
+                logger.info("removing retired loader link %s", path)
+                path.unlink()
 
 
 def install_loader_links(
@@ -158,14 +150,3 @@ def install_loader_links(
     kind = create_link(path, target, kinds)
     logger.info("created %s %s -> %s", kind.value, path, target)
     return path
-
-
-def remove_loader_links(loaders_dir: Path, plugin_root: Path) -> list[Path]:
-    """Delete every link into ``plugin_root`` from ``loaders_dir`` and return the removed paths."""
-    removed = []
-    for prefix in (LINK_PREFIX, LEGACY_LINK_PREFIX):
-        for path in loaders_dir.glob(f"{prefix}*.py"):
-            if is_our_link(path, plugin_root):
-                path.unlink()
-                removed.append(path)
-    return removed

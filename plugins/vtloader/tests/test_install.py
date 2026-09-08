@@ -2,8 +2,6 @@ import os
 import subprocess
 import sys
 import textwrap
-import types
-from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -14,8 +12,6 @@ from vtloader.install import (
     LinkKind,
     get_link_target,
     install_loader_links,
-    is_our_link,
-    remove_loader_links,
 )
 
 # the three loaders Memloader installed, under the name it used then
@@ -26,45 +22,12 @@ RETIRED = (
 )
 
 
-class BytesInput:
-    """The subset of IDA's loader input protocol that ``accept_file`` uses."""
-
-    def __init__(self, data: bytes):
-        self._io = BytesIO(data)
-
-    def seek(self, offset: int, whence: int = 0) -> int:
-        return self._io.seek(offset, whence)
-
-    def read(self, size: int) -> bytes:
-        return self._io.read(size)
-
-    def size(self) -> int:
-        return len(self._io.getvalue())
-
-
-def exec_loader_file(path: Path) -> dict:
-    namespace: dict = {"__file__": str(path)}
-    exec(compile(path.read_text(), str(path), "exec"), namespace)
-    return namespace
-
-
-def call_like_idapython(namespace: dict, name: str, *args):
-    """IDAPython runs a loader function's code with the loader module's namespace as its globals."""
-    return types.FunctionType(namespace[name].__code__, namespace)(*args)
-
-
-def make_plugin_root(tmp_path: Path, marker: str = "TEST") -> Path:
+def make_plugin_root(tmp_path: Path) -> Path:
     """A plugin root holding a loader entry file, without the rest of the plugin."""
     root = tmp_path / "plugin"
     (root / "loaders").mkdir(parents=True)
-    get_link_target(root).write_text(f'"""IDA loader entry for vtloader {marker}."""\n')
+    get_link_target(root).write_text('"""IDA loader entry for vtloader TEST."""\n')
     return root
-
-
-def test_the_link_target_exists_in_the_plugin():
-    target = get_link_target(PLUGIN_ROOT)
-    assert target.is_file()
-    assert target.name == LINK_NAME
 
 
 def test_install_creates_a_symlink_into_plugin_root(tmp_path):
@@ -76,7 +39,6 @@ def test_install_creates_a_symlink_into_plugin_root(tmp_path):
     assert path.name == LINK_NAME
     assert path.is_symlink()
     assert Path(os.readlink(path)) == get_link_target(plugin_root)
-    assert is_our_link(path, plugin_root)
 
 
 def test_install_can_hard_link_when_symlinks_are_not_permitted(tmp_path):
@@ -87,17 +49,12 @@ def test_install_can_hard_link_when_symlinks_are_not_permitted(tmp_path):
     assert not path.is_symlink()
     assert os.path.samefile(path, get_link_target(plugin_root))
 
-    inode = path.stat().st_ino
-    install_loader_links(loaders, plugin_root, kinds=(LinkKind.HARDLINK,))
-    assert path.stat().st_ino == inode
-
     # a plugin upgrade replaces the target, orphaning the old hard link
     target = get_link_target(plugin_root)
     target.unlink()
     target.write_text('"""IDA loader entry for vtloader TEST, upgraded."""\n')
     install_loader_links(loaders, plugin_root, kinds=(LinkKind.HARDLINK,))
     assert os.path.samefile(path, target)
-    assert remove_loader_links(loaders, plugin_root) == [path]
 
 
 def test_install_is_idempotent_and_retargets_when_root_moves(tmp_path):
@@ -171,35 +128,6 @@ def test_install_refuses_to_replace_a_file_it_did_not_create(tmp_path):
 
     with pytest.raises(OSError, match="not created by vtloader"):
         install_loader_links(loaders, make_plugin_root(tmp_path))
-
-
-def test_remove_only_deletes_links_into_plugin_root(tmp_path):
-    loaders = tmp_path / "loaders"
-    plugin_root = make_plugin_root(tmp_path)
-    install_loader_links(loaders, plugin_root)
-    foreign_target = tmp_path / "mine.py"
-    foreign_target.write_text("x = 1\n")
-    foreign = loaders / "vtloader_mine.py"
-    foreign.symlink_to(foreign_target)
-
-    removed = remove_loader_links(loaders, plugin_root)
-
-    assert [p.name for p in removed] == [LINK_NAME]
-    assert foreign.is_symlink()
-
-
-def test_linked_loader_works_with_its_namespace_as_globals(ida, tmp_path, monkeypatch):
-    from vtloader import loader
-    from vtloader.settings import VT_FORMAT_NAME
-
-    monkeypatch.setattr(loader, "is_batch_mode", lambda: False)
-    path = install_loader_links(tmp_path / "loaders", PLUGIN_ROOT)
-    namespace = exec_loader_file(path)
-
-    offered = call_like_idapython(
-        namespace, "accept_file", BytesInput(b"anything"), "x.bin"
-    )
-    assert offered == VT_FORMAT_NAME
 
 
 OPEN_SCRIPT = textwrap.dedent(

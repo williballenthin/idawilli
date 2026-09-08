@@ -1,11 +1,8 @@
 """Headless options passed to the loader via IDA's ``-O`` command line switch."""
 
-import logging
 from dataclasses import dataclass
 
 from vtloader.virustotal import InvalidHashError, normalize_sha256
-
-logger = logging.getLogger(__name__)
 
 PLUGIN_OPTIONS_NAME = "vtloader"
 DEFAULT_SHELLCODE_BITNESS = 32

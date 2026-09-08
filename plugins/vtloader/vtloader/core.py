@@ -3,7 +3,6 @@
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
 from pathlib import Path
 
 import ida_entry
@@ -30,17 +29,6 @@ class LoadError(Exception):
 
 class UserCancelled(LoadError):
     pass
-
-
-@dataclass(frozen=True)
-class LoadResult:
-    filename: str
-    loader: LoaderInfo | None
-    filetype: int
-
-    @property
-    def is_shellcode(self) -> bool:
-        return self.loader is None
 
 
 def is_batch_mode() -> bool:
@@ -167,7 +155,7 @@ def load_buffer_into_ida(
     neflags: int,
     options: LoadOptions,
     database_dir: Path,
-) -> LoadResult:
+) -> None:
     """Load ``buffer`` into the current database using IDA's own file format loaders.
 
     The buffer never touches the disk. When no loader recognizes it, the buffer is
@@ -188,14 +176,14 @@ def load_buffer_into_ida(
     global _loading_buffer
     _loading_buffer = True
     try:
-        return _load(kernel, buffer, filename, neflags, options)
+        _load(kernel, buffer, filename, neflags, options)
     finally:
         _loading_buffer = False
 
 
 def _load(
     kernel: IdaKernel, buffer: bytes, filename: str, neflags: int, options: LoadOptions
-) -> LoadResult:
+) -> None:
     with (
         kernel.bytearray_linput(buffer) as li,
         kernel.loaders_list(li, filename) as loaders,
@@ -210,9 +198,7 @@ def _load(
                 bitness,
             )
             load_as_shellcode(buffer, bitness)
-            return LoadResult(
-                filename=filename, loader=None, filetype=ida_ida.inf_get_filetype()
-            )
+            return
 
         best = loaders.best
         if best.is_archive:
@@ -224,6 +210,3 @@ def _load(
         ida_ida.inf_set_filetype(get_database_filetype(best))
         if not kernel.load_nonbinary_file(filename, li, neflags, loaders):
             raise LoadError(f"IDA loader {best.format_name!r} failed on {filename}")
-        return LoadResult(
-            filename=filename, loader=best, filetype=ida_ida.inf_get_filetype()
-        )

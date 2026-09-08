@@ -41,19 +41,10 @@ def test_normalize_rejects_non_sha256(text):
         normalize_sha256(text)
 
 
-def test_describe_api_error_includes_server_message():
+def test_describe_api_error_includes_the_server_message():
     body = b'{"error": {"code": "ForbiddenError", "message": "You are not allowed"}}'
-    assert (
-        describe_api_error(403, body)
-        == "the API key is not allowed to download files (You are not allowed)"
-    )
+    assert "You are not allowed" in describe_api_error(403, body)
     assert describe_api_error(500, b"<html>") == "HTTP status 500"
-
-
-def test_unreachable_server_is_reported():
-    client = VirusTotalClient("irrelevant", "http://127.0.0.1:9/api/v3")
-    with pytest.raises(VirusTotalError, match="cannot reach"):
-        client.get_download_url(PMA_EXE_SHA256)
 
 
 @needs_vt

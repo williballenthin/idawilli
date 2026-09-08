@@ -1,9 +1,6 @@
 """Plugin settings declared in ``ida-plugin.json`` and read through ida-settings."""
 
-import logging
 from pathlib import Path
-
-logger = logging.getLogger(__name__)
 
 PLUGIN_NAME = "vtloader"
 VT_FORMAT_NAME = "vtloader"
@@ -19,12 +16,14 @@ class ApiKeyMissingError(SettingsError):
     pass
 
 
-def get_setting(key: str) -> str | None:
-    """Read one string setting of this plugin, or None when it is unset or empty.
+def get_vt_api_key() -> str:
+    """The VirusTotal API key from the plugin settings.
 
     Raises:
-        SettingsError: the ida-settings package is missing, or the plugin is not
-            installed under ``$IDAUSR/plugins`` where ida-settings looks for it.
+        ApiKeyMissingError: no key is configured, or it is empty.
+        SettingsError: the ida-settings package is missing, the plugin is not
+            installed under ``$IDAUSR/plugins`` where ida-settings looks for it, or
+            the settings cannot be read at all.
     """
     try:
         import ida_settings
@@ -34,31 +33,18 @@ def get_setting(key: str) -> str | None:
             "reinstall the plugin with hcli to install its Python dependencies"
         ) from e
     try:
-        value = ida_settings.PluginSettings(PLUGIN_NAME).get_setting(key)
+        key = ida_settings.PluginSettings(PLUGIN_NAME).get_setting(VT_API_KEY_SETTING)
     except KeyError:
-        return None
+        key = None
     except Exception as e:
         raise SettingsError(
-            f"cannot read the {key} setting of the {PLUGIN_NAME} plugin: {e}"
+            f"cannot read the {VT_API_KEY_SETTING} setting of the {PLUGIN_NAME} plugin: {e}"
         ) from e
-    if not isinstance(value, str) or not value.strip():
-        return None
-    return value.strip()
-
-
-def get_vt_api_key() -> str:
-    """The VirusTotal API key from the plugin settings.
-
-    Raises:
-        ApiKeyMissingError: no key is configured.
-        SettingsError: the settings cannot be read at all.
-    """
-    key = get_setting(VT_API_KEY_SETTING)
-    if key is None:
+    if not isinstance(key, str) or not key.strip():
         raise ApiKeyMissingError(
             "no VirusTotal API key is set in the vtloader plugin settings"
         )
-    return key
+    return key.strip()
 
 
 def get_vt_database_dir() -> Path:

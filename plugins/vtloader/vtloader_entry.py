@@ -15,15 +15,11 @@ import ida_kernwin
 import idc
 from vtloader.core import UserCancelled, get_database_extension, wait_box
 from vtloader.install import install_loader_links
-from vtloader.instance import (
-    build_open_command,
-    build_vt_load_command,
-    create_vt_input_file,
-    get_ida_executable,
-    launch,
-)
+from vtloader.instance import create_vt_input_file, get_ida_executable, launch
+from vtloader.options import PLUGIN_OPTIONS_NAME
 from vtloader.settings import (
     PLUGIN_NAME,
+    VT_FORMAT_NAME,
     VT_HASH_PROMPT,
     ApiKeyMissingError,
     SettingsError,
@@ -109,14 +105,25 @@ def load_from_virustotal() -> None:
     ida = get_ida_executable(Path(ida_diskio.idadir("")))
     database = get_vt_database_dir() / (sha256 + get_database_extension())
     if database.exists() and choose_existing_database(database):
-        launch(build_open_command(ida, database))
+        launch([str(ida), str(database)])
         return
 
     with wait_box(f"Checking {sha256[:16]}... on VirusTotal"):
         VirusTotalClient(api_key).get_download_url(sha256)
     database.parent.mkdir(parents=True, exist_ok=True)
     input_file = create_vt_input_file(sha256)
-    launch(build_vt_load_command(ida, sha256, database, input_file))
+    # -T selects the loader so that no load dialog appears, -O passes the hash, and -o
+    # puts the database where the loader would place it anyway, so IDA's working files
+    # are created there from the start. The loader ignores the input file's content.
+    launch(
+        [
+            str(ida),
+            f"-T{VT_FORMAT_NAME}",
+            f"-O{PLUGIN_OPTIONS_NAME}:sha256={sha256}",
+            f"-o{database}",
+            str(input_file),
+        ]
+    )
     ida_kernwin.msg(f"vtloader: loading {sha256} from VirusTotal into {database}\n")
 
 

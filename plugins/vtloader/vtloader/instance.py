@@ -1,13 +1,10 @@
-"""Start another IDA instance that loads a file through one of the vtloader loaders."""
+"""Start another IDA instance that loads a file through the vtloader loader."""
 
 import logging
 import os
 import subprocess
 import tempfile
 from pathlib import Path
-
-from vtloader.options import PLUGIN_OPTIONS_NAME
-from vtloader.settings import VT_FORMAT_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -38,29 +35,6 @@ def get_ida_executable(idadir: Path) -> Path:
     if not path.is_file():
         raise FileNotFoundError(f"IDA executable not found at {path}")
     return path
-
-
-def build_vt_load_command(
-    ida: Path, sha256: str, database: Path, input_file: Path
-) -> list[str]:
-    """Command line for an IDA instance that fetches ``sha256`` from VirusTotal into ``database``.
-
-    ``-T`` selects the loader so that no load dialog appears, ``-O`` passes the hash,
-    and ``-o`` puts the database where the loader would place it anyway, so IDA's
-    working files are created there from the start. ``input_file`` must exist; the
-    loader ignores its content.
-    """
-    return [
-        str(ida),
-        f"-T{VT_FORMAT_NAME}",
-        f"-O{PLUGIN_OPTIONS_NAME}:sha256={sha256}",
-        f"-o{database}",
-        str(input_file),
-    ]
-
-
-def build_open_command(ida: Path, database: Path) -> list[str]:
-    return [str(ida), str(database)]
 
 
 def launch(command: list[str]) -> None:
