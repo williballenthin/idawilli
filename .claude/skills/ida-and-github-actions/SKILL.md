@@ -23,9 +23,11 @@ Use the short tag format:
 
     ida-pro:latest
 
-When multiple versions are IDA are used, then use a specific tag, like `ida-pro:9.4`. Otherwise, use `latest`.
+When multiple versions of IDA are used, then use a specific tag, like `ida-pro:9.4`. Otherwise, use `latest`.
 
-Always provide the following flags: --license-id ${IDA_LICENSE_ID} --install-dir="${{ runner.temp }}/app/ida" --accept-eula --set-default --yes
+Always provide the following flags: --license-id ${IDA_LICENSE_ID} --install-dir="${{ runner.temp }}/app/ida" --accept-eula --set-default --create-python-environment --yes
+
+`--create-python-environment` creates a virtualenv at `$HOME/.idapro/venv` with pip, matching IDA's Python version.
 
 Provide the license ID and HCLI API key as environment variables:
 
@@ -35,50 +37,47 @@ Provide the license ID and HCLI API key as environment variables:
         IDA_LICENSE_ID: ${{ secrets.IDA_LICENSE_ID }}
 ```
 
-# venv creation
+# IDAPYTHON_VENV_EXECUTABLE
 
-## IDA's Python environment
+After install, set `IDAPYTHON_VENV_EXECUTABLE` in GITHUB_ENV so subsequent steps pick it up. Use `uv python find` to resolve the path cross-platform (avoids platform-specific `bin/python3` vs `Scripts/python.exe`):
 
-While IDA comes bundled with Python, users can and should provide their own Python installation, specified with `idapyswitch`.
-And, it is strongly recommended to use a virtual environment, because this avoids dependency conflicts and issues with "externally managed" environments.
-Use `IDAPYTHON_VENV_EXECUTABLE` rather than `VIRTUAL_ENV` to signal the virtual environment to IDA (without interfering with other tools that use `VIRTUAL_ENV`).
+```yml
+    - name: Set IDAPYTHON_VENV_EXECUTABLE
+      shell: bash
+      run: |
+        VENV_PYTHON="$(uv python find "$HOME/.idapro/venv")"
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          echo "IDAPYTHON_VENV_EXECUTABLE=$(cygpath -w "$VENV_PYTHON")" >> "$GITHUB_ENV"
+        else
+          echo "IDAPYTHON_VENV_EXECUTABLE=$VENV_PYTHON" >> "$GITHUB_ENV"
+        fi
+```
 
-For IDA plugins that are installed and tested in CI (you should see `hcli plugin install...`), create a venv for IDA.
-Use `--seed` so that `pip` is available in the venv; `hcli plugin install` uses pip to install plugin Python dependencies.
-If plugins are not installed via hcli (e.g. installed from a zip archive), `--seed` can be omitted.
+# Testing with specific Python versions
 
-    uv venv --seed $HOME/.idapro/venv
+When the matrix includes specific Python versions (to verify a plugin works across interpreters), `--create-python-environment` alone isn't enough because it creates a venv matching IDA's default Python.
 
-Register the interpreter with IDA using idapyswitch. The one-liner below finds the Python shared library path cross-platform. It uses `max(glob, key=len)` instead of `next(glob)` because on some platforms (notably Linux aarch64) the unversioned `libpython3.so` symlink sorts before the versioned `libpython3.14.so`, and idapyswitch rejects the unversioned file. Picking the longest filename ensures the versioned library is selected. On macOS with Homebrew framework builds, `sysconfig.get_config_var("LDLIBRARY")` returns a framework-relative path that doesn't exist under `LIBDIR`, so the glob approach is used instead:
+Instead:
+1. Install IDA without `--create-python-environment`
+2. Run `idapyswitch` to register the matrix Python with IDA
+3. Run `hcli ida python create-environment` to create a venv matching the new interpreter
+4. Set `IDAPYTHON_VENV_EXECUTABLE`
+
+The idapyswitch one-liner finds the Python shared library path cross-platform. It uses `max(glob, key=len)` instead of `next(glob)` because on some platforms (notably Linux aarch64) the unversioned `libpython3.so` symlink sorts before the versioned `libpython3.14.so`, and idapyswitch rejects the unversioned file. Picking the longest filename ensures the versioned library is selected. On macOS with Homebrew framework builds, `sysconfig.get_config_var("LDLIBRARY")` returns a framework-relative path that doesn't exist under `LIBDIR`, so the glob approach is used instead:
 
     ${{ runner.temp }}/app/ida/${{ matrix.ida.idapyswitch }} --force-path $(uv run --python $HOME/.idapro/venv python -c 'import sys,sysconfig,pathlib;print(__import__("_winapi").GetModuleFileName(sys.dllhandle) if sys.platform=="win32" else max(pathlib.Path(sysconfig.get_config_var("LIBDIR")).glob("libpython*"),key=lambda p:len(p.name)))')
 
-This causes IDA to use the specific version of Python, which is important when Python loads native libraries (Pydantic, SSL, etc.).
-
-When subsequent steps start IDA or HCLI, they should point `IDAPYTHON_VENV_EXECUTABLE` to the virtual environment's Python interpreter.
-Use `uv python find` to resolve the path cross-platform (avoids platform-specific `bin/python3` vs `Scripts/python.exe`):
-
-```yml
-    env:
-        IDAPYTHON_VENV_EXECUTABLE: $(uv python find $HOME/.idapro/venv)
-```
-
-On Windows, the path must use native separators: wrap with `cygpath -w` in bash steps.
-
-This causes IDA to use the virtual environment for Python, giving access to the libraries installed there.
-Unfortunately, both idapyswitch and the virtual environment registration are required.
-
-## Python programs using idalib
+# Python programs using idalib
 
 For Python programs that use IDA as a library (idalib), create and activate a venv using uv: 
 
     uv sync --no-sources --extra dev --extra test
 
-The program will this environment's Python intepreter and virtual environment. When it loads IDA via idalib, IDA will also use this environment, so no additional setup is required.
+The program uses this environment's Python interpreter and virtual environment. When it loads IDA via idalib, IDA also uses this environment, so no additional setup is required.
 
-Note that it is possible that an program may rely on idalib and expect IDA to run plugins, such as to load new file formats.
-In this case, the setup may be complicated: all the Python dependencies of the IDA plugins must be available in the *program's* virtual environment.
-There's not an easy way to programmatically do this today; you should hardcode the installation of the deps into to virtual environment setup.
+Note that a program may rely on idalib and expect IDA to run plugins, such as to load new file formats.
+In this case, all the Python dependencies of the IDA plugins must be available in the *program's* virtual environment.
+There's not an easy way to programmatically do this today; you should hardcode the installation of the deps into the virtual environment setup.
 HCLI should probably grow a command to do this.
 
 # idalib
@@ -86,7 +85,79 @@ HCLI should probably grow a command to do this.
 For programs that use idalib, they need the idapro or ida-domain Python packages in their virtual environment, which they should have in their `pyproject.toml` file.
 
 
-# Example workflow
+# Example workflow (simple)
+
+When you don't need a Python version matrix:
+
+```yml
+    tests:
+      name: IDA on ${{ matrix.ida.os }}
+      runs-on: ${{ matrix.ida.os }}
+      strategy:
+        fail-fast: false
+        matrix:
+          ida:
+            - version: "latest"
+              os: ubuntu-latest
+
+            - version: "latest"
+              os: macos-latest
+
+            - version: "latest"
+              os: windows-latest
+      steps:
+        - name: Checkout
+          uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+          with:
+            fetch-depth: 0
+            persist-credentials: false
+
+        - name: Setup uv
+          uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+          with:
+            enable-cache: true
+            cache-dependency-glob: "uv.lock"
+            version: "0.12.6"
+
+        - name: Install IDA
+          shell: bash
+          run: |
+            uv run --with ida-hcli hcli \
+              ida install \
+              --download-id "ida-pro:${{ matrix.ida.version }}" \
+              --license-id "${IDA_LICENSE_ID}" \
+              --install-dir="${{ runner.temp }}/app/ida" \
+              --create-python-environment \
+              --accept-eula \
+              --set-default \
+              --yes
+          env:
+            HCLI_API_KEY: ${{ secrets.HCLI_API_KEY }}
+            IDA_LICENSE_ID: ${{ secrets.IDA_LICENSE_ID }}
+
+        - name: Set IDAPYTHON_VENV_EXECUTABLE
+          shell: bash
+          run: |
+            VENV_PYTHON="$(uv python find "$HOME/.idapro/venv")"
+            if [[ "$RUNNER_OS" == "Windows" ]]; then
+              echo "IDAPYTHON_VENV_EXECUTABLE=$(cygpath -w "$VENV_PYTHON")" >> "$GITHUB_ENV"
+            else
+              echo "IDAPYTHON_VENV_EXECUTABLE=$VENV_PYTHON" >> "$GITHUB_ENV"
+            fi
+
+        - name: Install foo plugin to IDA
+          run: uv run --with ida-hcli hcli plugin install foo
+
+        - name: Create program environment
+          run: uv sync --no-sources --extra dev --extra test
+
+        - name: Run tests
+          run: uv run pytest
+```
+
+# Example workflow (Python version matrix)
+
+When testing across Python versions, use manual venv + idapyswitch:
 
 ```yml
     tests:
@@ -142,13 +213,9 @@ For programs that use idalib, they need the idapro or ida-domain Python packages
             HCLI_API_KEY: ${{ secrets.HCLI_API_KEY }}
             IDA_LICENSE_ID: ${{ secrets.IDA_LICENSE_ID }}
             
-        # This is the environment that IDA will use when run as a program (ida.exe, idat.exe, etc.),
-        #  including where plugin dependencies will be installed.
-        # This should be set before HCLI installs plugins.
         - name: Create venv for IDA
           run: uv venv --seed $HOME/.idapro/venv
 
-        # Register the specific Python interpreter with IDA, so that native Python extensions load correctly.
         - name: Register Python interpreter with IDA
           shell: bash
           run: |
