@@ -1,0 +1,34 @@
+{
+  "IDAMetadataDescriptorVersion": 1,
+  "plugin": {
+    "name": "flirt-data-pack",
+    "version": "0.1.0",
+    "entryPoint": "flirt_data_pack_entry.py",
+    "description": "Ship FLIRT signatures as an IDA plugin and install them into the user sig directory",
+    "license": "Apache 2.0",
+    "idaVersions": ">=9.2",
+    "platforms": [
+      "windows-x86_64",
+      "linux-x86_64",
+      "macos-x86_64",
+      "macos-aarch64"
+    ],
+    "categories": [
+      "signatures-and-types"
+    ],
+    "keywords": [
+      "flirt",
+      "signatures",
+      "data-pack"
+    ],
+    "urls": {
+      "repository": "https://github.com/williballenthin/idawilli"
+    },
+    "authors": [
+      {
+        "name": "Willi Ballenthin",
+        "email": "wballenthin@hex-rays.com"
+      }
+    ]
+  }
+}
