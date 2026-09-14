@@ -5,7 +5,6 @@ import textwrap
 from pathlib import Path
 
 import pytest
-from conftest import PLUGIN_ROOT, create_idausr
 from pe import build_minimal_pe
 from vtloader.install import (
     LINK_NAME,
@@ -66,34 +65,6 @@ def test_install_retires_the_memloader_links(tmp_path):
     install_loader_links(loaders, plugin_root)
 
     assert sorted(p.name for p in loaders.iterdir()) == [LINK_NAME]
-
-
-def test_install_upgrades_a_legacy_hard_link_to_a_symlink(tmp_path):
-    """A hard link left by pre-1.1 vtloader on Windows is replaced with a symlink."""
-    loaders = tmp_path / "loaders"
-    loaders.mkdir()
-    plugin_root = make_plugin_root(tmp_path)
-    target = get_link_target(plugin_root)
-    os.link(target, loaders / LINK_NAME)
-    assert not (loaders / LINK_NAME).is_symlink()
-
-    install_loader_links(loaders, plugin_root)
-
-    assert (loaders / LINK_NAME).is_symlink()
-    assert (loaders / LINK_NAME).resolve() == target.resolve()
-
-
-def test_install_replaces_an_orphaned_entry_file_at_the_link_name(tmp_path):
-    loaders = tmp_path / "loaders"
-    loaders.mkdir()
-    old = loaders / LINK_NAME
-    old.write_text('"""IDA loader entry for vtloader, left by an upgrade."""\n')
-    plugin_root = make_plugin_root(tmp_path)
-
-    install_loader_links(loaders, plugin_root)
-
-    assert old.is_symlink()
-    assert old.resolve() == get_link_target(plugin_root).resolve()
 
 
 def test_install_removes_dangling_links_but_leaves_foreign_files(tmp_path):

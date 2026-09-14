@@ -6,8 +6,7 @@ the plugin root.
 
 This plugin was called Memloader up to version 1.1 and installed three loaders: ZIP,
 URL and VirusTotal. Their links are recognised here too, so that upgrading retires
-them rather than leaving loaders IDA would still offer. Versions before 1.1 also
-created hard links on Windows; those are cleaned up on upgrade.
+them rather than leaving loaders IDA would still offer.
 """
 
 import logging
@@ -17,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 LINK_PREFIX = "vtloader_"
 LINK_NAME = f"{LINK_PREFIX}loader.py"
-ENTRY_MARKER = '"""IDA loader entry for vtloader'
 
 LEGACY_LINK_PREFIX = "memloader_"
 LEGACY_MARKERS = (
@@ -53,12 +51,8 @@ def is_our_link(path: Path, plugin_root: Path) -> bool:
     return False
 
 
-def is_legacy_file(path: Path) -> bool:
-    """True for a regular file holding one of our loader entries, current or legacy.
-
-    Hard links from older vtloader versions and generated stubs from Memloader are
-    identified by the first line of the file.
-    """
+def is_memloader_stub(path: Path) -> bool:
+    """True for a regular file holding a Memloader loader entry or generated stub."""
     if path.is_symlink() or not path.is_file() or not has_loader_name(path):
         return False
     try:
@@ -66,23 +60,23 @@ def is_legacy_file(path: Path) -> bool:
             first = f.readline()
     except OSError:
         return False
-    return first.startswith((ENTRY_MARKER, *LEGACY_MARKERS))
+    return first.startswith(LEGACY_MARKERS)
 
 
 def remove_retired_links(loaders_dir: Path, plugin_root: Path) -> None:
     """Delete our loader links in ``loaders_dir`` other than the current one.
 
     This covers the ZIP and URL loaders that Memloader installed, links left behind by
-    a moved plugin root, dangling links, generated stub files from earlier versions,
-    and hard links left by pre-1.1 vtloader on Windows. A live link into some other
-    plugin's directory is left alone, as is any file that is not ours.
+    a moved plugin root, dangling links, and generated stub files from Memloader. A
+    live link into some other plugin's directory is left alone, as is any file that is
+    not ours.
     """
     for prefix in (LINK_PREFIX, LEGACY_LINK_PREFIX):
         for path in loaders_dir.glob(f"{prefix}*.py"):
             if path.name == LINK_NAME:
                 continue
             dangling = path.is_symlink() and not path.exists()
-            if dangling or is_our_link(path, plugin_root) or is_legacy_file(path):
+            if dangling or is_our_link(path, plugin_root) or is_memloader_stub(path):
                 logger.info("removing retired loader link %s", path)
                 path.unlink()
 
@@ -104,7 +98,7 @@ def install_loader_links(loaders_dir: Path, plugin_root: Path) -> Path:
     if is_current_link(path, target):
         logger.debug("loader link %s is current", path)
         return path
-    if path.is_symlink() or is_legacy_file(path):
+    if path.is_symlink() or is_memloader_stub(path):
         path.unlink()
     elif path.exists():
         raise OSError(f"not replacing {path}: it was not created by vtloader")
