@@ -1,11 +1,8 @@
-import os
 from pathlib import Path
 
-import pytest
 from conftest import PLUGIN_ROOT
 from flirt_data_pack.install import (
     LINK_PREFIX,
-    LinkKind,
     get_procs,
     get_sig_sources,
     install_sig_links,
@@ -66,7 +63,7 @@ class TestInstallSigLinks:
         link = paths[0]
         assert link.name == link_name_for("test.sig")
         assert link.is_symlink()
-        assert Path(os.readlink(link)) == (root / "sigs" / "pc" / "test.sig").resolve()
+        assert link.resolve() == (root / "sigs" / "pc" / "test.sig").resolve()
 
     def test_creates_directory_if_missing(self, tmp_path):
         sig_dir = tmp_path / "deep" / "sig" / "pc"
@@ -95,9 +92,7 @@ class TestInstallSigLinks:
         install_sig_links(sig_dir, root_b, "pc")
 
         link = sig_dir / link_name_for("test.sig")
-        assert (
-            Path(os.readlink(link)) == (root_b / "sigs" / "pc" / "test.sig").resolve()
-        )
+        assert link.resolve() == (root_b / "sigs" / "pc" / "test.sig").resolve()
 
     def test_installs_multiple_sigs(self, tmp_path):
         sig_dir = tmp_path / "sig" / "pc"
@@ -145,16 +140,6 @@ class TestInstallSigLinks:
         install_sig_links(sig_dir, root, "pc")
 
         assert other.read_bytes() == b"other plugin sig"
-
-    def test_hard_link_fallback(self, tmp_path):
-        sig_dir = tmp_path / "sig" / "pc"
-        root = make_plugin_root(tmp_path)
-
-        paths = install_sig_links(sig_dir, root, "pc", kinds=(LinkKind.HARDLINK,))
-
-        assert len(paths) == 1
-        assert not paths[0].is_symlink()
-        assert os.path.samefile(paths[0], root / "sigs" / "pc" / "test.sig")
 
 
 class TestIsOurLink:

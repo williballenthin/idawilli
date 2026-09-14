@@ -23,11 +23,9 @@ tests/                         pytest suite, pure Python plus in-process idalib
 
 IDA's `find_files()` and the "Apply FLIRT signature" dialog both scan `$IDAUSR/sig/<proc>/` flat without recursing into subdirectories. Each `.sig` file must sit directly in that directory. To avoid collisions between plugins that ship signatures with the same name, every link is prefixed with `flirt_data_pack_`: `sigs/pc/dummy.sig` becomes `~/.idapro/sig/pc/flirt_data_pack_dummy.sig`.
 
-`create_link` tries the kinds in `DEFAULT_LINK_KINDS` in order: a symbolic link everywhere, then a hard link on Windows where symbolic links need Developer Mode or elevation. A link is current when it is a symlink with the right target or a hard link of the target (`os.path.samefile`).
+`remove_stale_links` runs before installation and deletes any prefixed dangling symlink, covering the case where a signature was removed from the plugin between versions.
 
-`remove_stale_links` runs before installation and deletes any prefixed link whose target no longer exists, covering the case where a signature was removed from the plugin between versions.
-
-Ownership is determined by the link name prefix (`flirt_data_pack_`) combined with the symlink target pointing into the plugin root. Links without the prefix, or pointing into a different plugin, are left alone. Any prefixed symlink is replaceable regardless of where it points, so a moved plugin root is handled by relinking rather than leaving stale entries.
+Ownership is determined by the link name prefix (`flirt_data_pack_`) combined with the symlink target resolving into the plugin root. Links without the prefix, or pointing into a different plugin, are left alone. Any prefixed symlink is replaceable regardless of where it points, so a moved plugin root is handled by relinking rather than leaving stale entries. Path comparisons use `resolve()` rather than raw `readlink` output so that extended-length paths on Windows (``\\?\…``) compare correctly.
 
 ## Auto-apply
 
