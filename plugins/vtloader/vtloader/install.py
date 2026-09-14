@@ -11,7 +11,6 @@ created hard links on Windows; those are cleaned up on upgrade.
 """
 
 import logging
-import os
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -40,7 +39,9 @@ def has_loader_name(path: Path) -> bool:
 
 def is_current_link(path: Path, target: Path) -> bool:
     """True when ``path`` is a symlink to ``target``."""
-    return path.is_symlink() and Path(os.readlink(path)) == target
+    # resolve() rather than raw readlink: on Windows, readlink returns
+    # extended-length paths (\\?\…) that do not compare equal to regular ones.
+    return path.is_symlink() and path.resolve() == target.resolve()
 
 
 def is_our_link(path: Path, plugin_root: Path) -> bool:
@@ -48,7 +49,7 @@ def is_our_link(path: Path, plugin_root: Path) -> bool:
     if not has_loader_name(path):
         return False
     if path.is_symlink():
-        return Path(os.readlink(path)).is_relative_to(plugin_root.resolve())
+        return path.resolve().is_relative_to(plugin_root.resolve())
     return False
 
 

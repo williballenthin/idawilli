@@ -36,7 +36,7 @@ def test_install_creates_a_symlink_into_plugin_root(tmp_path):
 
     assert path.name == LINK_NAME
     assert path.is_symlink()
-    assert Path(os.readlink(path)) == get_link_target(plugin_root)
+    assert path.resolve() == get_link_target(plugin_root).resolve()
 
 
 def test_install_is_idempotent_and_retargets_when_root_moves(tmp_path):
@@ -49,7 +49,7 @@ def test_install_is_idempotent_and_retargets_when_root_moves(tmp_path):
     assert install_loader_links(loaders, root_a).lstat().st_ino == inode
 
     install_loader_links(loaders, root_b)
-    assert Path(os.readlink(path)) == get_link_target(root_b)
+    assert path.resolve() == get_link_target(root_b).resolve()
 
 
 def test_install_retires_the_memloader_links(tmp_path):
@@ -80,7 +80,7 @@ def test_install_upgrades_a_legacy_hard_link_to_a_symlink(tmp_path):
     install_loader_links(loaders, plugin_root)
 
     assert (loaders / LINK_NAME).is_symlink()
-    assert Path(os.readlink(loaders / LINK_NAME)) == target
+    assert (loaders / LINK_NAME).resolve() == target.resolve()
 
 
 def test_install_replaces_an_orphaned_entry_file_at_the_link_name(tmp_path):
@@ -93,7 +93,7 @@ def test_install_replaces_an_orphaned_entry_file_at_the_link_name(tmp_path):
     install_loader_links(loaders, plugin_root)
 
     assert old.is_symlink()
-    assert Path(os.readlink(old)) == get_link_target(plugin_root)
+    assert old.resolve() == get_link_target(plugin_root).resolve()
 
 
 def test_install_removes_dangling_links_but_leaves_foreign_files(tmp_path):
