@@ -1,19 +1,17 @@
-"""Maintain the link that makes IDA discover the loader.
+"""Maintain the symlink that makes IDA discover the loader.
 
-IDA only scans its ``loaders/`` directories for loader modules. The plugin links
+IDA only scans its ``loaders/`` directories for loader modules. The plugin symlinks
 ``$IDAUSR/loaders/vtloader_loader.py`` to the loader entry file under ``loaders/`` in
-the plugin root. Symbolic links are preferred because they name the plugin they
-belong to; on Windows without symlink permission a hard link is made instead.
+the plugin root.
 
 This plugin was called Memloader up to version 1.1 and installed three loaders: ZIP,
 URL and VirusTotal. Their links are recognised here too, so that upgrading retires
-them rather than leaving loaders IDA would still offer.
+them rather than leaving loaders IDA would still offer. Versions before 1.1 also
+created hard links on Windows; those are cleaned up on upgrade.
 """
 
 import logging
 import os
-from collections.abc import Sequence
-from enum import Enum
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -29,16 +27,6 @@ LEGACY_MARKERS = (
 )
 
 
-class LinkKind(Enum):
-    SYMLINK = "symlink"
-    HARDLINK = "hardlink"
-
-
-DEFAULT_LINK_KINDS: tuple[LinkKind, ...] = (
-    (LinkKind.SYMLINK, LinkKind.HARDLINK) if os.name == "nt" else (LinkKind.SYMLINK,)
-)
-
-
 def get_link_target(plugin_root: Path) -> Path:
     return plugin_root.resolve() / "loaders" / LINK_NAME
 
@@ -51,29 +39,24 @@ def has_loader_name(path: Path) -> bool:
 
 
 def is_current_link(path: Path, target: Path) -> bool:
-    """True when ``path`` is a symlink to ``target`` or a hard link of it."""
-    if path.is_symlink():
-        return Path(os.readlink(path)) == target
-    try:
-        return path.is_file() and os.path.samefile(path, target)
-    except OSError:
-        return False
+    """True when ``path`` is a symlink to ``target``."""
+    return path.is_symlink() and Path(os.readlink(path)) == target
 
 
 def is_our_link(path: Path, plugin_root: Path) -> bool:
-    """True for a loader-named symlink into ``plugin_root`` or a hard link of its loader."""
+    """True for a loader-named symlink into ``plugin_root``."""
     if not has_loader_name(path):
         return False
     if path.is_symlink():
         return Path(os.readlink(path)).is_relative_to(plugin_root.resolve())
-    return is_current_link(path, get_link_target(plugin_root))
+    return False
 
 
-def is_our_file(path: Path) -> bool:
+def is_legacy_file(path: Path) -> bool:
     """True for a regular file holding one of our loader entries, current or legacy.
 
-    A hard link whose target was replaced by an upgrade keeps the old entry file
-    content, so the first line identifies it as ours.
+    Hard links from older vtloader versions and generated stubs from Memloader are
+    identified by the first line of the file.
     """
     if path.is_symlink() or not path.is_file() or not has_loader_name(path):
         return False
@@ -85,55 +68,32 @@ def is_our_file(path: Path) -> bool:
     return first.startswith((ENTRY_MARKER, *LEGACY_MARKERS))
 
 
-def create_link(path: Path, target: Path, kinds: Sequence[LinkKind]) -> LinkKind:
-    """Link ``path`` to ``target`` with the first kind in ``kinds`` that the system permits.
-
-    Raises:
-        OSError: no kind could be created; the last error is raised.
-    """
-    error: OSError | None = None
-    for kind in kinds:
-        try:
-            if kind is LinkKind.SYMLINK:
-                path.symlink_to(target)
-            else:
-                os.link(target, path)
-            return kind
-        except OSError as e:
-            logger.info("cannot create %s %s -> %s: %s", kind.value, path, target, e)
-            error = e
-    assert error is not None
-    raise error
-
-
 def remove_retired_links(loaders_dir: Path, plugin_root: Path) -> None:
     """Delete our loader links in ``loaders_dir`` other than the current one.
 
     This covers the ZIP and URL loaders that Memloader installed, links left behind by
-    a moved plugin root, dangling links, and generated stub files from earlier
-    versions. A live link into some other plugin's directory is left alone, as is any
-    file that is not ours.
+    a moved plugin root, dangling links, generated stub files from earlier versions,
+    and hard links left by pre-1.1 vtloader on Windows. A live link into some other
+    plugin's directory is left alone, as is any file that is not ours.
     """
     for prefix in (LINK_PREFIX, LEGACY_LINK_PREFIX):
         for path in loaders_dir.glob(f"{prefix}*.py"):
             if path.name == LINK_NAME:
                 continue
             dangling = path.is_symlink() and not path.exists()
-            if dangling or is_our_link(path, plugin_root) or is_our_file(path):
+            if dangling or is_our_link(path, plugin_root) or is_legacy_file(path):
                 logger.info("removing retired loader link %s", path)
                 path.unlink()
 
 
-def install_loader_links(
-    loaders_dir: Path, plugin_root: Path, kinds: Sequence[LinkKind] = DEFAULT_LINK_KINDS
-) -> Path:
-    """Create the loader link in ``loaders_dir`` and remove retired links.
+def install_loader_links(loaders_dir: Path, plugin_root: Path) -> Path:
+    """Create the loader symlink in ``loaders_dir`` and remove retired links.
 
-    A link that already points at the right target is left untouched. Returns the
+    A symlink that already points at the right target is left untouched. Returns the
     path of the loader link.
 
     Raises:
-        OSError: the directory cannot be created or the link cannot be made.
+        OSError: the directory cannot be created or the symlink cannot be made.
     """
     loaders_dir.mkdir(parents=True, exist_ok=True)
     remove_retired_links(loaders_dir, plugin_root)
@@ -143,10 +103,10 @@ def install_loader_links(
     if is_current_link(path, target):
         logger.debug("loader link %s is current", path)
         return path
-    if path.is_symlink() or is_our_file(path):
+    if path.is_symlink() or is_legacy_file(path):
         path.unlink()
     elif path.exists():
         raise OSError(f"not replacing {path}: it was not created by vtloader")
-    kind = create_link(path, target, kinds)
-    logger.info("created %s %s -> %s", kind.value, path, target)
+    path.symlink_to(target)
+    logger.info("created symlink %s -> %s", path, target)
     return path
