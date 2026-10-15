@@ -54,6 +54,7 @@ module = [
     "ida_idp",
     "ida_kernwin",
     "ida_lines",
+    "ida_lumina",
     "ida_loader",
     "ida_moves",
     "ida_nalt",
