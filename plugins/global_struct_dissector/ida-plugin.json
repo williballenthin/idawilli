@@ -3,7 +3,7 @@
   "plugin": {
     "name": "global-struct-dissector",
     "entryPoint": "global_struct_dissector_entry.py",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "idaVersions": ">=9.2",
     "platforms": [
       "windows-x86_64",
