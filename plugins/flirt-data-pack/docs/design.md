@@ -43,4 +43,4 @@ The hooks are unhooked when the `plugmod_t` is garbage collected.
 
 `tests/conftest.py` locates an IDA installation from `IDADIR` or `~/.idapro/ida-config.json`, creates a temporary `IDAUSR` with the license files and a `plugins/flirt-data-pack` symlink to the plugin directory, and exports both variables before `idapro` is imported. The `ida` fixture imports `idapro`, accepts the EULA, and skips when no installation is available.
 
-The install tests verify symlinking, idempotency, retargeting when the plugin root moves, hard link fallback, stale link cleanup, and refusal to overwrite foreign files. `TestRealPlugin` checks that the shipped `dummy.sig` has the right magic and can be installed into a temporary directory. The apply tests verify the mapping logic and name prefixing without IDA.
+The install tests verify symlinking, idempotency, retargeting when the plugin root moves, stale link cleanup, and refusal to overwrite foreign files. `TestRealPlugin` checks that the shipped `dummy.sig` has the right magic and can be installed into a temporary directory. The apply tests verify the mapping logic and name prefixing without IDA.

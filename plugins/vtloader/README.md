@@ -50,7 +50,7 @@ When IDA starts, vtloader links `vtloader_loader.py` into the user `loaders/` di
 
 This plugin was called Memloader up to version 1.1 and installed ZIP and URL loaders as well. Its three links are removed on the first start after upgrading, so uninstall `memloader` and IDA will stop offering them.
 
-On Windows, symbolic links require Developer Mode or an elevated IDA process. vtloader uses hard links if needed. After uninstall, you can safely delete any remaining link. IDA ignores broken symbolic links. A remaining hard link prints the path that you must delete.
+The link is a symbolic link. After uninstall, the link stays but points to nothing, and IDA ignores it. You can safely delete it.
 
 ## Develop
 
